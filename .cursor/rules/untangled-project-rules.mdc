@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+- Only modify code relevant to the current request. Avoid changing unrelated functionality.
+- Break problems into smaller steps. Think through each step separately before implementing.
+- Always provide a complete **plan** with **reasoning** based on evidence from code, logs and other output before making changes.
