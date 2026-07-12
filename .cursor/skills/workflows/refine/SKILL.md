@@ -44,7 +44,7 @@ where `<N>` is the GitHub issue number.
 2. **Read** the issue (title, body, labels, assignees, and relevant comments) from GitHub. Enforce the open/assignment/READY pre-requisites above before drafting.
 3. **Draft** a fully detailed story into `.refinement/<N>-draft.md`: user voice, context, explicit **out of scope**, **acceptance criteria**, and risks/limitations/caveats. Seed from the current issue body if useful, but the draft file is the source of truth for the rest of this workflow.
 4. **Discuss gaps** with the user in chat; revise `.refinement/<N>-draft.md` until the user explicitly agrees the requirements are correct and complete. Do **not** update GitHub during this loop.
-5. **Only after** that explicit agreement: update the GitHub issue body with the final draft text (for example `issue_write` with `method: update` and the new `body`) so the issue becomes the **single source of truth**, then label the issue as READY.
+5. **Only after** that explicit agreement: update the GitHub issue body with the final draft text (for example `issue_write` with `method: update` and the new `body`) so the issue becomes the **single source of truth**, label the issue as READY, and **unassign** the issue.
 6. Delete `.refinement/<N>-draft.md` (and the `.refinement/` directory if empty). Inform the user that this workflow is complete.
 
 ## Notes
