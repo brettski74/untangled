@@ -34,14 +34,14 @@ where `<N>` is the GitHub issue number.
 - A **fresh chat** dedicated to this refinement (do not reuse a thread that mixed another ticket’s implementation or UAT).
 - The target issue **number** `N` and repository context (owner/repo or equivalent).
 - **GitHub access** via `**user-github` MCP**. If github MCP is unavailable or fails, abort and report the problem to the user.
-- If the issue is **not** assigned to the current user, assign the issue to the current user.
 - The issue must be **open**; if it is closed or marked duplicate, confirm with the user before proceeding.
+- **Assignment:** the issue must be either **unassigned** or assigned to the **current user**. If it is assigned to someone else, **stop** and warn the user that someone else may already be working on this ticket—do not reassign or continue. If it is unassigned, assign it to the current user.
 - The issue should not be labelled as READY. If it is, confirm with the user whether re-refinement is really necessary.
 
 ## Steps
 
 1. **Classify** the issue: this workflow targets **features**, not bugs. If the issue reads as a defect report or is misclassified, call that out and agree with the user whether to treat it as refinement (possibly after re-scoping) or hand off to another process before rewriting scope.
-2. **Read** the issue (title, body, labels, and relevant comments) from GitHub.
+2. **Read** the issue (title, body, labels, assignees, and relevant comments) from GitHub. Enforce the open/assignment/READY pre-requisites above before drafting.
 3. **Draft** a fully detailed story into `.refinement/<N>-draft.md`: user voice, context, explicit **out of scope**, **acceptance criteria**, and risks/limitations/caveats. Seed from the current issue body if useful, but the draft file is the source of truth for the rest of this workflow.
 4. **Discuss gaps** with the user in chat; revise `.refinement/<N>-draft.md` until the user explicitly agrees the requirements are correct and complete. Do **not** update GitHub during this loop.
 5. **Only after** that explicit agreement: update the GitHub issue body with the final draft text (for example `issue_write` with `method: update` and the new `body`) so the issue becomes the **single source of truth**, then label the issue as READY.
