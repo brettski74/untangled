@@ -1,0 +1,4 @@
+# Keep .refinement writable by the agent even if Cursor treats .gitignore
+# as an access block. Drafts stay out of git via .gitignore only.
+!.refinement/
+!.refinement/**
