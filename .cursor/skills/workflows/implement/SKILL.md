@@ -37,7 +37,7 @@ Use this workflow when building and shipping work for an agreed GitHub issue: pl
 7. As per the definition of done, **all** tests must be run before implementation can be considered done.
 8. When implementation is done, provide a **completion narrative**: what changed, any architecture impact, caveats, and which tests or docs moved. Wait for the user to review your completion narrative before proceeding beyond this point in the workflow.
 9. **After** the user agrees the narrative is accurate: **commit**, **push**, and **open a pull request** that **links or closes** the issue using GitHub’s linking conventions (for example `Fixes #N` / `Closes #N` in the PR body). Label the issue `IMPLEMENTED` and **unassign** it.
-10. Inform the user that this workflow is complete and suggest that they proceed with the **ship** workflow.
+10. Inform the user that this workflow is complete and suggest that they proceed with the **verify** workflow.
 
 ## Notes
 
