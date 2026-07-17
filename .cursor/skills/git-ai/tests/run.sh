@@ -414,6 +414,50 @@ EOF
   PATH="$stub:$PATH" assert_fail "gh auth failure blocks delete" "$SCRIPTS/sync-default.sh" --delete-branch feature/no-gh
 }
 
+# --- refine-preflight ---
+test_refine_preflight_creates_and_reports() {
+  local out
+  # .refinement absent → created, draft_exists=no
+  [[ ! -d "$REPO/.refinement" ]]
+  assert_eq "no .refinement before run" "0" "$?"
+  out="$("$SCRIPTS/refine-preflight.sh" 42 2>&1)" || {
+    echo "  FAIL: preflight run (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("preflight run")
+    return 0
+  }
+  [[ -d "$REPO/.refinement" ]]
+  assert_eq ".refinement created" "0" "$?"
+  assert_eq "repo_root line" "repo_root=$(cd "$REPO" && pwd)" "$(echo "$out" | grep '^repo_root=')"
+  assert_eq "origin_url raw" "origin_url=$BARE" "$(echo "$out" | grep '^origin_url=')"
+  assert_eq "issue_number line" "issue_number=42" "$(echo "$out" | grep '^issue_number=')"
+  assert_eq "draft_path line" "draft_path=.refinement/42-draft.md" "$(echo "$out" | grep '^draft_path=')"
+  assert_eq "draft_exists no" "draft_exists=no" "$(echo "$out" | grep '^draft_exists=')"
+
+  # Idempotent when .refinement already exists
+  assert_ok "idempotent rerun" "$SCRIPTS/refine-preflight.sh" 42
+
+  # Existing draft reported and left untouched
+  echo "draft body" >"$REPO/.refinement/42-draft.md"
+  out="$("$SCRIPTS/refine-preflight.sh" 42 2>&1)"
+  assert_eq "draft_exists yes" "draft_exists=yes" "$(echo "$out" | grep '^draft_exists=')"
+  assert_eq "draft untouched" "draft body" "$(cat "$REPO/.refinement/42-draft.md")"
+}
+
+test_refine_preflight_bad_args() {
+  assert_fail "missing N" "$SCRIPTS/refine-preflight.sh"
+  assert_fail "non-integer N" "$SCRIPTS/refine-preflight.sh" abc
+  assert_fail "zero N" "$SCRIPTS/refine-preflight.sh" 0
+  assert_fail "negative N" "$SCRIPTS/refine-preflight.sh" -7
+  assert_fail "extra args" "$SCRIPTS/refine-preflight.sh" 42 43
+}
+
+test_refine_preflight_missing_origin() {
+  git -C "$REPO" remote remove origin
+  assert_fail "missing origin" "$SCRIPTS/refine-preflight.sh" 42
+}
+
 # --- run all ---
 main() {
   with_fixture "common override" test_common_repo_root_override
@@ -436,6 +480,9 @@ main() {
   with_fixture "sync delete gh" test_sync_delete_via_gh_stub
   with_fixture "sync abort unpushed" test_sync_abort_unpushed
   with_fixture "gh auth fail" test_gh_missing_auth_failure
+  with_fixture "refine preflight" test_refine_preflight_creates_and_reports
+  with_fixture "refine preflight bad args" test_refine_preflight_bad_args
+  with_fixture "refine preflight no origin" test_refine_preflight_missing_origin
 
   echo
   echo "Results: $PASS passed, $FAIL failed"

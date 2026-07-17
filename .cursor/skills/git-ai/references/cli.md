@@ -64,3 +64,23 @@ Stage-only (no `-m`) exits 0. Commit with empty index after add exits non-zero.
 Refuse: default branch, detached HEAD, non-FF divergence. Never force.
 
 On `git push` failure: if the remote URL is `http://` or `https://`, print a warning suggesting SSH/git protocol may work better when HTTPS credentials are not configured, then exit non-zero.
+
+## `refine-preflight.sh`
+
+| Arg | Meaning |
+| --- | ------- |
+| `<issue-number>` | GitHub issue number `N` (exactly one argument; positive integer) |
+
+Behaviour:
+
+- Standard bootstrap (`common.sh`), requires `origin`.
+- `mkdir -p .refinement` (idempotent; existing drafts untouched).
+- Success output (stable `key=value` lines): `repo_root`, `origin_url` (raw, unparsed), `issue_number`, `draft_path` (`.refinement/<N>-draft.md`), `draft_exists` (`yes`/`no`).
+
+Failure modes (non-zero):
+
+- Missing, extra, non-integer, or non-positive `N`
+- Not inside a git work tree / bootstrap failure
+- No `origin` remote
+
+Owner/repo parsing from `origin_url` is deliberately left to the agent.

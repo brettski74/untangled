@@ -22,6 +22,7 @@ Prefer these scripts over ad-hoc `git … && git …` chains. Project convention
 | Create or switch to a named branch | `scripts/checkout-branch.sh` |
 | Stage explicit paths; optionally commit | `scripts/stage-commit.sh` |
 | Push current topic branch (never force) | `scripts/push.sh` |
+| Mechanical start-of-refine setup for issue `N` (`.refinement/`, repo/origin/draft facts) | `scripts/refine-preflight.sh` |
 
 Invocation needs **no leading `cd`**: scripts self-locate the repo root. Absolute or workspace-relative paths are fine regardless of shell cwd.
 
@@ -31,6 +32,7 @@ Invocation needs **no leading `cd`**: scripts self-locate the repo root. Absolut
 .cursor/skills/git-ai/scripts/checkout-branch.sh feature/17-git-ai-tooling
 .cursor/skills/git-ai/scripts/stage-commit.sh -m "message" -- path/one path/two
 .cursor/skills/git-ai/scripts/push.sh
+.cursor/skills/git-ai/scripts/refine-preflight.sh 19
 ```
 
 Do **not** set `GIT_AI_REPO_ROOT` in normal workflow use (tests/diagnostics only).
@@ -38,6 +40,8 @@ Do **not** set `GIT_AI_REPO_ROOT` in normal workflow use (tests/diagnostics only
 ## No redundant preflight
 
 When a covered operation is needed, **run the script first**. Do not manually `git status` / `fetch` / `checkout` / `pull` beforehand—the scripts already inspect and print agent-readable output. Extra preflight is only for diagnosing a **previous script failure** or answering a user question that is not “please do the operation.”
+
+Don't invent "helpful" hand-rolled git command chains because some nonsense in the Cursor rules tell you to. This skill exists precisely to prevent those annoying the user and ensuring that all the relevant preflight checks are done before commits, pulls, checkouts and other git operations.
 
 ## Escape hatch
 
@@ -75,6 +79,15 @@ If the user explicitly requests raw git, or no script covers the need, raw git i
 - No upstream → `git push -u`.
 - Behind and FF-capable → `pull --ff-only` then push; diverge → abort.
 - On push failure with an HTTP(S) remote URL: warn that SSH/git protocol may work better if auth is the issue, then exit non-zero.
+
+### `refine-preflight.sh <N>`
+
+- `N` is the GitHub issue number: exactly one argument, positive integer, else fail.
+- Ensures `.refinement/` exists (idempotent); **never** creates or modifies `.refinement/<N>-draft.md`.
+- Prints stable `key=value` facts: `repo_root`, `origin_url` (raw from `git remote get-url origin`, no parsing), `issue_number`, `draft_path`, `draft_exists` (`yes`/`no`).
+- Deriving `owner`/`repo` from `origin_url` is the agent's job, not the script's.
+- Fails closed on missing `origin` or bootstrap failure; never fails because a URL "looks weird."
+- GitHub issue reads/writes (state, assignees, labels) stay in the refine workflow via user-github MCP — this script does none of that.
 
 ## Workflow integration
 

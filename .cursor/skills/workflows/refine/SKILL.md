@@ -27,7 +27,7 @@ where `<N>` is the GitHub issue number.
 - **Write and revise only in this file.** Do not put the draft requirements in the chat, and do not update the GitHub issue body while iterating.
 - Chat is for discussion, questions, and gap analysis only. Point the user at the draft file for review.
 - The local file exists so the human reviewer can use IDE diffs to see what changed each pass—do not bypass it.
-- Create `.refinement/` if it does not exist.
+- `.refinement/` creation and draft-path facts come from the **git-ai** preflight script (see Steps); do not `mkdir` or probe them by hand.
 
 ## Pre-requisites
 
@@ -40,12 +40,13 @@ where `<N>` is the GitHub issue number.
 
 ## Steps
 
-1. **Classify** the issue: this workflow targets **features**, not bugs. If the issue reads as a defect report or is misclassified, call that out and agree with the user whether to treat it as refinement (possibly after re-scoping) or hand off to another process before rewriting scope.
-2. **Read** the issue (title, body, labels, assignees, and relevant comments) from GitHub. Enforce the open/assignment/READY pre-requisites above before drafting.
-3. **Draft** a fully detailed story into `.refinement/<N>-draft.md`: user voice, context, explicit **out of scope**, **acceptance criteria**, and risks/limitations/caveats. Seed from the current issue body if useful, but the draft file is the source of truth for the rest of this workflow.
-4. **Discuss gaps** with the user in chat; revise `.refinement/<N>-draft.md` until the user explicitly agrees the requirements are correct and complete. Do **not** update GitHub during this loop.
-5. **Only after** that explicit agreement: update the GitHub issue body with the final draft text (for example `issue_write` with `method: update` and the new `body`) so the issue becomes the **single source of truth**, label the issue as READY, and **unassign** the issue.
-6. Delete `.refinement/<N>-draft.md` (and the `.refinement/` directory if empty). Inform the user that this workflow is complete.
+1. **Preflight (mechanical)**: run `.cursor/skills/git-ai/scripts/refine-preflight.sh <N>` (git-ai skill) first. It ensures `.refinement/` exists and prints `repo_root`, the raw `origin_url`, `issue_number`, `draft_path`, and `draft_exists`. Derive `owner`/`repo` from `origin_url` yourself. Do not run ad-hoc `git remote`, `mkdir`, or draft-path probes for facts the script already prints. If `draft_exists=yes`, a prior refinement may be incomplete—raise it with the user before overwriting.
+2. **Classify** the issue: this workflow targets **features**, not bugs. If the issue reads as a defect report or is misclassified, call that out and agree with the user whether to treat it as refinement (possibly after re-scoping) or hand off to another process before rewriting scope.
+3. **Read** the issue (title, body, labels, assignees, and relevant comments) from GitHub. Enforce the open/assignment/READY pre-requisites above before drafting.
+4. **Draft** a fully detailed story into `.refinement/<N>-draft.md`: user voice, context, explicit **out of scope**, **acceptance criteria**, and risks/limitations/caveats. Seed from the current issue body if useful, but the draft file is the source of truth for the rest of this workflow.
+5. **Discuss gaps** with the user in chat; revise `.refinement/<N>-draft.md` until the user explicitly agrees the requirements are correct and complete. Do **not** update GitHub during this loop.
+6. **Only after** that explicit agreement: update the GitHub issue body with the final draft text (for example `issue_write` with `method: update` and the new `body`) so the issue becomes the **single source of truth**, label the issue as READY, and **unassign** the issue.
+7. Delete `.refinement/<N>-draft.md` (and the `.refinement/` directory if empty). Inform the user that this workflow is complete.
 
 ## Notes
 
