@@ -20,6 +20,7 @@ Use this workflow for **developer-led acceptance testing** after implementation 
 - The issue must be **open**; if it is closed or marked duplicate, confirm with the user before proceeding.
 - **Assignment:** the issue must be either **unassigned** or assigned to the **current user**. If it is assigned to someone else, **stop** and warn the user that someone else may already be working on this ticket—do not reassign or continue. If it is unassigned, assign it to the current user.
 - The issue must be labelled **IMPLEMENTED**. If it is not, inform the user that it does not appear to have completed the **implement** workflow and get their acknowledgement before proceeding with anything more.
+- Avoid raw git commands whenever possible. Use the git-ai skill scripts wherever possible. User refine-preflight.sh to orient yourself in a new chat.
 
 ## Steps
 
