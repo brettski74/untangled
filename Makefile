@@ -39,8 +39,8 @@ up: install ## Start backend and frontend dev processes (local scaffold only)
 	@if [ -f $(FRONTEND_PID) ] && kill -0 $$(cat $(FRONTEND_PID)) 2>/dev/null; then \
 		echo "frontend already running (pid $$(cat $(FRONTEND_PID)))"; \
 	else \
-		cd $(FRONTEND_DIR) && npm run dev -- --host 127.0.0.1 --port 5173 \
-			> ../$(RUN_DIR)/frontend.log 2>&1 & echo $$! > ../$(FRONTEND_PID); \
+		( cd $(FRONTEND_DIR) && npm run dev -- --host 127.0.0.1 --port 5173 ) \
+			> $(RUN_DIR)/frontend.log 2>&1 & echo $$! > $(FRONTEND_PID); \
 		echo "frontend started on http://127.0.0.1:5173 (pid $$(cat $(FRONTEND_PID)))"; \
 	fi
 	@echo "Compose-based runtime is a later ticket; this target starts local dev processes only."
