@@ -219,3 +219,17 @@ __marimo__/
 
 # Local requirements drafts during /refine (never commit)
 .refinement/
+
+# Node / frontend
+node_modules/
+.react-router/
+build/
+dist/
+*.tsbuildinfo
+.npm/
+
+# Local dev process state (make up / make down)
+.run/
+
+# Vite
+.vite/
