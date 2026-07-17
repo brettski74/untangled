@@ -24,8 +24,8 @@ Use this workflow when building and shipping work for an agreed GitHub issue: pl
 
 1. **Read** the issue (and any linked specs or comments needed to understand scope).
 2. **Confirm readiness**: the issue must be **open**, labelled `READY`, and either **unassigned** or assigned to the **current user**. If it is assigned to someone else, **stop** and warn that someone else may already be working on it. If it is unassigned, assign it to the current user. If it is not open or not labelled `READY`, inform the user and obtain acknowledgement before continuing.
-3. **Sync the local repo** before developing an implementation plan: check out the **default branch** and ensure it is **up to date with origin**. If it is not, propose a plan to bring the local repo to that state, present it to the user, and wait for approval before doing anything further toward an implementation plan.
-4. **Create the feature branch** from the default branch (always branch off the default branch; do not land substantive work by committing directly to the default branch). Name it:
+3. **Sync the local repo** before developing an implementation plan: use the **git-ai** skill (`scripts/sync-default.sh`) to check out the **default branch** and update it from origin. If sync cannot complete (dirty tree, non-FF divergence, etc.), propose a plan to bring the local repo to a good state, present it to the user, and wait for approval before doing anything further toward an implementation plan.
+4. **Create the feature branch** from the default branch via **git-ai** (`scripts/checkout-branch.sh`) (always branch off the default branch; do not land substantive work by committing directly to the default branch). Name it:
 
    ```text
    feature/<N>-<short-kebab-case-summary>
@@ -36,11 +36,12 @@ Use this workflow when building and shipping work for an agreed GitHub issue: pl
 6. After the user **approves the plan**, implement in accordance with the agreed plan. If you attempt to resolve an issue **twice** and are still stuck, **stop**: discuss the issue, your current understanding of what is happening and/or why, and solicit feedback from the user. They may have context that resolves it faster—do not keep thrashing alone.
 7. As per the definition of done, **all** tests must be run before implementation can be considered done.
 8. When implementation is done, provide a **completion narrative**: what changed, any architecture impact, caveats, and which tests or docs moved. Wait for the user to review your completion narrative before proceeding beyond this point in the workflow.
-9. **After** the user agrees the narrative is accurate: **commit**, **push**, and **open a pull request** that **links or closes** the issue using GitHub’s linking conventions (for example `Fixes #N` / `Closes #N` in the PR body). Label the issue `IMPLEMENTED` and **unassign** it.
+9. **After** the user agrees the narrative is accurate: **commit** and **push** via the **git-ai** skill (`scripts/stage-commit.sh`, then `scripts/push.sh`), and **open a pull request** using the `user-github` MCP that **links or closes** the issue using GitHub’s linking conventions (for example `Fixes #N` / `Closes #N` in the PR body). Label the issue `IMPLEMENTED` and **unassign** it.
 10. Inform the user that this workflow is complete and suggest that they proceed with the **verify** workflow.
 
 ## Notes
 
+- Covered local git operations (sync default, create/switch branch, stage/commit, push) go through the **git-ai** skill scripts—do not hand-assemble equivalent `git` chains unless the user asks for raw git or no script covers the need. See `.cursor/skills/git-ai/SKILL.md`.
 - If scope drifts during implementation, pause and reconcile with the issue or run the **refine** skill before piling on unrelated changes.
 - The PR is the review surface; keep the issue updated only when the team wants cross-links, not as a substitute for the PR description.
 - Avoid restating project conventions that already live in rules, skills, or **AGENTS.md**—apply them; do not paste or paraphrase that material into the plan, narrative, or PR.
