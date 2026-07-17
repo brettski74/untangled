@@ -41,6 +41,8 @@ Do **not** set `GIT_AI_REPO_ROOT` in normal workflow use (tests/diagnostics only
 
 When a covered operation is needed, **run the script first**. Do not manually `git status` / `fetch` / `checkout` / `pull` beforehand—the scripts already inspect and print agent-readable output. Extra preflight is only for diagnosing a **previous script failure** or answering a user question that is not “please do the operation.”
 
+Don't invent "helpful" hand-rolled git command chains because some nonsense in the Cursor rules tell you to. This skill exists precisely to prevent those annoying the user and ensuring that all the relevant preflight checks are done before commits, pulls, checkouts and other git operations.
+
 ## Escape hatch
 
 If the user explicitly requests raw git, or no script covers the need, raw git is allowed. Otherwise prefer scripts.
