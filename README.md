@@ -2,6 +2,18 @@
 
 An enterprise grade ITSM platform, including ITSM, Event Management, Discovery and CMDB capabilities.
 
+## Development
+
+This repository is a monorepo with a Python/FastAPI backend and a React Router v7 SSR frontend.
+
+```bash
+make install   # first-time setup
+make up        # start local backend + frontend dev processes
+make help      # list all commands
+```
+
+See [docs/local-development.md](docs/local-development.md) for setup, smoke tests, and what is still placeholder scaffolding.
+
 # Why?
 
 Several reasons:
