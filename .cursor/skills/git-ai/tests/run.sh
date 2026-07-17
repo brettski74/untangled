@@ -245,6 +245,42 @@ test_push_abort_divergence() {
   assert_fail "abort on divergence" "$SCRIPTS/push.sh"
 }
 
+test_push_https_hint_on_failure() {
+  assert_ok "create branch" "$SCRIPTS/checkout-branch.sh" feature/https-hint
+  echo h >"$REPO/h.txt"
+  assert_ok "commit" "$SCRIPTS/stage-commit.sh" -m "h" -- h.txt
+
+  git -C "$REPO" remote set-url origin "https://example.invalid/untangled.git"
+
+  local real_git stub out rc=0
+  real_git="$(command -v git)"
+  stub="$TEST_TMP/bin"
+  mkdir -p "$stub"
+  cat >"$stub/git" <<EOF
+#!/usr/bin/env bash
+if [[ "\$1" == "push" ]]; then
+  echo "fatal: could not read Username for 'https://example.invalid': No such device or address" >&2
+  exit 1
+fi
+if [[ "\$1" == "fetch" ]]; then
+  exit 0
+fi
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$stub/git"
+
+  out="$(PATH="$stub:$PATH" "$SCRIPTS/push.sh" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]] && echo "$out" | grep -q "HTTP(S) URL" && echo "$out" | grep -q "SSH/git protocol"; then
+    echo "  PASS: https hint on push failure"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: https hint on push failure (rc=$rc)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("https hint on push failure")
+  fi
+}
+
 # --- sync-default ---
 test_sync_ff_and_dirty_abort() {
   # Advance remote main
@@ -393,6 +429,7 @@ main() {
   with_fixture "push first+ff" test_push_first_and_ff
   with_fixture "push refuse default" test_push_refuse_default
   with_fixture "push diverge" test_push_abort_divergence
+  with_fixture "push https hint" test_push_https_hint_on_failure
   with_fixture "sync ff+dirty" test_sync_ff_and_dirty_abort
   with_fixture "sync delete ancestry" test_sync_delete_merged_ancestry
   with_fixture "sync delete tree-eq" test_sync_delete_tree_equivalent_squash

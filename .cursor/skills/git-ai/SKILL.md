@@ -74,6 +74,7 @@ If the user explicitly requests raw git, or no script covers the need, raw git i
 - Never `--force` / `--force-with-lease`.
 - No upstream → `git push -u`.
 - Behind and FF-capable → `pull --ff-only` then push; diverge → abort.
+- On push failure with an HTTP(S) remote URL: warn that SSH/git protocol may work better if auth is the issue, then exit non-zero.
 
 ## Workflow integration
 

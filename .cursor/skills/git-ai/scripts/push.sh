@@ -36,6 +36,19 @@ if ! git remote get-url "$REMOTE" >/dev/null 2>&1; then
   git_ai_die "remote '${REMOTE}' does not exist"
 fi
 
+# On push failure: if remote URL is HTTP(S), hint that git/SSH protocol may work better.
+git_ai_push_failed() {
+  local detail="$1"
+  echo "error: ${detail}" >&2
+  local url
+  url="$(git remote get-url "$REMOTE" 2>/dev/null || true)"
+  if [[ "$url" == https://* || "$url" == http://* ]]; then
+    echo "warning: remote '${REMOTE}' is an HTTP(S) URL (${url})." >&2
+    echo "warning: if this failed due to authentication (e.g. username/password prompt), SSH/git protocol may work better — e.g. git@github.com:OWNER/REPO.git — when HTTPS credentials are not set up in this environment." >&2
+  fi
+  exit 1
+}
+
 DEFAULT="$(git_ai_default_branch)"
 BRANCH="$(git_ai_current_branch)"
 
@@ -55,7 +68,7 @@ fi
 if [[ -z "$UPSTREAM" ]]; then
   git_ai_info "no upstream; pushing -u ${REMOTE} HEAD"
   if ! git push -u "$REMOTE" HEAD; then
-    git_ai_die "git push -u failed (check auth/network)"
+    git_ai_push_failed "git push -u failed (check auth/network)"
   fi
   git_ai_print_status_short
   exit 0
@@ -84,7 +97,7 @@ else
 fi
 
 if ! git push; then
-  git_ai_die "git push failed (check auth/network or remote rejection)"
+  git_ai_push_failed "git push failed (check auth/network or remote rejection)"
 fi
 
 git_ai_info "pushed ${BRANCH} -> ${UPSTREAM}"

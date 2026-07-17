@@ -62,3 +62,5 @@ Stage-only (no `-m`) exits 0. Commit with empty index after add exits non-zero.
 | `--remote <name>` | Remote name (default `origin`) |
 
 Refuse: default branch, detached HEAD, non-FF divergence. Never force.
+
+On `git push` failure: if the remote URL is `http://` or `https://`, print a warning suggesting SSH/git protocol may work better when HTTPS credentials are not configured, then exit non-zero.
