@@ -10,7 +10,7 @@ BACKEND_PIP := $(BACKEND_VENV)/bin/pip
 BACKEND_PID := $(RUN_DIR)/backend.pid
 FRONTEND_PID := $(RUN_DIR)/frontend.pid
 
-.PHONY: help install up down backend-dev frontend-dev backend-install frontend-install lint test backend-lint backend-test frontend-lint frontend-test clean-run
+.PHONY: help install up down backend-dev frontend-dev backend-install frontend-install lint test backend-lint backend-test frontend-lint frontend-test models clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -68,6 +68,9 @@ backend-dev: backend-install ## Run the FastAPI dev server in the foreground
 frontend-dev: frontend-install ## Run the React Router dev server in the foreground
 	cd $(FRONTEND_DIR) && npm run dev -- --host 127.0.0.1 --port 5173
 
+models: backend-install ## Generate Pydantic and Zod models from YAML class definitions
+	$(BACKEND_PYTHON) -m untangled.mapping
+
 lint: backend-lint frontend-lint ## Run backend and frontend lint checks
 
 test: backend-test frontend-test ## Run backend and frontend tests
@@ -75,7 +78,7 @@ test: backend-test frontend-test ## Run backend and frontend tests
 backend-lint: backend-install ## Lint backend Python sources
 	$(BACKEND_VENV)/bin/ruff check $(BACKEND_DIR)/src $(BACKEND_DIR)/tests
 
-backend-test: backend-install ## Run backend pytest suite
+backend-test: backend-install frontend-install ## Run backend pytest suite
 	PYTHONPATH=$(BACKEND_DIR)/src $(BACKEND_PYTHON) -m pytest $(BACKEND_DIR)
 
 frontend-lint: frontend-install ## Typecheck the frontend (minimal lint until ESLint is added)
@@ -83,6 +86,11 @@ frontend-lint: frontend-install ## Typecheck the frontend (minimal lint until ES
 
 frontend-test: frontend-install ## Smoke-test frontend SSR production build
 	cd $(FRONTEND_DIR) && npm run build
+
+clean-models: ## Remove generated Pydantic/Zod artefacts
+	rm -rf $(BACKEND_DIR)/src/untangled/generated $(FRONTEND_DIR)/app/generated
+
+clean: clean-models ## Remove generated artefacts (leave a clean source tree)
 
 clean-run: ## Remove local run logs and pid files
 	rm -rf $(RUN_DIR)

@@ -1,0 +1,162 @@
+"""Load and validate YAML class definitions."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
+
+from untangled.mapping.naming import kebab_to_snake
+from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
+from untangled.mapping.types import SUPPORTED_TYPES
+
+
+class DefinitionError(ValueError):
+    """Raised when a class definition file is invalid."""
+
+
+@dataclass(frozen=True, slots=True)
+class AttributeDefinition:
+    """One user-declared attribute on a class."""
+
+    name_kebab: str
+    name_snake: str
+    type_name: str
+    required: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ClassDefinition:
+    """Normalized class definition loaded from YAML."""
+
+    name_kebab: str
+    name_snake: str
+    display_name: str
+    description: str
+    attributes: tuple[AttributeDefinition, ...]
+    source_path: Path
+
+
+def load_definitions(definitions_dir: Path) -> list[ClassDefinition]:
+    """Load every ``*.yaml`` / ``*.yml`` class definition from a directory.
+
+    The directory path is an input so the same pipeline can later run against
+    custom-class definition trees, not only committed core fixtures.
+    """
+    if not definitions_dir.is_dir():
+        raise DefinitionError(f"definitions directory does not exist: {definitions_dir}")
+
+    paths = sorted(
+        (
+            *definitions_dir.glob("*.yaml"),
+            *definitions_dir.glob("*.yml"),
+        ),
+        key=lambda p: p.name,
+    )
+    if not paths:
+        raise DefinitionError(f"no YAML class definitions found in {definitions_dir}")
+
+    return [load_definition(path) for path in paths]
+
+
+def load_definition(path: Path) -> ClassDefinition:
+    """Load and validate a single class definition YAML file."""
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise DefinitionError(f"{path}: invalid YAML: {exc}") from exc
+
+    if not isinstance(raw, dict):
+        raise DefinitionError(f"{path}: root must be a mapping")
+
+    name = raw.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise DefinitionError(f"{path}: 'name' is required (kebab-case class name)")
+    name = name.strip()
+    _require_kebab(name, path, "name")
+
+    display_name = raw.get("display-name")
+    if not isinstance(display_name, str) or not display_name.strip():
+        raise DefinitionError(f"{path}: 'display-name' is required")
+    display_name = display_name.strip()
+
+    description = raw.get("description")
+    if not isinstance(description, str) or not description.strip():
+        raise DefinitionError(f"{path}: 'description' is required")
+    description = description.strip()
+
+    attributes_raw = raw.get("attributes", {})
+    if attributes_raw is None:
+        attributes_raw = {}
+    if not isinstance(attributes_raw, dict):
+        raise DefinitionError(f"{path}: 'attributes' must be a mapping")
+
+    attributes: list[AttributeDefinition] = []
+    seen_snake: set[str] = set()
+    for attr_kebab, spec in attributes_raw.items():
+        if not isinstance(attr_kebab, str):
+            raise DefinitionError(f"{path}: attribute keys must be strings")
+        _require_kebab(attr_kebab, path, f"attribute '{attr_kebab}'")
+        snake = kebab_to_snake(attr_kebab)
+        if snake in SYSTEM_FIELD_NAMES:
+            raise DefinitionError(
+                f"{path}: attribute '{attr_kebab}' conflicts with injected system "
+                f"field '{snake}'; remove it from the YAML definition"
+            )
+        if snake in seen_snake:
+            raise DefinitionError(f"{path}: duplicate attribute '{attr_kebab}'")
+        seen_snake.add(snake)
+
+        if not isinstance(spec, dict):
+            raise DefinitionError(f"{path}: attribute '{attr_kebab}' must be a mapping")
+
+        type_name = spec.get("type")
+        if not isinstance(type_name, str) or type_name not in SUPPORTED_TYPES:
+            raise DefinitionError(
+                f"{path}: attribute '{attr_kebab}' has unsupported type "
+                f"{type_name!r}; expected one of {sorted(SUPPORTED_TYPES)}"
+            )
+
+        required = spec.get("required", False)
+        if not isinstance(required, bool):
+            raise DefinitionError(f"{path}: attribute '{attr_kebab}'.required must be a boolean")
+
+        unknown = set(spec) - {"type", "required"}
+        if unknown:
+            raise DefinitionError(
+                f"{path}: attribute '{attr_kebab}' has unknown keys: {sorted(unknown)}"
+            )
+
+        attributes.append(
+            AttributeDefinition(
+                name_kebab=attr_kebab,
+                name_snake=snake,
+                type_name=type_name,
+                required=required,
+            )
+        )
+
+    unknown_top = set(raw) - {"name", "display-name", "description", "attributes"}
+    if unknown_top:
+        raise DefinitionError(f"{path}: unknown top-level keys: {sorted(unknown_top)}")
+
+    return ClassDefinition(
+        name_kebab=name,
+        name_snake=kebab_to_snake(name),
+        display_name=display_name,
+        description=description,
+        attributes=tuple(attributes),
+        source_path=path,
+    )
+
+
+def _require_kebab(value: str, path: Path, label: str) -> None:
+    if value != value.lower() or "_" in value or value.startswith("-") or value.endswith("-"):
+        raise DefinitionError(f"{path}: {label} must be kebab-case, got {value!r}")
+    if "--" in value:
+        raise DefinitionError(f"{path}: {label} must be kebab-case, got {value!r}")
+    # Allow single-segment names (e.g. ``title``) and multi-segment kebab.
+    for part in value.split("-"):
+        if not part or not part.isalnum():
+            raise DefinitionError(f"{path}: {label} must be kebab-case, got {value!r}")

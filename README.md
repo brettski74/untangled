@@ -13,6 +13,7 @@ make help      # list all commands
 ```
 
 See [docs/local-development.md](docs/local-development.md) for setup, smoke tests, and what is still placeholder scaffolding.
+See [docs/class-definitions.md](docs/class-definitions.md) for YAML class definitions and `make models`.
 
 # Why?
 

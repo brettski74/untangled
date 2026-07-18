@@ -13,3 +13,5 @@ AGENTS.md         Engineering principles and conventions
 Future tickets extend the existing `backend/` and `frontend/` trees in place — do not add parallel application roots.
 
 See [local-development.md](./local-development.md) for setup and smoke tests.
+See [class-definitions.md](./class-definitions.md) for YAML class definitions and
+`make models` (Pydantic / Zod codegen).

@@ -220,6 +220,10 @@ __marimo__/
 # Local requirements drafts during /refine (never commit)
 .refinement/
 
+# Generated Pydantic / Zod models (`make models`)
+backend/src/untangled/generated/
+frontend/app/generated/
+
 # Node / frontend
 node_modules/
 .react-router/

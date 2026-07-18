@@ -1,0 +1,29 @@
+# Demo / fixture class for the mapping layer (not a real INC/CHG/User).
+# Edit definitions here, then run `make models`. Persistence lands in a later child of #6.
+name: demo-item
+display-name: Demo Item
+description: >
+  Minimal fixture class used to prove YAML definitions through Pydantic/Zod
+  generation. Not a product ticket type.
+attributes:
+  title:
+    type: string
+    required: true
+  summary:
+    type: string
+    required: false
+  is-active:
+    type: boolean
+    required: true
+  quantity:
+    type: integer
+    required: true
+  unit-price:
+    type: float
+    required: false
+  fixed-amount:
+    type: decimal
+    required: true
+  due-at:
+    type: datetime
+    required: false
