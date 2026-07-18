@@ -23,6 +23,7 @@ Prefer these scripts over ad-hoc `git … && git …` chains. Project convention
 | Stage explicit paths; optionally commit | `scripts/stage-commit.sh` |
 | Push current topic branch (never force) | `scripts/push.sh` |
 | Mechanical start-of-refine setup for issue `N` (`.refinement/`, repo/origin/draft facts) | `scripts/refine-preflight.sh` |
+| Mechanical end-of-refine publish for issue `N` (body-file → GitHub, READY, unassign, delete draft) | `scripts/refine-publish.sh` |
 
 Invocation needs **no leading `cd`**: scripts self-locate the repo root. Absolute or workspace-relative paths are fine regardless of shell cwd.
 
@@ -33,6 +34,7 @@ Invocation needs **no leading `cd`**: scripts self-locate the repo root. Absolut
 .cursor/skills/git-ai/scripts/stage-commit.sh -m "message" -- path/one path/two
 .cursor/skills/git-ai/scripts/push.sh
 .cursor/skills/git-ai/scripts/refine-preflight.sh 19
+.cursor/skills/git-ai/scripts/refine-publish.sh 19
 ```
 
 Do **not** set `GIT_AI_REPO_ROOT` in normal workflow use (tests/diagnostics only).
@@ -87,7 +89,16 @@ If the user explicitly requests raw git, or no script covers the need, raw git i
 - Prints stable `key=value` facts: `repo_root`, `origin_url` (raw from `git remote get-url origin`, no parsing), `issue_number`, `draft_path`, `draft_exists` (`yes`/`no`).
 - Deriving `owner`/`repo` from `origin_url` is the agent's job, not the script's.
 - Fails closed on missing `origin` or bootstrap failure; never fails because a URL "looks weird."
-- GitHub issue reads/writes (state, assignees, labels) stay in the refine workflow via user-github MCP — this script does none of that.
+- Does not call `gh` or mutate GitHub issues.
+
+### `refine-publish.sh <N>`
+
+- `N` is the GitHub issue number: exactly one argument, positive integer, else fail.
+- Requires `.refinement/<N>-draft.md` to exist; does not create or edit its contents.
+- Requires `gh` on `PATH` and authenticated (`gh auth status`); never runs `gh auth *`.
+- Publishes draft via `gh issue edit <N> --body-file …`, adds `READY`, removes all assignees, deletes the draft (and `.refinement/` if empty), then prints a verified `gh issue view` snapshot (`title`, `state`, `labels`, `assignees`, body size).
+- Prints stable `key=value` facts including `issue_url`, `title`, `labels`, `assignees`, `body_bytes`, `draft_deleted`, `unassigned`, `label_ready`.
+- Agents must not re-implement this with MCP body paste, ad-hoc serializers, or chained `gh` verification after the script.
 
 ## Workflow integration
 
