@@ -7,12 +7,11 @@ An enterprise grade ITSM platform, including ITSM, Event Management, Discovery a
 This repository is a monorepo with a Python/FastAPI backend and a React Router v7 SSR frontend.
 
 ```bash
-make install   # first-time setup
-make up        # start local backend + frontend dev processes
-make help      # list all commands
+make up         # postgres + api + web via Docker Compose
+make help       # list all commands
 ```
 
-See [docs/local-development.md](docs/local-development.md) for setup, smoke tests, and what is still placeholder scaffolding.
+See [docs/local-development.md](docs/local-development.md) for setup, ports, smoke tests, and host hot-reload (`make backend-dev` / `make frontend-dev`).
 See [docs/class-definitions.md](docs/class-definitions.md) for YAML class definitions and `make models`.
 
 # Why?

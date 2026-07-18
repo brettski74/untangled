@@ -1,6 +1,5 @@
-# Minimal PostgreSQL for local dev and automated tests.
-# Full api+web Compose (#5) may absorb/reshape this wiring later; the
-# mapping/persistence stack itself should stay put.
+# Local Compose runtime: PostgreSQL + API + web.
+# make up / make down drive the full stack; make db-up starts postgres only.
 services:
   postgres:
     image: postgres:18-alpine
@@ -19,6 +18,44 @@ services:
       # Postgres 18+ images expect the mount at /var/lib/postgresql (versioned
       # subdirs), not the old /var/lib/postgresql/data path.
       - untangled_pgdata:/var/lib/postgresql
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql://untangled:untangled@postgres:5432/untangled
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  web:
+    build:
+      context: ./frontend
+    environment:
+      # Server-side / in-network API base (Compose DNS). Browser-origin calls
+      # later use the host-published URL (http://127.0.0.1:8000).
+      API_BASE_URL: http://api:8000
+      PORT: "3000"
+    ports:
+      # Local familiarity: host 5173. Production should expose 3000 (container listen port).
+      - "5173:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   untangled_pgdata:
