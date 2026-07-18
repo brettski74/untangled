@@ -5,7 +5,12 @@ Minimal FastAPI scaffold for Milestone 1. Domain APIs, auth, database access, an
 ## Layout
 
 - `src/untangled/` — application package
+- `src/untangled/mapping/` — class-definition load + Pydantic/Zod codegen pipeline
+- `class-definitions/` — human-authored YAML class definitions
 - `tests/` — pytest suite (extend as APIs are added)
+
+Generated models (gitignored) land in `src/untangled/generated/` after `make models`.
+See [docs/class-definitions.md](../docs/class-definitions.md).
 
 ## Local run
 

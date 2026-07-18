@@ -29,6 +29,7 @@ This creates `backend/.venv`, installs pinned Python dependencies from `backend/
 | `make frontend-dev` | Run React Router dev server in the foreground |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
 | `make test` | Backend pytest + frontend production build smoke test |
+| `make models` | Generate Pydantic + Zod models from `backend/class-definitions/` |
 
 Logs and pid files for `make up` live under `.run/` (gitignored).
 
@@ -45,6 +46,7 @@ After `make up`:
 | ----- | ------ | ---------- |
 | `make up` / `make down` | Local dev processes only | Compose ticket extends these targets in place |
 | Backend `/health` | Real smoke endpoint | Domain APIs, auth, DB replace/extend `backend/src/untangled/` |
+| Class definitions + `make models` | Real codegen (no Postgres) | Persistence / schema sync in mapping-layer child |
 | Frontend welcome page | Real SSR scaffold | Shell UI, auth, API integration replace route modules in `frontend/app/` |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |
 | `frontend/package-lock.json` | Pinned deps | Regenerate when `package.json` changes |
