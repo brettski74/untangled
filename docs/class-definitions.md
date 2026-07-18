@@ -2,9 +2,9 @@
 
 YAML class definitions are the source of truth for persisted object shapes. A
 build-time pipeline generates Pydantic (Python) and Zod (JavaScript/TypeScript)
-validation models from those definitions. PostgreSQL persistence is a later
-child of the mapping-layer epic; this document covers definitions and codegen
-only.
+validation models from those definitions. Runtime persistence materializes
+PostgreSQL tables from the same definitions and round-trips rows with explicit
+SQL (see `untangled.persistence`).
 
 ## Where definitions live
 
@@ -38,23 +38,23 @@ SQL, JSON, Python, and JavaScript.
 
 ### Type vocabulary (M1)
 
-| YAML `type` | Meaning |
-| ----------- | ------- |
-| `string` | UTF-8 text |
-| `boolean` | True/false |
-| `integer` | Whole number |
-| `float` | Floating-point number |
-| `decimal` | Fixed-point decimal (exact; JSON string at boundaries) |
-| `uuid` | UUID (hyphenated string at JSON boundaries) |
-| `datetime` | Timezone-aware timestamp; **UTC** in storage and mapped attributes |
+| YAML `type` | Meaning | PostgreSQL |
+| ----------- | ------- | ---------- |
+| `string` | UTF-8 text | `text` |
+| `boolean` | True/false | `boolean` |
+| `integer` | Whole number | `integer` |
+| `float` | Floating-point number | `double precision` |
+| `decimal` | Fixed-point decimal (exact; JSON string at boundaries) | `numeric` |
+| `uuid` | UUID (hyphenated string at JSON boundaries) | `uuid` |
+| `datetime` | Timezone-aware timestamp; **UTC** in storage and mapped attributes | `timestamptz` |
 
-Keep this vocabulary small. The persistence child will map these types to
-PostgreSQL columns.
+Keep this vocabulary small.
 
 ### Injected system fields
 
-Every generated model includes these fields. **Do not declare them in YAML** —
-definitions that redefine any of them are rejected:
+Every generated model (and every materialized table) includes these fields.
+**Do not declare them in YAML** — definitions that redefine any of them are
+rejected:
 
 | Field | Role |
 | ----- | ---- |
@@ -63,6 +63,10 @@ definitions that redefine any of them are rejected:
 | `updated_at` | Last updated time (UTC) |
 | `created_by` | Creating user id (uuid; no FK yet) |
 | `updated_by` | Last updating user id (uuid; no FK yet) |
+
+Until auth lands, `created_by` / `updated_by` are stamped with a temporary
+well-known UUID (`STUB_ACTOR_ID` in `untangled.persistence.actor`). That constant
+is intentionally easy to replace with an authenticated principal later.
 
 ## Naming conventions
 
@@ -80,11 +84,26 @@ Maps: `demo-item` ↔ `demo_item` ↔ `DemoItem`.
 2. Run **`make models`** from the repository root.
 3. Use the generated Pydantic modules under `backend/src/untangled/generated/`
    and Zod modules under `frontend/app/generated/`.
-4. Schema apply / persistence follows in the next mapping-layer child ticket.
+4. Apply / sync PostgreSQL tables from the same definitions via
+   `untangled.persistence.apply_schema` (recreate-friendly for demo/dev/test;
+   formal versioned migrations are a later ticket).
 
 Generated outputs are **not** committed; regenerate locally and in CI as needed.
 Tests invoke the same generate pipeline and assert behavioural accept/reject
 behaviour (they do not compare golden file text).
+
+## Persistence write rules
+
+- **Create:** generate UUIDv7 `id`; stamp `created_at`, `updated_at`, `created_by`,
+  `updated_by` (actor stub today).
+- **Update:** stamp `updated_at` and `updated_by` only; leave `id` and `created_*`
+  unchanged.
+- Datetimes are stored as `timestamptz` UTC and exposed as UTC on mapped
+  attributes / JSON.
+
+Postgres for local work and `make test` is started with `make db-up`
+(`compose.yaml`). Issue #5 may reshape that Compose layout; the persistence API
+should remain the mapping-layer access path.
 
 ## Datetime / UTC policy
 
@@ -98,9 +117,11 @@ behaviour (they do not compare golden file text).
 
 ```bash
 make models        # YAML → Pydantic + Zod
+make db-up         # start PostgreSQL (Compose)
+make db-down       # stop PostgreSQL
 make clean-models  # remove generated artefacts only
 make clean         # same as clean-models (clean source tree of codegen output)
-make test          # includes generation/validation/naming tests (no Postgres)
+make test          # includes generation + DB-backed persistence tests
 make lint
 ```
 

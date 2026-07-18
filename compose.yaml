@@ -1,0 +1,24 @@
+# Minimal PostgreSQL for local dev and automated tests.
+# Full api+web Compose (#5) may absorb/reshape this wiring later; the
+# mapping/persistence stack itself should stay put.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: untangled
+      POSTGRES_PASSWORD: untangled
+      POSTGRES_DB: untangled
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U untangled -d untangled"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      # Postgres 18+ images expect the mount at /var/lib/postgresql (versioned
+      # subdirs), not the old /var/lib/postgresql/data path.
+      - untangled_pgdata:/var/lib/postgresql
+
+volumes:
+  untangled_pgdata:
