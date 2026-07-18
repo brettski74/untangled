@@ -7,8 +7,6 @@ PYTHON ?= python3
 BACKEND_VENV := $(BACKEND_DIR)/.venv
 BACKEND_PYTHON := $(BACKEND_VENV)/bin/python
 BACKEND_PIP := $(BACKEND_VENV)/bin/pip
-BACKEND_PID := $(RUN_DIR)/backend.pid
-FRONTEND_PID := $(RUN_DIR)/frontend.pid
 
 COMPOSE ?= docker compose
 
@@ -29,46 +27,17 @@ backend-install: ## Create backend venv and install locked dependencies
 frontend-install: ## Install frontend npm dependencies
 	cd $(FRONTEND_DIR) && npm ci
 
-up: install ## Start backend and frontend dev processes (local scaffold only)
-	@mkdir -p $(RUN_DIR)
-	@if [ -f $(BACKEND_PID) ] && kill -0 $$(cat $(BACKEND_PID)) 2>/dev/null; then \
-		echo "backend already running (pid $$(cat $(BACKEND_PID)))"; \
-	else \
-		$(BACKEND_VENV)/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000 \
-			> $(RUN_DIR)/backend.log 2>&1 & echo $$! > $(BACKEND_PID); \
-		echo "backend started on http://127.0.0.1:8000 (pid $$(cat $(BACKEND_PID)))"; \
-	fi
-	@if [ -f $(FRONTEND_PID) ] && kill -0 $$(cat $(FRONTEND_PID)) 2>/dev/null; then \
-		echo "frontend already running (pid $$(cat $(FRONTEND_PID)))"; \
-	else \
-		( cd $(FRONTEND_DIR) && npm run dev -- --host 127.0.0.1 --port 5173 ) \
-			> $(RUN_DIR)/frontend.log 2>&1 & echo $$! > $(FRONTEND_PID); \
-		echo "frontend started on http://127.0.0.1:5173 (pid $$(cat $(FRONTEND_PID)))"; \
-	fi
-	@echo "Compose-based runtime is a later ticket; this target starts local dev processes only."
+up: ## Build and start postgres + api + web via Compose
+	$(COMPOSE) up -d --build --wait
 
-down: ## Stop backend and frontend dev processes started by make up
-	@for name in backend frontend; do \
-		pidfile="$(RUN_DIR)/$$name.pid"; \
-		if [ -f "$$pidfile" ]; then \
-			pid=$$(cat "$$pidfile"); \
-			if kill -0 "$$pid" 2>/dev/null; then \
-				kill "$$pid" 2>/dev/null || true; \
-				echo "stopped $$name (pid $$pid)"; \
-			else \
-				echo "$$name not running (stale pid $$pid)"; \
-			fi; \
-			rm -f "$$pidfile"; \
-		else \
-			echo "$$name not running (no pid file)"; \
-		fi; \
-	done
+down: ## Stop Compose runtime (keeps named DB volume)
+	$(COMPOSE) down
 
-db-up: ## Start containerized PostgreSQL (compose.yaml; #5 may reshape later)
+db-up: ## Start containerized PostgreSQL only (for host-run tests / persistence)
 	$(COMPOSE) up -d postgres
 	@$(MAKE) db-wait
 
-db-down: ## Stop containerized PostgreSQL started by make db-up
+db-down: ## Stop the Compose PostgreSQL service
 	$(COMPOSE) stop postgres
 
 db-wait: ## Wait until PostgreSQL accepts connections
@@ -83,10 +52,10 @@ db-wait: ## Wait until PostgreSQL accepts connections
 	echo "PostgreSQL did not become ready in time"; \
 	exit 1
 
-backend-dev: backend-install ## Run the FastAPI dev server in the foreground
+backend-dev: backend-install ## Run the FastAPI dev server in the foreground (host hot-reload)
 	$(BACKEND_VENV)/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
 
-frontend-dev: frontend-install ## Run the React Router dev server in the foreground
+frontend-dev: frontend-install ## Run the React Router dev server in the foreground (host hot-reload)
 	cd $(FRONTEND_DIR) && npm run dev -- --host 127.0.0.1 --port 5173
 
 models: backend-install ## Generate Pydantic and Zod models from YAML class definitions
@@ -114,5 +83,5 @@ clean-models: ## Remove generated Pydantic/Zod artefacts
 
 clean: clean-models ## Remove generated artefacts (leave a clean source tree)
 
-clean-run: ## Remove local run logs and pid files
+clean-run: ## Remove leftover local run logs and pid files (legacy host up path)
 	rm -rf $(RUN_DIR)

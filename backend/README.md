@@ -18,7 +18,9 @@ Audit stamps currently use a temporary actor stub (`STUB_ACTOR_ID`) until auth l
 
 ## Local run
 
-From the repository root:
+Compose (preferred): from the repository root, `make up` starts postgres + api + web.
+
+Host hot-reload: from the repository root:
 
 ```bash
 make backend-dev
@@ -30,4 +32,4 @@ Or from this directory after `make install`:
 .venv/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Smoke test: `GET http://127.0.0.1:8000/health`
+Smoke test: `GET http://127.0.0.1:8000/health` (docs at `/docs`)
