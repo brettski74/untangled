@@ -458,6 +458,80 @@ test_refine_preflight_missing_origin() {
   assert_fail "missing origin" "$SCRIPTS/refine-preflight.sh" 42
 }
 
+# --- refine-publish ---
+test_refine_publish_happy_path() {
+  mkdir -p "$REPO/.refinement"
+  echo "# agreed draft" >"$REPO/.refinement/7-draft.md"
+
+  local stub="$TEST_TMP/bin"
+  mkdir -p "$stub"
+  cat >"$stub/gh" <<'EOF'
+#!/usr/bin/env bash
+logfile="${GIT_AI_GH_LOG:?}"
+echo "$*" >>"$logfile"
+if [[ "$1" == "auth" && "$2" == "status" ]]; then
+  exit 0
+fi
+if [[ "$1" == "issue" && "$2" == "edit" ]]; then
+  exit 0
+fi
+if [[ "$1" == "issue" && "$2" == "view" ]]; then
+  # Pre-unassign assignee listing (no --json url/title bundle)
+  if [[ "$*" == *assignees* && "$*" != *title* ]]; then
+    echo "alice"
+    echo "bob"
+    exit 0
+  fi
+  # Final verified snapshot
+  if [[ "$*" == *--json* ]]; then
+    cat <<'JSON'
+{"url":"https://github.com/example/untangled/issues/7","title":"Schema migrations baseline","state":"OPEN","labels":[{"name":"M1"},{"name":"READY"}],"assignees":[],"body":"# agreed draft\n"}
+JSON
+    exit 0
+  fi
+fi
+echo "unexpected gh args: $*" >&2
+exit 1
+EOF
+  chmod +x "$stub/gh"
+
+  local log="$TEST_TMP/gh.log"
+  : >"$log"
+  local out
+  out="$(
+    PATH="$stub:$PATH" GIT_AI_GH_LOG="$log" \
+      "$SCRIPTS/refine-publish.sh" 7 2>&1
+  )" || {
+    echo "  FAIL: publish run (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("publish run")
+    return 0
+  }
+
+  [[ ! -f "$REPO/.refinement/7-draft.md" ]]
+  assert_eq "draft deleted" "0" "$?"
+  assert_eq "issue_url line" "issue_url=https://github.com/example/untangled/issues/7" "$(echo "$out" | grep '^issue_url=')"
+  assert_eq "title line" "title=Schema migrations baseline" "$(echo "$out" | grep '^title=')"
+  assert_eq "state line" "state=OPEN" "$(echo "$out" | grep '^state=')"
+  assert_eq "labels line" "labels=M1,READY" "$(echo "$out" | grep '^labels=')"
+  assert_eq "assignees empty" "assignees=" "$(echo "$out" | grep '^assignees=')"
+  assert_eq "draft_deleted yes" "draft_deleted=yes" "$(echo "$out" | grep '^draft_deleted=')"
+  assert_eq "label_ready yes" "label_ready=yes" "$(echo "$out" | grep '^label_ready=')"
+  assert_eq "unassigned both" "unassigned=alice,bob" "$(echo "$out" | grep '^unassigned=')"
+  grep -q -- '--body-file .refinement/7-draft.md' "$log"
+  assert_eq "used body-file" "0" "$?"
+  grep -q -- '--add-label READY' "$log"
+  assert_eq "added READY" "0" "$?"
+}
+
+test_refine_publish_bad_args_and_missing_draft() {
+  assert_fail "missing N" "$SCRIPTS/refine-publish.sh"
+  assert_fail "non-integer N" "$SCRIPTS/refine-publish.sh" abc
+  assert_fail "zero N" "$SCRIPTS/refine-publish.sh" 0
+  assert_fail "missing draft" "$SCRIPTS/refine-publish.sh" 99
+}
+
 # --- run all ---
 main() {
   with_fixture "common override" test_common_repo_root_override
@@ -483,6 +557,8 @@ main() {
   with_fixture "refine preflight" test_refine_preflight_creates_and_reports
   with_fixture "refine preflight bad args" test_refine_preflight_bad_args
   with_fixture "refine preflight no origin" test_refine_preflight_missing_origin
+  with_fixture "refine publish" test_refine_publish_happy_path
+  with_fixture "refine publish bad args" test_refine_publish_bad_args_and_missing_draft
 
   echo
   echo "Results: $PASS passed, $FAIL failed"

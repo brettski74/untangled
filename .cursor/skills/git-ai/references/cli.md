@@ -84,3 +84,29 @@ Failure modes (non-zero):
 - No `origin` remote
 
 Owner/repo parsing from `origin_url` is deliberately left to the agent.
+
+## `refine-publish.sh`
+
+| Arg | Meaning |
+| --- | ------- |
+| `<issue-number>` | GitHub issue number `N` (exactly one argument; positive integer) |
+
+Behaviour:
+
+- Standard bootstrap (`common.sh`), requires `origin` and authenticated `gh`.
+- Requires `.refinement/<N>-draft.md`; never creates or rewrites draft content.
+- `gh issue edit <N> --body-file .refinement/<N>-draft.md`
+- `gh issue edit <N> --add-label READY`
+- Removes every current assignee via `gh issue edit --remove-assignee`
+- Deletes the draft; removes `.refinement/` only if empty afterward
+- Success output (stable `key=value` lines): `repo_root`, `issue_number`, `issue_url`, `title`, `state`, `labels`, `assignees` (post-unassign), `draft_path`, `draft_bytes`, `draft_lines`, `body_bytes`, `body_lines`, `draft_deleted`, `refinement_dir_removed`, `unassigned`, `label_ready` (verified from issue after edits)
+
+Failure modes (non-zero):
+
+- Missing, extra, non-integer, or non-positive `N`
+- Missing draft file
+- Missing `origin` / bootstrap failure
+- `gh` missing or not authenticated
+- Any `gh issue edit` / `gh issue view` failure
+
+Does not create child issues or perform refine judgment (feature vs bug, READY confirmation)—workflow skill only.

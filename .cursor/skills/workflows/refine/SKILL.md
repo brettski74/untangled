@@ -33,7 +33,7 @@ where `<N>` is the GitHub issue number.
 
 - A **fresh chat** dedicated to this refinement (do not reuse a thread that mixed another ticket’s implementation or UAT).
 - The target issue **number** `N` and repository context (owner/repo or equivalent).
-- **GitHub access** via `**user-github` MCP**. If github MCP is unavailable or fails, abort and report the problem to the user.
+- **GitHub access** via `**user-github` MCP** for reads, assignment at start, and creating child issues. **Finish/publish** uses git-ai `refine-publish.sh` (`gh`), not MCP body paste. If MCP is unavailable for the read/assign/create steps, abort and report the problem to the user.
 - The issue must be **open**; if it is closed or marked duplicate, confirm with the user before proceeding.
 - **Assignment:** the issue must be either **unassigned** or assigned to the **current user**. If it is assigned to someone else, **stop** and warn the user that someone else may already be working on this ticket—do not reassign or continue. If it is unassigned, assign it to the current user.
 - The issue should not be labelled as READY. If it is, confirm with the user whether re-refinement is really necessary.
@@ -45,12 +45,13 @@ where `<N>` is the GitHub issue number.
 3. **Read** the issue (title, body, labels, assignees, and relevant comments) from GitHub. Enforce the open/assignment/READY pre-requisites above before drafting.
 4. **Draft** a fully detailed story into `.refinement/<N>-draft.md`: user voice, context, explicit **out of scope**, **acceptance criteria**, and risks/limitations/caveats. Seed from the current issue body if useful, but the draft file is the source of truth for the rest of this workflow.
 5. **Discuss gaps** with the user in chat; revise `.refinement/<N>-draft.md` until the user explicitly agrees the requirements are correct and complete. Do **not** update GitHub during this loop.
-6. **Only after** that explicit agreement: update the GitHub issue body with the final draft text (for example `issue_write` with `method: update` and the new `body`) so the issue becomes the **single source of truth**, label the issue as READY, and **unassign** the issue.
-7. Delete `.refinement/<N>-draft.md` (and the `.refinement/` directory if empty). Inform the user that this workflow is complete.
+6. **Only after** that explicit agreement: run `.cursor/skills/git-ai/scripts/refine-publish.sh <N>`. That script publishes `.refinement/<N>-draft.md` to the issue body via `gh issue edit --body-file`, ensures the READY label, unassigns the issue, deletes the draft (and `.refinement/` if empty), and prints verified issue state. Do **not** paste the draft through `issue_write`, invent Python/JSON serializers, hand-roll `gh`/`curl` publish chains, or chain extra `gh` verification onto the script.
+7. Inform the user that this workflow is complete using the script’s output (issue URL, labels, assignees, body size).
 
 ## Notes
 
-- Until READY, the draft lives only in `.refinement/<N>-draft.md`. The GitHub issue body is updated once at the end, not on every revision.
+- Until READY, the draft lives only in `.refinement/<N>-draft.md`. The GitHub issue body is updated once at the end (via `refine-publish.sh`), not on every revision.
+- Large issue bodies are fine for **user-github** MCP when calling `issue_write` directly—do not invent workarounds “because 14k is too big.” Refine finish still uses `--body-file` because the draft is already a local file and that keeps agents from re-encoding it.
 - Avoid restating project conventions that already live in rules, skills, or **AGENTS.md**—reference them when needed; do not paste or paraphrase that material into the draft or the issue.
 - If requirements change materially later, either run this workflow again or treat the change as implementation detail via the **implement** skill, as the team prefers.
 - The github issue should not be labelled READY unless and until the user has explicitly agreed that the requirements are correct and complete and we're ready to finish off this workflow.
