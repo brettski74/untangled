@@ -97,8 +97,10 @@ behaviour (they do not compare golden file text).
 ## Commands
 
 ```bash
-make models   # YAML → Pydantic + Zod
-make test     # includes generation/validation/naming tests (no Postgres)
+make models        # YAML → Pydantic + Zod
+make clean-models  # remove generated artefacts only
+make clean         # same as clean-models (clean source tree of codegen output)
+make test          # includes generation/validation/naming tests (no Postgres)
 make lint
 ```
 

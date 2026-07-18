@@ -30,6 +30,9 @@ This creates `backend/.venv`, installs pinned Python dependencies from `backend/
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
 | `make test` | Backend pytest + frontend production build smoke test |
 | `make models` | Generate Pydantic + Zod models from `backend/class-definitions/` |
+| `make clean-models` | Remove generated Pydantic/Zod artefacts |
+| `make clean` | Same as `clean-models` (clean source tree of codegen output) |
+| `make clean-run` | Remove `.run/` logs and pid files |
 
 Logs and pid files for `make up` live under `.run/` (gitignored).
 
