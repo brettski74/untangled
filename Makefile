@@ -103,10 +103,11 @@ backend-test: backend-install frontend-install db-up ## Run backend pytest suite
 	PYTHONPATH=$(BACKEND_DIR)/src $(BACKEND_PYTHON) -m pytest $(BACKEND_DIR)
 
 frontend-lint: frontend-install ## Typecheck the frontend (minimal lint until ESLint is added)
-	cd $(FRONTEND_DIR) && npm run typecheck
+	# CI=1: react-router typegen ignores vite clearScreen and wipes TTY scrollback otherwise
+	cd $(FRONTEND_DIR) && CI=1 npm run typecheck
 
 frontend-test: frontend-install ## Smoke-test frontend SSR production build
-	cd $(FRONTEND_DIR) && npm run build
+	cd $(FRONTEND_DIR) && CI=1 npm run build
 
 clean-models: ## Remove generated Pydantic/Zod artefacts
 	rm -rf $(BACKEND_DIR)/src/untangled/generated $(FRONTEND_DIR)/app/generated
