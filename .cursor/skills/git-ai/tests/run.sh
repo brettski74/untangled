@@ -458,6 +458,165 @@ test_refine_preflight_missing_origin() {
   assert_fail "missing origin" "$SCRIPTS/refine-preflight.sh" 42
 }
 
+# --- git-status ---
+test_git_status_clean_default() {
+  local out
+  out="$("$SCRIPTS/git-status.sh" 2>&1)" || {
+    echo "  FAIL: git-status run (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("git-status run")
+    return 0
+  }
+  assert_eq "repo_root line" "repo_root=$(cd "$REPO" && pwd)" "$(echo "$out" | grep '^repo_root=')"
+  assert_eq "origin_url raw" "origin_url=$BARE" "$(echo "$out" | grep '^origin_url=')"
+  assert_eq "default_branch" "default_branch=main" "$(echo "$out" | grep '^default_branch=')"
+  assert_eq "current_branch main" "current_branch=main" "$(echo "$out" | grep '^current_branch=')"
+  assert_eq "head_detached no" "head_detached=no" "$(echo "$out" | grep '^head_detached=')"
+  assert_eq "on_default yes" "on_default=yes" "$(echo "$out" | grep '^on_default=')"
+  assert_eq "tracked_dirty no" "tracked_dirty=no" "$(echo "$out" | grep '^tracked_dirty=')"
+  assert_eq "has_untracked no" "has_untracked=no" "$(echo "$out" | grep '^has_untracked=')"
+  assert_eq "no issue keys without N" "" "$(echo "$out" | grep '^issue_number=' || true)"
+  # No status_path lines when clean
+  assert_eq "no porcelain paths" "" "$(echo "$out" | grep '^status_path=' || true)"
+}
+
+test_git_status_dirty_and_issue_branches() {
+  assert_ok "create feature" "$SCRIPTS/checkout-branch.sh" feature/28-schema-ir
+  echo feat >"$REPO/feat.txt"
+  assert_ok "commit feature" "$SCRIPTS/stage-commit.sh" -m "feat" -- feat.txt
+  assert_ok "push feature" "$SCRIPTS/push.sh"
+
+  # Second local-only match should appear in issue_branch_local
+  git -C "$REPO" branch feature/28-other >/dev/null
+
+  echo dirty >"$REPO/README"
+  echo untracked >"$REPO/u.txt"
+
+  local out
+  out="$("$SCRIPTS/git-status.sh" 28 2>&1)" || {
+    echo "  FAIL: git-status with N (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("git-status with N")
+    return 0
+  }
+  assert_eq "on_default no" "on_default=no" "$(echo "$out" | grep '^on_default=')"
+  assert_eq "tracked_dirty yes" "tracked_dirty=yes" "$(echo "$out" | grep '^tracked_dirty=')"
+  assert_eq "has_untracked yes" "has_untracked=yes" "$(echo "$out" | grep '^has_untracked=')"
+  assert_eq "upstream set" "upstream=origin/feature/28-schema-ir" "$(echo "$out" | grep '^upstream=')"
+  assert_eq "issue_number" "issue_number=28" "$(echo "$out" | grep '^issue_number=')"
+  assert_eq "on_issue_branch yes" "on_issue_branch=yes" "$(echo "$out" | grep '^on_issue_branch=')"
+  assert_eq "local matches" "issue_branch_local=feature/28-other,feature/28-schema-ir" "$(echo "$out" | grep '^issue_branch_local=')"
+  assert_eq "remote matches" "issue_branch_remote=origin/feature/28-schema-ir" "$(echo "$out" | grep '^issue_branch_remote=')"
+  echo "$out" | grep -qE '^status_path=.M README'
+  assert_eq "porcelain modified README" "0" "$?"
+  echo "$out" | grep -q '^status_path=?? u.txt'
+  assert_eq "porcelain untracked u.txt" "0" "$?"
+
+  # Discard dirty state so we can switch branches cleanly
+  git -C "$REPO" checkout -- README
+  rm -f "$REPO/u.txt"
+
+  # On main: matching branches exist but on_issue_branch=no
+  git -C "$REPO" checkout main >/dev/null
+  out="$("$SCRIPTS/git-status.sh" 28 2>&1)"
+  assert_eq "on_issue_branch no on main" "on_issue_branch=no" "$(echo "$out" | grep '^on_issue_branch=')"
+  # Unrelated issue number → empty matches
+  out="$("$SCRIPTS/git-status.sh" 99 2>&1)"
+  assert_eq "empty local for 99" "issue_branch_local=" "$(echo "$out" | grep '^issue_branch_local=')"
+  assert_eq "empty remote for 99" "issue_branch_remote=" "$(echo "$out" | grep '^issue_branch_remote=')"
+}
+
+test_git_status_detached() {
+  local sha
+  sha="$(git -C "$REPO" rev-parse HEAD)"
+  git -C "$REPO" checkout --detach "$sha" >/dev/null 2>&1
+  local out
+  out="$("$SCRIPTS/git-status.sh" 2>&1)" || {
+    echo "  FAIL: git-status detached should succeed (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("git-status detached")
+    return 0
+  }
+  assert_eq "head_detached yes" "head_detached=yes" "$(echo "$out" | grep '^head_detached=')"
+  assert_eq "on_default no when detached" "on_default=no" "$(echo "$out" | grep '^on_default=')"
+  assert_eq "empty upstream when detached" "upstream=" "$(echo "$out" | grep '^upstream=')"
+}
+
+test_git_status_bad_args() {
+  assert_fail "non-integer N" "$SCRIPTS/git-status.sh" abc
+  assert_fail "zero N" "$SCRIPTS/git-status.sh" 0
+  assert_fail "negative N" "$SCRIPTS/git-status.sh" -7
+  assert_fail "extra args" "$SCRIPTS/git-status.sh" 28 29
+}
+
+test_git_status_missing_origin() {
+  git -C "$REPO" remote remove origin
+  assert_fail "missing origin" "$SCRIPTS/git-status.sh"
+}
+
+# --- branch-diff ---
+test_branch_diff_on_default_empty() {
+  local out
+  out="$("$SCRIPTS/branch-diff.sh" 2>&1)" || {
+    echo "  FAIL: branch-diff on default (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("branch-diff on default")
+    return 0
+  }
+  assert_eq "base_ref" "base_ref=origin/main" "$(echo "$out" | grep '^base_ref=')"
+  assert_eq "compare_ref HEAD" "compare_ref=HEAD" "$(echo "$out" | grep '^compare_ref=')"
+  assert_eq "commits_ahead 0" "commits_ahead=0" "$(echo "$out" | grep '^commits_ahead=')"
+  assert_eq "no commit lines" "" "$(echo "$out" | grep '^commit=' || true)"
+  assert_eq "no diff_stat" "" "$(echo "$out" | grep '^diff_stat=' || true)"
+  assert_eq "no diff_summary" "" "$(echo "$out" | grep '^diff_summary=' || true)"
+}
+
+test_branch_diff_feature_commits_and_stat() {
+  assert_ok "create feature" "$SCRIPTS/checkout-branch.sh" feature/diff-me
+  echo a >"$REPO/a.txt"
+  echo b >"$REPO/b.txt"
+  assert_ok "commit" "$SCRIPTS/stage-commit.sh" -m "add a and b" -- a.txt b.txt
+
+  local out
+  out="$("$SCRIPTS/branch-diff.sh" 2>&1)" || {
+    echo "  FAIL: branch-diff on feature (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("branch-diff on feature")
+    return 0
+  }
+  assert_eq "commits_ahead 1" "commits_ahead=1" "$(echo "$out" | grep '^commits_ahead=')"
+  echo "$out" | grep -qE '^commit=[0-9a-f]+ add a and b$'
+  assert_eq "commit oneline" "0" "$?"
+  echo "$out" | grep -q '^diff_stat= a.txt'
+  assert_eq "diff_stat a.txt" "0" "$?"
+  echo "$out" | grep -q '^diff_stat= b.txt'
+  assert_eq "diff_stat b.txt" "0" "$?"
+  echo "$out" | grep -qE '^diff_summary= 2 files changed'
+  assert_eq "diff_summary" "0" "$?"
+
+  # Explicit ref works while on another branch
+  git -C "$REPO" checkout main >/dev/null
+  out="$("$SCRIPTS/branch-diff.sh" feature/diff-me 2>&1)"
+  assert_eq "compare_ref named" "compare_ref=feature/diff-me" "$(echo "$out" | grep '^compare_ref=')"
+  assert_eq "commits_ahead via named" "commits_ahead=1" "$(echo "$out" | grep '^commits_ahead=')"
+}
+
+test_branch_diff_bad_args() {
+  assert_fail "extra args" "$SCRIPTS/branch-diff.sh" HEAD main
+  assert_fail "dash ref" "$SCRIPTS/branch-diff.sh" --oops
+  assert_fail "missing ref" "$SCRIPTS/branch-diff.sh" does-not-exist
+}
+
+test_branch_diff_missing_origin() {
+  git -C "$REPO" remote remove origin
+  assert_fail "missing origin" "$SCRIPTS/branch-diff.sh"
+}
+
 # --- refine-publish ---
 test_refine_publish_happy_path() {
   mkdir -p "$REPO/.refinement"
@@ -557,6 +716,15 @@ main() {
   with_fixture "refine preflight" test_refine_preflight_creates_and_reports
   with_fixture "refine preflight bad args" test_refine_preflight_bad_args
   with_fixture "refine preflight no origin" test_refine_preflight_missing_origin
+  with_fixture "git-status clean default" test_git_status_clean_default
+  with_fixture "git-status dirty+issue" test_git_status_dirty_and_issue_branches
+  with_fixture "git-status detached" test_git_status_detached
+  with_fixture "git-status bad args" test_git_status_bad_args
+  with_fixture "git-status no origin" test_git_status_missing_origin
+  with_fixture "branch-diff empty default" test_branch_diff_on_default_empty
+  with_fixture "branch-diff feature" test_branch_diff_feature_commits_and_stat
+  with_fixture "branch-diff bad args" test_branch_diff_bad_args
+  with_fixture "branch-diff no origin" test_branch_diff_missing_origin
   with_fixture "refine publish" test_refine_publish_happy_path
   with_fixture "refine publish bad args" test_refine_publish_bad_args_and_missing_draft
 
