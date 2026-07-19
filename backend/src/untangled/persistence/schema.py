@@ -13,7 +13,6 @@ from psycopg import Connection, sql
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELDS
 from untangled.persistence.sql_types import postgres_type
-from untangled.schema.migrate import migrate
 
 
 def apply_schema(
@@ -28,6 +27,9 @@ def apply_schema(
     drop/recreate can still reach the desired schema. Prefer calling ``migrate``
     directly when the destructive gate matters.
     """
+    # Lazy import: persistence ↔ schema would otherwise cycle at package import time.
+    from untangled.schema.migrate import migrate
+
     result = migrate(conn, definitions_dir, allow_destructive=allow_destructive)
     return list(result.definitions)
 

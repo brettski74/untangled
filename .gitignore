@@ -237,3 +237,4 @@ dist/
 
 # Vite
 .vite/
+.vscode/settings.json

@@ -344,6 +344,9 @@ AI agents must:
 * Follow this document strictly
 * Prefer simple, maintainable solutions
 * Avoid unnecessary complexity
+* never use raw git commands for operations covered by the git-ai skill and its scripts
+* always use git-ai scripts when they provide what is needed
+* never chain gi-ai scripts with other commands
 
 ---
 
