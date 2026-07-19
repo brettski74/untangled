@@ -43,6 +43,7 @@ Use this workflow when building and shipping work for an agreed GitHub issue: pl
 
 ## Notes
 
+- **NEVER** consult `/architecture/`. That intent store is private to architect skills. Do not read it for planning, implementation, or completion narratives, and do not paste its contents into those artefacts.
 - Covered local git operations (status/orientation, sync default, create/switch branch, stage/commit, push) go through the **git-ai** skill scripts—do not hand-assemble equivalent `git` chains unless the user asks for raw git or no script covers the need. See `.cursor/skills/git-ai/SKILL.md`.
 - If scope drifts during implementation, pause and reconcile with the issue or run the **refine** skill before piling on unrelated changes.
 - The PR is the review surface; keep the issue updated only when the team wants cross-links, not as a substitute for the PR description.

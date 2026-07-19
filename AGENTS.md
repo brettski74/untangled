@@ -348,6 +348,10 @@ AI agents must:
 * always use git-ai scripts when they provide what is needed
 * never chain gi-ai scripts with other commands
 
+### 6.1 Architecture intent store
+
+The `/architecture/` directory is private to **architect** skills. Primary workflow agents (refine, implement, verify, and similar) must **NEVER** consult `/architecture/` for guidance, planning, or review. Do not paste architecture content into this file or into workflow skill prompts.
+
 ---
 
 ## 7. Licensing

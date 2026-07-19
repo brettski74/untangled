@@ -38,6 +38,7 @@ Use this workflow for **developer-led acceptance testing** after implementation 
 
 ## Notes
 
+- **NEVER** consult `/architecture/`. That intent store is private to architect skills. Do not read it for verification checklists, bug analysis, or fix design, and do not paste its contents into comments or chat.
 - Covered local git operations (status/orientation, branch-diff, checkout, stage/commit, push, post-merge sync/cleanup) go through the **git-ai** skill scripts—do not hand-assemble equivalent `git` chains unless the user asks for raw git or no script covers the need. See `.cursor/skills/git-ai/SKILL.md`.
 - Verification is not the place to silently broaden scope; capture product decisions in comments or run the **refine** skill when the specification must change.
 - If a gap is purely operational (data, config), document it in comments and fix procedures or README as appropriate without changing the issue’s acceptance story unless the user asks.

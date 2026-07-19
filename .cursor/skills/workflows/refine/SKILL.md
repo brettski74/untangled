@@ -50,6 +50,7 @@ where `<N>` is the GitHub issue number.
 
 ## Notes
 
+- **NEVER** consult `/architecture/`. That intent store is private to architect skills. Do not read it for refinement guidance or paste its contents into drafts or chat.
 - Until READY, the draft lives only in `.refinement/<N>-draft.md`. The GitHub issue body is updated once at the end (via `refine-publish.sh`), not on every revision.
 - Large issue bodies are fine for **user-github** MCP when calling `issue_write` directly—do not invent workarounds “because 14k is too big.” Refine finish still uses `--body-file` because the draft is already a local file and that keeps agents from re-encoding it.
 - Avoid restating project conventions that already live in rules, skills, or **AGENTS.md**—reference them when needed; do not paste or paraphrase that material into the draft or the issue.
