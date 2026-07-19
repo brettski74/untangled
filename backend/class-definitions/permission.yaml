@@ -1,0 +1,19 @@
+# RBAC permission (M1). Canonical key is the authority for seeds and helpers.
+name: permission
+display-name: Permission
+description: >
+  Authorization grant identified by a stable canonical key. Class+operation
+  keys use "{class}:{operation}" (kebab class name); the non-class key "admin"
+  grants all access. Optional class-name and operation must stay consistent
+  with the key when present.
+attributes:
+  key:
+    type: string
+    required: true
+    unique: true
+  class-name:
+    type: string
+    required: false
+  operation:
+    type: string
+    required: false

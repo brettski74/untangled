@@ -10,7 +10,16 @@ from untangled.mapping.definition import DefinitionError, load_definition, load_
 def test_load_demo_item(repo_definitions: Path) -> None:
     definitions = load_definitions(repo_definitions)
     by_kebab = {d.name_kebab: d for d in definitions}
-    assert set(by_kebab) == {"demo-item", "demo-link", "refresh-token", "user"}
+    assert set(by_kebab) == {
+        "demo-item",
+        "demo-link",
+        "permission",
+        "refresh-token",
+        "role",
+        "role-permission",
+        "user",
+        "user-role",
+    }
     demo = by_kebab["demo-item"]
     assert demo.name_snake == "demo_item"
     assert demo.display_name == "Demo Item"
@@ -28,6 +37,17 @@ def test_load_demo_item(repo_definitions: Path) -> None:
     user_attrs = {attr.name_snake: attr for attr in user.attributes}
     assert user_attrs["username"].unique is True
     assert user_attrs["password_hash"].unique is False
+
+    role = by_kebab["role"]
+    role_attrs = {attr.name_snake: attr for attr in role.attributes}
+    assert role_attrs["name"].unique is True
+    permission = by_kebab["permission"]
+    perm_attrs = {attr.name_snake: attr for attr in permission.attributes}
+    assert perm_attrs["key"].unique is True
+    user_role = by_kebab["user-role"]
+    ur_attrs = {attr.name_snake: attr for attr in user_role.attributes}
+    assert ur_attrs["user_id"].references == "user"
+    assert ur_attrs["role_id"].references == "role"
 
 
 def test_load_demo_link_fk(repo_definitions: Path) -> None:

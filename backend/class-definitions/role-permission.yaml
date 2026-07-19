@@ -1,0 +1,15 @@
+# Many-to-many join: role ↔ permission (first-class object with its own UUID PK).
+name: role-permission
+display-name: Role Permission
+description: >
+  Grant of a permission to a role. Idempotent seed uses stable join row ids;
+  composite uniqueness is enforced by seed/application logic in M1.
+attributes:
+  role-id:
+    type: uuid
+    required: true
+    references: role
+  permission-id:
+    type: uuid
+    required: true
+    references: permission

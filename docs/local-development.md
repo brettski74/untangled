@@ -4,7 +4,7 @@ Untangled is **containers-first**: `make up` brings up PostgreSQL, the API, and 
 
 For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` if you need Postgres). Those are not required for the Compose runtime.
 
-Schema apply and user seed are **intentional**: after `make up`, run `make migrate` then `make seed`. Neither runs automatically on Compose start.
+Schema apply and baseline seed are **intentional**: after `make up`, run `make migrate` then `make seed`. Neither runs automatically on Compose start.
 
 ## Prerequisites
 
@@ -19,10 +19,10 @@ From the repository root:
 ```bash
 make up
 make migrate   # apply YAML schema intent (Postgres must be reachable)
-make seed      # idempotent baseline users (admin / readonly / readwrite)
+make seed      # idempotent baseline users + RBAC (roles/permissions/attachments)
 ```
 
-That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass, reconciles the database to `backend/class-definitions/`, then upserts the three local seed users.
+That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass, reconciles the database to `backend/class-definitions/`, then upserts the three local seed users and attaches RBAC roles.
 
 For host-side lint/test tooling:
 
@@ -48,21 +48,64 @@ Inside the **api** container, Compose sets `DATABASE_URL` to use the `postgres` 
 
 Seed users (usernames are case-normalized to lowercase):
 
-| Username | Default password | Stable UUID | Intent |
-| -------- | ---------------- | ----------- | ------ |
-| `admin` | `admin-change-me` | `01900000-0000-7000-8000-000000000001` | admin role in #9 |
-| `readonly` | `readonly-change-me` | `01900000-0000-7000-8000-000000000002` | read-only role in #9 |
-| `readwrite` | `readwrite-change-me` | `01900000-0000-7000-8000-000000000003` | read-write role in #9 |
+| Username | Default password | Stable UUID | Role |
+| -------- | ---------------- | ----------- | ---- |
+| `admin` | `admin-change-me` | `01900000-0000-7000-8000-000000000001` | `admin` (permission `admin` = allow-all) |
+| `readonly` | `readonly-change-me` | `01900000-0000-7000-8000-000000000002` | `read-only` (`{class}:read`) |
+| `readwrite` | `readwrite-change-me` | `01900000-0000-7000-8000-000000000003` | `read-write` (create/read/update; **no** `:delete`, **no** `admin`) |
 
 Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_READWRITE_PASSWORD` when running `make seed`.
+
+### Permission keys
+
+- Class+operation: `{class}:{operation}` where `class` is the YAML class `name` (kebab-case) and `operation` is one of `create`, `read`, `update`, `delete`. Example: `demo-item:read`.
+- For M1, `read` covers list, fetch-by-id, and search.
+- Non-class key in M1: `admin` — grants all access in enforcement helpers.
+- Seeded catalog includes full CRUD keys for `demo-item`, `incident`, and `change-request` (including `:delete` rows). Pre-seeding `incident` / `change-request` permission **rows** does not create those domain tables.
+- Effective permissions are the **union** across all roles assigned to a user. Resolution is from the database per request (not JWT claims).
+
+### Roles (stable seed UUIDs)
+
+| Role `name` | UUID | Permissions |
+| ----------- | ---- | ----------- |
+| `admin` | `01900000-0000-7000-8000-000000000011` | `admin` |
+| `read-only` | `01900000-0000-7000-8000-000000000012` | `{class}:read` for seeded classes |
+| `read-write` | `01900000-0000-7000-8000-000000000013` | `{class}:create`, `:read`, `:update` for seeded classes |
+
+### Enforcement helpers (for later domain routes)
+
+Use FastAPI dependencies from `untangled.rbac`:
+
+```python
+from typing import Annotated, Any
+
+from fastapi import Depends
+
+from untangled.rbac import require_class_operation, require_permission
+
+@router.get("/incidents")
+def list_incidents(
+    _user: Annotated[dict[str, Any], Depends(require_class_operation("incident", "read"))],
+):
+    ...
+
+@router.delete("/incidents/{id}")
+def delete_incident(
+    _user: Annotated[dict[str, Any], Depends(require_permission("incident:delete"))],
+):
+    ...
+```
+
+Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
 
 ### `/docs` Authorize loop
 
 1. Open `http://127.0.0.1:8000/docs`.
 2. `POST /auth/login` (OAuth2 password form) with a seed username/password — copy `access_token`.
-3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me`.
-4. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
-5. `POST /auth/logout` with the refresh token to revoke it.
+3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
+4. Hit `GET /auth/rbac-probe` (requires `demo-item:read` or `admin`). All three seed users succeed; a user with no roles gets **403**.
+5. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
+6. `POST /auth/logout` with the refresh token to revoke it.
 
 `GET /health` and `/docs` stay public. There is no “auth disabled” mode.
 
@@ -77,7 +120,7 @@ Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_R
 | `make db-down` | Stop the Compose PostgreSQL service |
 | `make db-wait` | Wait until PostgreSQL accepts connections |
 | `make migrate` | Apply YAML schema intent via production CLI (`python -m untangled.schema`) |
-| `make seed` | Idempotent seed of baseline users (`python -m untangled.seed`) |
+| `make seed` | Idempotent seed of baseline users + RBAC (`python -m untangled.seed`) |
 | `make backend-dev` | Run FastAPI with reload on the host (port 8000) |
 | `make frontend-dev` | Run React Router dev server on the host (port 5173) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
@@ -135,8 +178,8 @@ The welcome page does not call the API in this milestone slice; the env and netw
 | ----- | ------ | ---------- |
 | `make up` / `make down` | Full Compose runtime (postgres + api + web); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
-| `make seed` / `python -m untangled.seed` | Three baseline users (intentional) | Role attachment in #9 |
-| Auth (`/auth/login`, refresh, logout, `/auth/me`) | Bearer JWT + rotating refresh | RBAC #9; UI login #11; hardening #33 |
+| `make seed` / `python -m untangled.seed` | Three baseline users + roles/permissions/attachments (intentional) | Role-admin HTTP APIs later |
+| Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI login #11; hardening #33 |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen | See [class-definitions.md](./class-definitions.md) |

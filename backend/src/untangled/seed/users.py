@@ -16,7 +16,7 @@ SEED_READWRITE_ID = UUID("01900000-0000-7000-8000-000000000003")
 
 @dataclass(frozen=True, slots=True)
 class SeedUser:
-    """One intentional seed principal (roles attached in #9)."""
+    """One intentional seed principal with a matching RBAC role attachment."""
 
     id: UUID
     username: str
@@ -33,7 +33,7 @@ SEED_USERS: tuple[SeedUser, ...] = (
         display_name="Local Admin",
         password_env="SEED_ADMIN_PASSWORD",
         default_password="admin-change-me",
-        intent="admin (role in #9)",
+        intent="admin role (allow-all via admin permission)",
     ),
     SeedUser(
         id=SEED_READONLY_ID,
@@ -41,7 +41,7 @@ SEED_USERS: tuple[SeedUser, ...] = (
         display_name="Local Read-Only",
         password_env="SEED_READONLY_PASSWORD",
         default_password="readonly-change-me",
-        intent="read-only (role in #9)",
+        intent="read-only role ({class}:read for seeded classes)",
     ),
     SeedUser(
         id=SEED_READWRITE_ID,
@@ -49,7 +49,7 @@ SEED_USERS: tuple[SeedUser, ...] = (
         display_name="Local Read-Write",
         password_env="SEED_READWRITE_PASSWORD",
         default_password="readwrite-change-me",
-        intent="read-write (role in #9)",
+        intent="read-write role (create/read/update; no delete/admin)",
     ),
 )
 

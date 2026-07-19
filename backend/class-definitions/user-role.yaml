@@ -1,0 +1,15 @@
+# Many-to-many join: user ↔ role (first-class object with its own UUID PK).
+name: user-role
+display-name: User Role
+description: >
+  Assignment of a role to a user. Idempotent seed uses stable join row ids;
+  composite uniqueness is enforced by seed/application logic in M1.
+attributes:
+  user-id:
+    type: uuid
+    required: true
+    references: user
+  role-id:
+    type: uuid
+    required: true
+    references: role

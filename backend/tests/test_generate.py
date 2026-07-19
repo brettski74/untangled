@@ -53,15 +53,23 @@ def test_generate_demo_pydantic_accepts_and_rejects(
     assert {d.name_snake for d in result.definitions} == {
         "demo_item",
         "demo_link",
+        "permission",
         "refresh_token",
+        "role",
+        "role_permission",
         "user",
+        "user_role",
     }
     assert (pydantic_out / "demo_item.py").is_file()
     assert (pydantic_out / "demo_link.py").is_file()
     assert (pydantic_out / "user.py").is_file()
+    assert (pydantic_out / "role.py").is_file()
+    assert (pydantic_out / "permission.py").is_file()
     assert (zod_out / "demo_item.ts").is_file()
     assert (zod_out / "demo_link.ts").is_file()
     assert (zod_out / "user.ts").is_file()
+    assert (zod_out / "role.ts").is_file()
+    assert (zod_out / "permission.ts").is_file()
 
     module = _load_module(pydantic_out / "demo_item.py", "generated_demo_item")
     demo_item = module.DemoItem

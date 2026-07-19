@@ -1,0 +1,14 @@
+# RBAC role (M1). Seeded catalog; no operator CRUD HTTP API yet.
+name: role
+display-name: Role
+description: >
+  Named set of permissions assigned to users. Users may hold multiple roles;
+  effective permissions are the union across assignments.
+attributes:
+  name:
+    type: string
+    required: true
+    unique: true
+  display-name:
+    type: string
+    required: true

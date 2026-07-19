@@ -18,7 +18,16 @@ from untangled.schema import (
     unique_index_name,
 )
 
-_MANAGED = {"demo_item", "demo_link", "refresh_token", "user"}
+_MANAGED = {
+    "demo_item",
+    "demo_link",
+    "permission",
+    "refresh_token",
+    "role",
+    "role_permission",
+    "user",
+    "user_role",
+}
 
 
 def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
@@ -74,6 +83,41 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
         IndexIR(name=unique_index_name("user", "username"), columns=("username",), unique=True),
     )
     assert all(fk.referenced_table == "user" for fk in user.foreign_keys)
+
+    role = by_table["role"]
+    assert role.indexes == (
+        IndexIR(name=unique_index_name("role", "name"), columns=("name",), unique=True),
+    )
+    permission = by_table["permission"]
+    assert permission.indexes == (
+        IndexIR(name=unique_index_name("permission", "key"), columns=("key",), unique=True),
+    )
+    user_role = by_table["user_role"]
+    assert ForeignKeyIR(
+        name="user_role_user_id_fkey",
+        columns=("user_id",),
+        referenced_table="user",
+        referenced_columns=("id",),
+    ) in user_role.foreign_keys
+    assert ForeignKeyIR(
+        name="user_role_role_id_fkey",
+        columns=("role_id",),
+        referenced_table="role",
+        referenced_columns=("id",),
+    ) in user_role.foreign_keys
+    role_permission = by_table["role_permission"]
+    assert ForeignKeyIR(
+        name="role_permission_role_id_fkey",
+        columns=("role_id",),
+        referenced_table="role",
+        referenced_columns=("id",),
+    ) in role_permission.foreign_keys
+    assert ForeignKeyIR(
+        name="role_permission_permission_id_fkey",
+        columns=("permission_id",),
+        referenced_table="permission",
+        referenced_columns=("id",),
+    ) in role_permission.foreign_keys
 
 
 def test_introspect_matches_desired_for_demo(

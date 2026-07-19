@@ -63,6 +63,8 @@ def test_me_requires_bearer_and_returns_profile(auth_client: TestClient) -> None
     assert profile["username"] == "admin"
     assert profile["display_name"] == admin.display_name
     assert profile["is_active"] is True
+    assert profile["roles"] == ["admin"]
+    assert profile["permissions"] == ["admin"]
     assert "password_hash" not in profile
     assert "password" not in profile
 

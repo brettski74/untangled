@@ -70,6 +70,14 @@ rejected:
 Optional attribute flag: `unique: true` adds a unique index on that column
 (e.g. `user.username`).
 
+### Many-to-many joins
+
+There is no dedicated M2M YAML syntax. Model join tables as **first-class
+classes** with their own UUID primary keys and `references:` foreign keys (see
+`user-role.yaml` / `role-permission.yaml`). Composite uniqueness on join pairs
+is not expressible in YAML today; seeds and application logic keep pairs
+idempotent via stable row ids.
+
 `created_by` / `updated_by` may still be stamped with `STUB_ACTOR_ID`
 (`untangled.persistence.actor`) on non-HTTP library paths; that constant matches
 the seeded **admin** user id so audit FKs stay valid. When migrate adds audit
