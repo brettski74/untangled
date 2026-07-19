@@ -4,6 +4,8 @@ Untangled is **containers-first**: `make up` brings up PostgreSQL, the API, and 
 
 For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` if you need Postgres). Those are not required for the Compose runtime.
 
+Schema apply is **intentional**: after definitions change, run `make migrate` (or `python -m untangled.schema`). Migrate is **not** part of `make up` / Compose start.
+
 ## Prerequisites
 
 - Docker with Compose v2 (`docker compose`) — required for `make up` and DB-backed tests
@@ -16,9 +18,10 @@ From the repository root:
 
 ```bash
 make up
+make migrate   # apply YAML schema intent (Postgres must be reachable)
 ```
 
-That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass.
+That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass, then reconciles the database to `backend/class-definitions/`.
 
 For host-side lint/test tooling:
 
@@ -39,18 +42,25 @@ Inside the **api** container, Compose sets `DATABASE_URL` to use the `postgres` 
 | Command | Purpose |
 | ------- | ------- |
 | `make` or `make help` | List targets with one-line descriptions |
-| `make up` | Build and start postgres + api + web via Compose |
+| `make up` | Build and start postgres + api + web via Compose (does **not** migrate) |
 | `make down` | Stop the Compose stack (keeps the named DB volume) |
 | `make db-up` | Start PostgreSQL only (for host-run tests / persistence) |
 | `make db-down` | Stop the Compose PostgreSQL service |
 | `make db-wait` | Wait until PostgreSQL accepts connections |
+| `make migrate` | Apply YAML schema intent via production CLI (`python -m untangled.schema`) |
 | `make backend-dev` | Run FastAPI with reload on the host (port 8000) |
 | `make frontend-dev` | Run React Router dev server on the host (port 5173) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
-| `make test` | Backend pytest (starts DB) + frontend production build smoke test |
+| `make test` | Backend pytest (starts DB; uses migrate path) + frontend build smoke test |
 | `make models` | Generate Pydantic + Zod models from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
 | `make clean` | Same as `clean-models` (clean source tree of codegen output) |
+
+Destructive schema plans are rejected by default. To allow them locally:
+
+```bash
+make migrate MIGRATE_ARGS=--allow-destructive
+```
 
 Ensure host ports **5432**, **8000**, and **5173** are free before `make up`.
 
@@ -64,7 +74,7 @@ Ensure host ports **5432**, **8000**, and **5173** are free before `make up`.
 
 ## Smoke tests
 
-After `make up`:
+After `make up` (and `make migrate` if you need demo tables):
 
 - API health: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`
 - API docs: open `http://127.0.0.1:8000/docs`
@@ -83,7 +93,7 @@ After `make db-up` only (postgres):
 ## API base URL (Compose)
 
 | Caller | URL |
-| ------ | --- |
+| ------ | ---- |
 | Server-side / from web container | `http://api:8000` (`API_BASE_URL` in Compose) |
 | Browser on the host (later UI work) | `http://127.0.0.1:8000` |
 
@@ -93,11 +103,12 @@ The welcome page does not call the API in this milestone slice; the env and netw
 
 | Piece | Status | Later work |
 | ----- | ------ | ---------- |
-| `make up` / `make down` | Full Compose runtime (postgres + api + web) | Migrations apply-on-start, seeds, auth |
+| `make up` / `make down` | Full Compose runtime (postgres + api + web); **no auto-migrate** | Seeds, auth |
+| `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
 | Backend `/health` | Real smoke endpoint | Domain APIs, auth replace/extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen | See [class-definitions.md](./class-definitions.md) |
-| Persistence (`untangled.persistence`) | Schema sync + create/fetch/update | Formal migrations later; auth replaces actor stub |
+| Persistence (`untangled.persistence`) | Thin SQL create/fetch/update; schema via migrate | Auth replaces actor stub |
 | Actor stub (`STUB_ACTOR_ID`) | Temporary well-known UUID for audit stamps | Replace when auth lands |
 | Frontend welcome page | Real SSR scaffold | Shell UI, auth, API integration in `frontend/app/` |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |
@@ -114,4 +125,4 @@ Makefile     Primary command entrypoint
 ```
 
 See [frontend-stack.md](./frontend-stack.md) for the React Router v7 rationale.
-See [class-definitions.md](./class-definitions.md) for YAML definitions, codegen, and schema apply.
+See [class-definitions.md](./class-definitions.md) for YAML definitions, codegen, migrate, hashes, and PITR caveats.

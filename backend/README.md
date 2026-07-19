@@ -1,12 +1,13 @@
 # Untangled backend
 
-Minimal FastAPI scaffold for Milestone 1. Domain APIs, auth, database access, and migrations land in later tickets — extend this package in place rather than adding a parallel backend tree.
+Minimal FastAPI scaffold for Milestone 1. Domain APIs and auth land in later tickets — extend this package in place rather than adding a parallel backend tree.
 
 ## Layout
 
 - `src/untangled/` — application package
 - `src/untangled/mapping/` — class-definition load + Pydantic/Zod codegen pipeline
-- `src/untangled/persistence/` — PostgreSQL schema sync + thin SQL create/fetch/update
+- `src/untangled/schema/` — Schema IR, diff-based migrate, version history
+- `src/untangled/persistence/` — thin SQL create/fetch/update (schema apply via migrate)
 - `class-definitions/` — human-authored YAML class definitions
 - `tests/` — pytest suite (includes DB-backed persistence tests; needs `make db-up`)
 
@@ -16,9 +17,20 @@ See [docs/class-definitions.md](../docs/class-definitions.md) and
 
 Audit stamps currently use a temporary actor stub (`STUB_ACTOR_ID`) until auth lands.
 
+## Schema migrate
+
+Production entrypoint (also used by `make migrate` from the repo root):
+
+```bash
+.venv/bin/python -m untangled.schema
+.venv/bin/python -m untangled.schema --allow-destructive
+```
+
+Uses `DATABASE_URL` or the documented local default. Migrate is intentional — not run on Compose/`make up` start. See the class-definitions doc for hashes, the destructive gate, and restore-point / PITR caveats.
+
 ## Local run
 
-Compose (preferred): from the repository root, `make up` starts postgres + api + web.
+Compose (preferred): from the repository root, `make up` starts postgres + api + web. Then `make migrate` when you need schema applied.
 
 Host hot-reload: from the repository root:
 
