@@ -13,7 +13,7 @@ from psycopg import Connection
 from untangled.mapping.definition import ClassDefinition, load_definition
 from untangled.mapping.generate import generate_models
 from untangled.persistence.connection import connect
-from untangled.persistence.schema import apply_schema
+from untangled.schema.migrate import migrate
 
 
 @pytest.fixture
@@ -65,4 +65,6 @@ def demo_model_cls(repo_definitions: Path, tmp_path: Path):
 
 @pytest.fixture
 def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefinition]:
-    return apply_schema(db_conn, repo_definitions)
+    # allow_destructive so shared test DB can reconcile leftovers to YAML intent.
+    result = migrate(db_conn, repo_definitions, allow_destructive=True)
+    return list(result.definitions)
