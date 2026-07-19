@@ -72,13 +72,19 @@ def issue_token_pair(conn: Connection, user_id: UUID) -> tuple[str, str]:
 
 
 def rotate_refresh_token(conn: Connection, refresh_plaintext: str) -> tuple[str, str] | None:
-    """Invalidate ``refresh_plaintext`` and return a new token pair, or None."""
-    row = _fetch_valid_refresh(conn, refresh_plaintext)
+    """Atomically claim ``refresh_plaintext`` and return a new pair, or None.
+
+    Concurrent callers cannot both claim the same token. Inactive or missing
+    users fail closed: the refresh row stays revoked and no new pair is issued.
+    """
+    row = _claim_valid_refresh(conn, refresh_plaintext)
     if row is None:
         return None
-    _revoke_refresh(conn, row["id"])
-    access, refresh = issue_token_pair(conn, row["user_id"])
-    return access, refresh
+    user = fetch_user_by_id(conn, row["user_id"])
+    if user is None or not user["is_active"]:
+        conn.commit()
+        return None
+    return issue_token_pair(conn, row["user_id"])
 
 
 def revoke_refresh_token(conn: Connection, refresh_plaintext: str) -> bool:
@@ -129,28 +135,29 @@ def _insert_refresh_token(conn: Connection, *, user_id: UUID, token_plaintext: s
         )
 
 
-def _fetch_valid_refresh(conn: Connection, refresh_plaintext: str) -> dict[str, Any] | None:
+def _claim_valid_refresh(conn: Connection, refresh_plaintext: str) -> dict[str, Any] | None:
+    """Revoke a still-valid refresh token in one statement; return its id/user_id."""
     token_hash = hash_refresh_token(refresh_plaintext)
     now = datetime.now(timezone.utc)
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             sql.SQL(
-                "SELECT id, user_id, expires_at, revoked_at "
-                "FROM {} WHERE token_hash = {}"
-            ).format(sql.Identifier("refresh_token"), sql.Placeholder()),
-            (token_hash,),
+                "UPDATE {} SET revoked_at = {}, updated_at = {} "
+                "WHERE token_hash = {} "
+                "AND revoked_at IS NULL "
+                "AND expires_at > {} "
+                "RETURNING id, user_id"
+            ).format(
+                sql.Identifier("refresh_token"),
+                sql.Placeholder(),
+                sql.Placeholder(),
+                sql.Placeholder(),
+                sql.Placeholder(),
+            ),
+            (now, now, token_hash, now),
         )
         row = cur.fetchone()
-    if row is None:
-        return None
-    if row["revoked_at"] is not None:
-        return None
-    expires_at = row["expires_at"]
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at <= now:
-        return None
-    return dict(row)
+    return dict(row) if row is not None else None
 
 
 def _revoke_refresh(conn: Connection, token_id: UUID) -> None:

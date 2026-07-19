@@ -42,7 +42,10 @@ def decode_access_token(token: str) -> UUID:
     sub = payload.get("sub")
     if not isinstance(sub, str) or not sub:
         raise jwt.InvalidTokenError("missing subject")
-    return UUID(sub)
+    try:
+        return UUID(sub)
+    except ValueError as exc:
+        raise jwt.InvalidTokenError("invalid subject") from exc
 
 
 def new_refresh_token() -> str:

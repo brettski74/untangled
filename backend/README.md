@@ -18,7 +18,9 @@ See [docs/class-definitions.md](../docs/class-definitions.md) and
 [docs/local-development.md](../docs/local-development.md).
 
 Audit stamps on non-HTTP paths use `STUB_ACTOR_ID` (aligned with the seeded admin
-user). HTTP handlers should use the current-user dependency when domain writes land.
+user). Migrate may insert that stub row when applying audit FKs; `make seed` still
+sets real local passwords. HTTP handlers should use the current-user dependency
+when domain writes land.
 
 ## Schema migrate
 

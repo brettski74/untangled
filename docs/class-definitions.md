@@ -72,8 +72,11 @@ Optional attribute flag: `unique: true` adds a unique index on that column
 
 `created_by` / `updated_by` may still be stamped with `STUB_ACTOR_ID`
 (`untangled.persistence.actor`) on non-HTTP library paths; that constant matches
-the seeded **admin** user id so audit FKs stay valid. Protected domain APIs should
-pass the authenticated principal once they land.
+the seeded **admin** user id so audit FKs stay valid. When migrate adds audit
+FKs that reference `user`, it upserts that stub row first (inside the migrate
+transaction) so existing `STUB_ACTOR_ID` stamps do not block `ADD FOREIGN KEY`.
+Full local credentials still come from **`make seed`**. Protected domain APIs
+should pass the authenticated principal once they land.
 
 ## Naming conventions
 

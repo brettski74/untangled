@@ -9,12 +9,13 @@ from pathlib import Path
 from psycopg import Connection
 
 from untangled.mapping.definition import ClassDefinition, load_definitions
+from untangled.mapping.system_fields import AUDIT_USER_TABLE
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import diff_schemas
 from untangled.schema.from_yaml import desired_schema_from_classes
 from untangled.schema.introspect import introspect_schema
 from untangled.schema.ir import SchemaIR
-from untangled.schema.plan import MigrationOp, MigrationPlan
+from untangled.schema.plan import AddForeignKey, MigrationOp, MigrationPlan
 from untangled.schema.versions import (
     create_restore_point,
     ensure_bootstrap_tables,
@@ -22,6 +23,7 @@ from untangled.schema.versions import (
     record_schema_version,
     restore_point_name_for,
 )
+from untangled.seed import upsert_stub_actor
 
 ProgressFn = Callable[[str], None]
 
@@ -97,7 +99,16 @@ def migrate(
     create_restore_point(conn, rp_name)
 
     try:
+        stub_actor_ensured = False
         for op in plan.ops:
+            if (
+                not stub_actor_ensured
+                and isinstance(op, AddForeignKey)
+                and op.foreign_key.referenced_table == AUDIT_USER_TABLE
+            ):
+                log(f"migrate: ensure stub actor on {AUDIT_USER_TABLE} for audit FKs")
+                upsert_stub_actor(conn)
+                stub_actor_ensured = True
             log(f"migrate: {op.describe()}")
             conn.execute(compile_op(op))
         record_schema_version(
