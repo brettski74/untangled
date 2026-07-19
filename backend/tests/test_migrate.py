@@ -28,13 +28,12 @@ from untangled.schema.versions import (
 
 def _drop_managed(conn: Connection, repo_definitions: Path) -> None:
     desired = desired_schema_from_definitions(repo_definitions)
-    # Children first.
-    for name in ("demo_link", "demo_item"):
+    # CASCADE handles FK order among managed tables.
+    for name in sorted(t.name for t in desired.tables):
         conn.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(name)))
     conn.execute("DROP TABLE IF EXISTS schema_version_class_hashes CASCADE")
     conn.execute("DROP TABLE IF EXISTS schema_versions CASCADE")
     conn.commit()
-    assert desired  # silence unused if defs change
 
 
 def test_migrate_empty_to_desired_and_noop(
@@ -50,7 +49,9 @@ def test_migrate_empty_to_desired_and_noop(
     assert first.restore_point_name == "untangled_schema_v1"
     assert any("CREATE TABLE demo_item" in m for m in messages)
     assert any("CREATE TABLE demo_link" in m for m in messages)
+    assert any("CREATE TABLE user" in m for m in messages)
     assert any("ADD FOREIGN KEY" in m for m in messages)
+    assert any("UNIQUE INDEX" in m for m in messages)
 
     desired = desired_schema_from_definitions(repo_definitions)
     current = introspect_schema(db_conn, [t.name for t in desired.tables])
@@ -66,6 +67,8 @@ def test_migrate_empty_to_desired_and_noop(
     by_table = {t.name: t for t in desired.tables}
     assert class_rows["demo_item"] == table_hash(by_table["demo_item"])
     assert class_rows["demo_link"] == table_hash(by_table["demo_link"])
+    assert class_rows["user"] == table_hash(by_table["user"])
+    assert class_rows["refresh_token"] == table_hash(by_table["refresh_token"])
 
     messages.clear()
     second = migrate(db_conn, repo_definitions, progress=messages.append)

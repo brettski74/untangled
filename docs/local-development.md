@@ -4,7 +4,7 @@ Untangled is **containers-first**: `make up` brings up PostgreSQL, the API, and 
 
 For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` if you need Postgres). Those are not required for the Compose runtime.
 
-Schema apply is **intentional**: after definitions change, run `make migrate` (or `python -m untangled.schema`). Migrate is **not** part of `make up` / Compose start.
+Schema apply and user seed are **intentional**: after `make up`, run `make migrate` then `make seed`. Neither runs automatically on Compose start.
 
 ## Prerequisites
 
@@ -19,9 +19,10 @@ From the repository root:
 ```bash
 make up
 make migrate   # apply YAML schema intent (Postgres must be reachable)
+make seed      # idempotent baseline users (admin / readonly / readwrite)
 ```
 
-That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass, then reconciles the database to `backend/class-definitions/`.
+That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass, reconciles the database to `backend/class-definitions/`, then upserts the three local seed users.
 
 For host-side lint/test tooling:
 
@@ -37,17 +38,46 @@ postgresql://untangled:untangled@127.0.0.1:5432/untangled
 
 Inside the **api** container, Compose sets `DATABASE_URL` to use the `postgres` service hostname.
 
+## Auth (local)
+
+| Setting | Default (Compose / docs) |
+| ------- | ------------------------ |
+| `UNTANGLED_JWT_SECRET` | `local-dev-only-change-me-untangled-jwt-secret` (dev only) |
+| `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
+| `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days) |
+
+Seed users (usernames are case-normalized to lowercase):
+
+| Username | Default password | Stable UUID | Intent |
+| -------- | ---------------- | ----------- | ------ |
+| `admin` | `admin-change-me` | `01900000-0000-7000-8000-000000000001` | admin role in #9 |
+| `readonly` | `readonly-change-me` | `01900000-0000-7000-8000-000000000002` | read-only role in #9 |
+| `readwrite` | `readwrite-change-me` | `01900000-0000-7000-8000-000000000003` | read-write role in #9 |
+
+Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_READWRITE_PASSWORD` when running `make seed`.
+
+### `/docs` Authorize loop
+
+1. Open `http://127.0.0.1:8000/docs`.
+2. `POST /auth/login` (OAuth2 password form) with a seed username/password — copy `access_token`.
+3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me`.
+4. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
+5. `POST /auth/logout` with the refresh token to revoke it.
+
+`GET /health` and `/docs` stay public. There is no “auth disabled” mode.
+
 ## Common commands
 
 | Command | Purpose |
 | ------- | ------- |
 | `make` or `make help` | List targets with one-line descriptions |
-| `make up` | Build and start postgres + api + web via Compose (does **not** migrate) |
+| `make up` | Build and start postgres + api + web via Compose (does **not** migrate or seed) |
 | `make down` | Stop the Compose stack (keeps the named DB volume) |
 | `make db-up` | Start PostgreSQL only (for host-run tests / persistence) |
 | `make db-down` | Stop the Compose PostgreSQL service |
 | `make db-wait` | Wait until PostgreSQL accepts connections |
 | `make migrate` | Apply YAML schema intent via production CLI (`python -m untangled.schema`) |
+| `make seed` | Idempotent seed of baseline users (`python -m untangled.seed`) |
 | `make backend-dev` | Run FastAPI with reload on the host (port 8000) |
 | `make frontend-dev` | Run React Router dev server on the host (port 5173) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
@@ -74,10 +104,10 @@ Ensure host ports **5432**, **8000**, and **5173** are free before `make up`.
 
 ## Smoke tests
 
-After `make up` (and `make migrate` if you need demo tables):
+After `make up` → `make migrate` → `make seed`:
 
 - API health: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`
-- API docs: open `http://127.0.0.1:8000/docs`
+- API docs: open `http://127.0.0.1:8000/docs` and run the Authorize loop above
 - Web: open `http://127.0.0.1:5173` — SSR welcome page (does not call the API yet)
 - Postgres: `docker compose exec postgres pg_isready -U untangled -d untangled`
 - Web → API on the Compose network:
@@ -103,13 +133,15 @@ The welcome page does not call the API in this milestone slice; the env and netw
 
 | Piece | Status | Later work |
 | ----- | ------ | ---------- |
-| `make up` / `make down` | Full Compose runtime (postgres + api + web); **no auto-migrate** | Seeds, auth |
+| `make up` / `make down` | Full Compose runtime (postgres + api + web); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
+| `make seed` / `python -m untangled.seed` | Three baseline users (intentional) | Role attachment in #9 |
+| Auth (`/auth/login`, refresh, logout, `/auth/me`) | Bearer JWT + rotating refresh | RBAC #9; UI login #11; hardening #33 |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
-| Backend `/health` | Real smoke endpoint | Domain APIs, auth replace/extend `backend/src/untangled/` |
+| Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen | See [class-definitions.md](./class-definitions.md) |
-| Persistence (`untangled.persistence`) | Thin SQL create/fetch/update; schema via migrate | Auth replaces actor stub |
-| Actor stub (`STUB_ACTOR_ID`) | Temporary well-known UUID for audit stamps | Replace when auth lands |
+| Persistence (`untangled.persistence`) | Thin SQL create/fetch/update; schema via migrate | Domain routes stamp authenticated actor |
+| Actor stub (`STUB_ACTOR_ID`) | Matches seeded admin UUID for FK-safe tests | Prefer current-user dependency on HTTP writes |
 | Frontend welcome page | Real SSR scaffold | Shell UI, auth, API integration in `frontend/app/` |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |
 | `frontend/package-lock.json` | Pinned deps | Regenerate when `package.json` changes |

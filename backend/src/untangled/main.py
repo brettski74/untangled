@@ -6,11 +6,14 @@ layers land in later M1 tickets. Do not introduce a second application entry.
 
 from fastapi import FastAPI
 
+from untangled.auth import auth_router
+
 app = FastAPI(
     title="Untangled ITSM",
     description="Backend API scaffold for Milestone 1.",
     version="0.1.0",
 )
+app.include_router(auth_router)
 
 
 @app.get("/health")

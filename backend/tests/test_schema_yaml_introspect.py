@@ -9,21 +9,29 @@ from psycopg import Connection, sql
 from untangled.mapping.definition import ClassDefinition
 from untangled.schema import (
     ForeignKeyIR,
+    IndexIR,
     desired_schema_from_definitions,
+    foreign_key_constraint_name,
     introspect_schema,
     schema_hash,
     table_hash,
+    unique_index_name,
 )
+
+_MANAGED = {"demo_item", "demo_link", "refresh_token", "user"}
 
 
 def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
     desired = desired_schema_from_definitions(repo_definitions)
     by_table = {t.name: t for t in desired.tables}
-    assert set(by_table) == {"demo_item", "demo_link"}
+    assert set(by_table) == _MANAGED
 
     table = by_table["demo_item"]
     assert table.primary_key == ("id",)
-    assert table.foreign_keys == ()
+    assert set(fk.name for fk in table.foreign_keys) == {
+        foreign_key_constraint_name("demo_item", "created_by"),
+        foreign_key_constraint_name("demo_item", "updated_by"),
+    }
 
     by_name = {col.name: col for col in table.columns}
     assert set(by_name) >= {
@@ -51,17 +59,21 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
 
     link = by_table["demo_link"]
     assert link.primary_key == ("id",)
-    assert link.foreign_keys == (
-        ForeignKeyIR(
-            name="demo_link_demo_item_id_fkey",
-            columns=("demo_item_id",),
-            referenced_table="demo_item",
-            referenced_columns=("id",),
-        ),
-    )
+    assert ForeignKeyIR(
+        name="demo_link_demo_item_id_fkey",
+        columns=("demo_item_id",),
+        referenced_table="demo_item",
+        referenced_columns=("id",),
+    ) in link.foreign_keys
     link_cols = {c.name: c for c in link.columns}
     assert link_cols["demo_item_id"].type_name == "uuid" and not link_cols["demo_item_id"].nullable
     assert link_cols["label"].type_name == "text"
+
+    user = by_table["user"]
+    assert user.indexes == (
+        IndexIR(name=unique_index_name("user", "username"), columns=("username",), unique=True),
+    )
+    assert all(fk.referenced_table == "user" for fk in user.foreign_keys)
 
 
 def test_introspect_matches_desired_for_demo(
@@ -77,22 +89,15 @@ def test_introspect_matches_desired_for_demo(
     assert schema_hash(desired) == schema_hash(current)
     desired_by = {t.name: t for t in desired.tables}
     current_by = {t.name: t for t in current.tables}
-    assert set(desired_by) == set(current_by) == {"demo_item", "demo_link"}
+    assert set(desired_by) == set(current_by) == _MANAGED
     for name in desired_by:
         assert table_hash(desired_by[name]) == table_hash(current_by[name])
         assert {c.name: c for c in desired_by[name].columns} == {
             c.name: c for c in current_by[name].columns
         }
         assert current_by[name].primary_key == ("id",)
-    assert current_by["demo_item"].foreign_keys == ()
-    assert current_by["demo_link"].foreign_keys == (
-        ForeignKeyIR(
-            name="demo_link_demo_item_id_fkey",
-            columns=("demo_item_id",),
-            referenced_table="demo_item",
-            referenced_columns=("id",),
-        ),
-    )
+        assert set(desired_by[name].foreign_keys) == set(current_by[name].foreign_keys)
+        assert set(desired_by[name].indexes) == set(current_by[name].indexes)
 
 
 def test_introspect_reads_foreign_keys(
@@ -129,9 +134,11 @@ def test_introspect_reads_foreign_keys(
             ),
         )
     finally:
-        db_conn.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(
-            sql.Identifier("schema_ir_fk_child")
-        ))
+        db_conn.execute(
+            sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(
+                sql.Identifier("schema_ir_fk_child")
+            )
+        )
         db_conn.commit()
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, TableIR
+from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, TableIR
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +139,37 @@ class DropForeignKey:
         return f"DROP FOREIGN KEY {self.table_name}.{self.constraint_name}"
 
 
+@dataclass(frozen=True, slots=True)
+class CreateIndex:
+    """Create an index (unique or non-unique) on a managed table."""
+
+    table_name: str
+    index: IndexIR
+
+    @property
+    def destructive(self) -> bool:
+        return False
+
+    def describe(self) -> str:
+        kind = "UNIQUE INDEX" if self.index.unique else "INDEX"
+        cols = ", ".join(self.index.columns)
+        return f"CREATE {kind} {self.index.name} on {self.table_name} ({cols})"
+
+
+@dataclass(frozen=True, slots=True)
+class DropIndex:
+    """Drop an index from a managed table."""
+
+    index_name: str
+
+    @property
+    def destructive(self) -> bool:
+        return True
+
+    def describe(self) -> str:
+        return f"DROP INDEX {self.index_name}"
+
+
 MigrationOp = (
     CreateTable
     | DropTable
@@ -148,6 +179,8 @@ MigrationOp = (
     | AlterColumnNullability
     | AddForeignKey
     | DropForeignKey
+    | CreateIndex
+    | DropIndex
 )
 
 

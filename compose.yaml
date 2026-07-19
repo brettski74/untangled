@@ -24,6 +24,10 @@ services:
       context: ./backend
     environment:
       DATABASE_URL: postgresql://untangled:untangled@postgres:5432/untangled
+      # Local-dev only — replace in real environments.
+      UNTANGLED_JWT_SECRET: local-dev-only-change-me-untangled-jwt-secret
+      UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: "900"
+      UNTANGLED_REFRESH_TOKEN_TTL_SECONDS: "604800"
     ports:
       - "8000:8000"
     depends_on:

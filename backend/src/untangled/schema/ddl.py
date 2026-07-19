@@ -10,9 +10,11 @@ from untangled.schema.plan import (
     AddForeignKey,
     AlterColumnNullability,
     AlterColumnType,
+    CreateIndex,
     CreateTable,
     DropColumn,
     DropForeignKey,
+    DropIndex,
     DropTable,
     MigrationOp,
 )
@@ -65,6 +67,22 @@ def compile_op(op: MigrationOp) -> sql.Composed:
             sql.Identifier(op.table_name),
             sql.Identifier(op.constraint_name),
         )
+    if isinstance(op, CreateIndex):
+        idx = op.index
+        cols = sql.SQL(", ").join(sql.Identifier(c) for c in idx.columns)
+        if idx.unique:
+            return sql.SQL("CREATE UNIQUE INDEX {} ON {} ({})").format(
+                sql.Identifier(idx.name),
+                sql.Identifier(op.table_name),
+                cols,
+            )
+        return sql.SQL("CREATE INDEX {} ON {} ({})").format(
+            sql.Identifier(idx.name),
+            sql.Identifier(op.table_name),
+            cols,
+        )
+    if isinstance(op, DropIndex):
+        return sql.SQL("DROP INDEX {}").format(sql.Identifier(op.index_name))
     raise TypeError(f"unsupported migration op: {type(op)!r}")
 
 

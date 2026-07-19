@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import deque
 
 from untangled.schema.ir import SchemaIR, TableIR
 from untangled.schema.plan import (
@@ -10,9 +10,11 @@ from untangled.schema.plan import (
     AddForeignKey,
     AlterColumnNullability,
     AlterColumnType,
+    CreateIndex,
     CreateTable,
     DropColumn,
     DropForeignKey,
+    DropIndex,
     DropTable,
     MigrationOp,
     MigrationPlan,
@@ -49,6 +51,20 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
         for fk in current_by_name[name].foreign_keys:
             ops.append(DropForeignKey(table_name=name, constraint_name=fk.name))
 
+    # 1b. Drop indexes that will be removed or changed (before column/table drops).
+    for name in sorted(shared_names):
+        desired_idxs = {i.name: i for i in desired_by_name[name].indexes}
+        current_idxs = {i.name: i for i in current_by_name[name].indexes}
+        for idx_name in sorted(current_idxs.keys() - desired_idxs.keys()):
+            ops.append(DropIndex(index_name=idx_name))
+        for idx_name in sorted(desired_idxs.keys() & current_idxs.keys()):
+            if desired_idxs[idx_name] != current_idxs[idx_name]:
+                ops.append(DropIndex(index_name=idx_name))
+
+    for name in sorted(drop_names):
+        for idx in current_by_name[name].indexes:
+            ops.append(DropIndex(index_name=idx.name))
+
     # 2. Column drops / alters on shared tables (before table drops).
     for name in sorted(shared_names):
         ops.extend(_diff_columns(desired_by_name[name], current_by_name[name]))
@@ -57,10 +73,10 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
     for name in _topo_sort(drop_names, current_by_name, reverse=True):
         ops.append(DropTable(table_name=name))
 
-    # 4. Create tables (dependencies before dependents); FKs added later.
+    # 4. Create tables (dependencies before dependents); FKs/indexes added later.
     for name in _topo_sort(create_names, desired_by_name, reverse=False):
         table = desired_by_name[name]
-        ops.append(CreateTable(table=_table_without_fks(table)))
+        ops.append(CreateTable(table=_table_without_fks_or_indexes(table)))
 
     # 5. Add columns on shared tables.
     for name in sorted(shared_names):
@@ -71,7 +87,19 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
             if col.name not in current_cols:
                 ops.append(AddColumn(table_name=name, column=col))
 
-    # 6. Add FKs (new tables + shared tables missing/changed FKs).
+    # 6. Add indexes (new tables + shared tables missing/changed indexes).
+    for name in sorted(desired_names):
+        desired_table = desired_by_name[name]
+        current_table = current_by_name.get(name)
+        current_idxs = (
+            {idx.name: idx for idx in current_table.indexes} if current_table else {}
+        )
+        for idx in sorted(desired_table.indexes, key=lambda item: item.name):
+            existing = current_idxs.get(idx.name)
+            if existing is None or existing != idx:
+                ops.append(CreateIndex(table_name=name, index=idx))
+
+    # 7. Add FKs (new tables + shared tables missing/changed FKs).
     for name in _topo_sort(desired_names, desired_by_name, reverse=False):
         desired_table = desired_by_name[name]
         current_table = current_by_name.get(name)
@@ -86,13 +114,13 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
     return MigrationPlan(ops=tuple(ops))
 
 
-def _table_without_fks(table: TableIR) -> TableIR:
+def _table_without_fks_or_indexes(table: TableIR) -> TableIR:
     return TableIR(
         name=table.name,
         columns=table.columns,
         primary_key=table.primary_key,
         foreign_keys=(),
-        indexes=table.indexes,
+        indexes=(),
         checks=table.checks,
     )
 
@@ -148,31 +176,25 @@ def _topo_sort(
 
     if reverse:
         # Invert edges: dependency → dependents, then Kahn for drop order.
-        inverted: dict[str, set[str]] = {n: set() for n in subset}
-        for name, targets in deps.items():
-            for target in targets:
-                inverted[target].add(name)
-        deps = inverted
+        dependents: dict[str, set[str]] = {n: set() for n in subset}
+        for name, parents in deps.items():
+            for parent in parents:
+                dependents[parent].add(name)
+        deps = dependents
 
-    incoming: dict[str, int] = {n: 0 for n in subset}
-    adjacency: dict[str, set[str]] = defaultdict(set)
-    for name, targets in deps.items():
-        for target in targets:
-            # Edge target → name means target must come before name.
-            adjacency[target].add(name)
-            incoming[name] += 1
-
-    queue = deque(sorted(n for n, count in incoming.items() if count == 0))
+    indegree = {n: len(deps[n]) for n in subset}
+    queue = deque(sorted(n for n in subset if indegree[n] == 0))
     ordered: list[str] = []
     while queue:
         node = queue.popleft()
         ordered.append(node)
-        for child in sorted(adjacency[node]):
-            incoming[child] -= 1
-            if incoming[child] == 0:
-                queue.append(child)
+        for other in sorted(subset):
+            if node in deps[other]:
+                indegree[other] -= 1
+                if indegree[other] == 0:
+                    queue.append(other)
 
     if len(ordered) != len(subset):
-        # Cycle among managed tables — fall back to sorted names.
+        # Cycle (e.g. mutual FKs): fall back to sorted names for determinism.
         return sorted(subset)
     return ordered

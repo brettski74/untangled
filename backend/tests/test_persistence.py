@@ -43,7 +43,12 @@ def test_yaml_types_map_to_postgres() -> None:
 
 
 def test_migrate_creates_demo_tables(db_conn, demo_schema, demo_definition) -> None:
-    assert {d.name_snake for d in demo_schema} >= {"demo_item", "demo_link"}
+    assert {d.name_snake for d in demo_schema} >= {
+        "demo_item",
+        "demo_link",
+        "user",
+        "refresh_token",
+    }
     row = db_conn.execute(
         """
         SELECT column_name, data_type, is_nullable

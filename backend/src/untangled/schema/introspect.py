@@ -7,7 +7,7 @@ from collections.abc import Iterable, Sequence
 
 from psycopg import Connection
 
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, SchemaIR, TableIR
+from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SchemaIR, TableIR
 from untangled.schema.types import ir_type_from_postgres
 
 
@@ -53,12 +53,13 @@ def _introspect_table(conn: Connection, schema_name: str, table_name: str) -> Ta
     columns = tuple(_introspect_columns(conn, schema_name, table_name))
     primary_key = tuple(_introspect_primary_key(conn, schema_name, table_name))
     foreign_keys = tuple(_introspect_foreign_keys(conn, schema_name, table_name))
+    indexes = tuple(_introspect_indexes(conn, schema_name, table_name))
     return TableIR(
         name=table_name,
         columns=columns,
         primary_key=primary_key,
         foreign_keys=foreign_keys,
-        indexes=(),
+        indexes=indexes,
         checks=(),
     )
 
@@ -147,4 +148,44 @@ def _introspect_foreign_keys(
             columns=tuple(p[1] for p in parts),
             referenced_table=parts[0][2],
             referenced_columns=tuple(p[3] for p in parts),
+        )
+
+
+def _introspect_indexes(
+    conn: Connection, schema_name: str, table_name: str
+) -> Iterable[IndexIR]:
+    """Load non-primary indexes. Unique indexes map to YAML ``unique: true``."""
+    rows = conn.execute(
+        """
+        SELECT
+            i.relname AS index_name,
+            ix.indisunique AS is_unique,
+            a.attname AS column_name,
+            x.ordinality AS position
+        FROM pg_index AS ix
+        JOIN pg_class AS t ON t.oid = ix.indrelid
+        JOIN pg_namespace AS ns ON ns.oid = t.relnamespace
+        JOIN pg_class AS i ON i.oid = ix.indexrelid
+        JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS x(attnum, ordinality) ON TRUE
+        JOIN pg_attribute AS a
+          ON a.attrelid = t.oid AND a.attnum = x.attnum
+        WHERE ns.nspname = %s
+          AND t.relname = %s
+          AND NOT ix.indisprimary
+          AND x.attnum > 0
+        ORDER BY i.relname, x.ordinality
+        """,
+        (schema_name, table_name),
+    ).fetchall()
+
+    grouped: dict[str, list[tuple[int, str, bool]]] = defaultdict(list)
+    for index_name, is_unique, column_name, position in rows:
+        grouped[index_name].append((position, column_name, bool(is_unique)))
+
+    for index_name in sorted(grouped):
+        parts = sorted(grouped[index_name], key=lambda item: item[0])
+        yield IndexIR(
+            name=index_name,
+            columns=tuple(p[1] for p in parts),
+            unique=parts[0][2],
         )

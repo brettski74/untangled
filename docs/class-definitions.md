@@ -64,12 +64,16 @@ rejected:
 | `id` | Primary key (UUIDv7) |
 | `created_at` | Created time (UTC) |
 | `updated_at` | Last updated time (UTC) |
-| `created_by` | Creating user id (uuid; no FK yet) |
-| `updated_by` | Last updating user id (uuid; no FK yet) |
+| `created_by` | Creating user id (uuid; FK to `user.id` when a `user` class exists) |
+| `updated_by` | Last updating user id (uuid; FK to `user.id` when a `user` class exists) |
 
-Until auth lands, `created_by` / `updated_by` are stamped with a temporary
-well-known UUID (`STUB_ACTOR_ID` in `untangled.persistence.actor`). That constant
-is intentionally easy to replace with an authenticated principal later.
+Optional attribute flag: `unique: true` adds a unique index on that column
+(e.g. `user.username`).
+
+`created_by` / `updated_by` may still be stamped with `STUB_ACTOR_ID`
+(`untangled.persistence.actor`) on non-HTTP library paths; that constant matches
+the seeded **admin** user id so audit FKs stay valid. Protected domain APIs should
+pass the authenticated principal once they land.
 
 ## Naming conventions
 

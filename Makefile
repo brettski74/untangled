@@ -10,7 +10,7 @@ BACKEND_PIP := $(BACKEND_VENV)/bin/pip
 
 COMPOSE ?= docker compose
 
-.PHONY: help install up down db-up db-down db-wait backend-dev frontend-dev backend-install frontend-install lint test backend-lint backend-test frontend-lint frontend-test models migrate clean clean-models clean-run
+.PHONY: help install up down db-up db-down db-wait backend-dev frontend-dev backend-install frontend-install lint test backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -63,6 +63,9 @@ models: backend-install ## Generate Pydantic and Zod models from YAML class defi
 
 migrate: backend-install ## Apply YAML schema intent to PostgreSQL (intentional; not part of up)
 	$(BACKEND_PYTHON) -m untangled.schema $(MIGRATE_ARGS)
+
+seed: backend-install ## Idempotent local user seed (intentional; after migrate; not part of up)
+	$(BACKEND_PYTHON) -m untangled.seed
 
 lint: backend-lint frontend-lint ## Run backend and frontend lint checks
 
