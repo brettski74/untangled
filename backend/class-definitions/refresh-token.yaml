@@ -1,0 +1,20 @@
+# Internal rotating refresh-token storage (not a product UI class).
+name: refresh-token
+display-name: Refresh Token
+description: >
+  Opaque refresh tokens stored hashed at rest. Rotated on use; revoked on logout.
+attributes:
+  user-id:
+    type: uuid
+    required: true
+    references: user
+  token-hash:
+    type: string
+    required: true
+    unique: true
+  expires-at:
+    type: datetime
+    required: true
+  revoked-at:
+    type: datetime
+    required: false

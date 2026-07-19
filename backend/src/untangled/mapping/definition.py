@@ -26,6 +26,7 @@ class AttributeDefinition:
     required: bool
     # Kebab-case class name this attribute references (FK to that table's ``id``).
     references: str | None = None
+    unique: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +141,11 @@ def load_definition(path: Path) -> ClassDefinition:
                     f"{path}: attribute '{attr_kebab}' with references must have type uuid"
                 )
 
-        unknown = set(spec) - {"type", "required", "references"}
+        unique = spec.get("unique", False)
+        if not isinstance(unique, bool):
+            raise DefinitionError(f"{path}: attribute '{attr_kebab}'.unique must be a boolean")
+
+        unknown = set(spec) - {"type", "required", "references", "unique"}
         if unknown:
             raise DefinitionError(
                 f"{path}: attribute '{attr_kebab}' has unknown keys: {sorted(unknown)}"
@@ -153,6 +158,7 @@ def load_definition(path: Path) -> ClassDefinition:
                 type_name=type_name,
                 required=required,
                 references=references,
+                unique=unique,
             )
         )
 

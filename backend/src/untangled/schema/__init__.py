@@ -5,6 +5,7 @@ from untangled.schema.from_yaml import (
     desired_schema_from_classes,
     desired_schema_from_definitions,
     foreign_key_constraint_name,
+    unique_index_name,
 )
 from untangled.schema.hash import schema_hash, table_hash
 from untangled.schema.introspect import introspect_schema
@@ -41,4 +42,5 @@ __all__ = [
     "schema_hash",
     "table_canonical_bytes",
     "table_hash",
+    "unique_index_name",
 ]

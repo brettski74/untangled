@@ -29,6 +29,9 @@ SYSTEM_FIELDS: tuple[SystemField, ...] = (
     SystemField("id", "uuid", "Primary key (UUIDv7)"),
     SystemField("created_at", "datetime", "Created time (UTC)"),
     SystemField("updated_at", "datetime", "Last updated time (UTC)"),
-    SystemField("created_by", "uuid", "Creating user id (no FK yet)"),
-    SystemField("updated_by", "uuid", "Last updating user id (no FK yet)"),
+    SystemField("created_by", "uuid", "Creating user id (FK to user when present)"),
+    SystemField("updated_by", "uuid", "Last updating user id (FK to user when present)"),
 )
+
+# Snake-case class/table name that owns audit FK targets for created_by / updated_by.
+AUDIT_USER_TABLE = "user"

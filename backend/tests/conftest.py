@@ -8,12 +8,13 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from psycopg import Connection
+from psycopg import Connection, sql
 
 from untangled.mapping.definition import ClassDefinition, load_definition
 from untangled.mapping.generate import generate_models
 from untangled.persistence.connection import connect
 from untangled.schema.migrate import migrate
+from untangled.seed import ensure_stub_actor_user
 
 
 @pytest.fixture
@@ -65,6 +66,13 @@ def demo_model_cls(repo_definitions: Path, tmp_path: Path):
 
 @pytest.fixture
 def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefinition]:
+    # Clear managed data so new audit FKs / unique indexes can apply on shared DBs.
+    for table in ("demo_link", "demo_item", "refresh_token", "user"):
+        db_conn.execute(
+            sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(table))
+        )
+    db_conn.commit()
     # allow_destructive so shared test DB can reconcile leftovers to YAML intent.
     result = migrate(db_conn, repo_definitions, allow_destructive=True)
+    ensure_stub_actor_user(db_conn)
     return list(result.definitions)

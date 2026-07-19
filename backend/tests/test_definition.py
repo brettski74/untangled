@@ -10,7 +10,7 @@ from untangled.mapping.definition import DefinitionError, load_definition, load_
 def test_load_demo_item(repo_definitions: Path) -> None:
     definitions = load_definitions(repo_definitions)
     by_kebab = {d.name_kebab: d for d in definitions}
-    assert set(by_kebab) == {"demo-item", "demo-link"}
+    assert set(by_kebab) == {"demo-item", "demo-link", "refresh-token", "user"}
     demo = by_kebab["demo-item"]
     assert demo.name_snake == "demo_item"
     assert demo.display_name == "Demo Item"
@@ -23,6 +23,11 @@ def test_load_demo_item(repo_definitions: Path) -> None:
     assert by_name["unit_price"].type_name == "float"
     assert by_name["fixed_amount"].type_name == "decimal"
     assert by_name["due_at"].type_name == "datetime"
+
+    user = by_kebab["user"]
+    user_attrs = {attr.name_snake: attr for attr in user.attributes}
+    assert user_attrs["username"].unique is True
+    assert user_attrs["password_hash"].unique is False
 
 
 def test_load_demo_link_fk(repo_definitions: Path) -> None:
