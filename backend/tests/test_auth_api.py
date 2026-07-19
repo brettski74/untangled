@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from psycopg import Connection
+from psycopg import Connection, sql
 
 from untangled.main import app
 from untangled.seed.users import SEED_USERS, password_for
@@ -95,6 +95,42 @@ def test_logout_revokes_refresh(auth_client: TestClient) -> None:
 
     reuse = auth_client.post("/auth/refresh", json={"refresh_token": refresh})
     assert reuse.status_code == 401
+
+
+def test_refresh_rejects_inactive_user(
+    auth_client: TestClient,
+    db_conn: Connection,
+) -> None:
+    admin = SEED_USERS[0]
+    login = _login(auth_client, admin.username, password_for(admin))
+    refresh = login.json()["refresh_token"]
+
+    db_conn.execute(
+        sql.SQL("UPDATE {} SET is_active = FALSE WHERE id = {}").format(
+            sql.Identifier("user"),
+            sql.Placeholder(),
+        ),
+        (admin.id,),
+    )
+    db_conn.commit()
+
+    rejected = auth_client.post("/auth/refresh", json={"refresh_token": refresh})
+    assert rejected.status_code == 401
+
+    reuse = auth_client.post("/auth/refresh", json={"refresh_token": refresh})
+    assert reuse.status_code == 401
+
+
+def test_refresh_claim_is_single_use(auth_client: TestClient) -> None:
+    """Second rotate of the same token fails (sequential stand-in for concurrent race)."""
+    admin = SEED_USERS[0]
+    login = _login(auth_client, admin.username, password_for(admin))
+    refresh = login.json()["refresh_token"]
+
+    first = auth_client.post("/auth/refresh", json={"refresh_token": refresh})
+    assert first.status_code == 200
+    second = auth_client.post("/auth/refresh", json={"refresh_token": refresh})
+    assert second.status_code == 401
 
 
 def test_health_remains_public(auth_client: TestClient) -> None:

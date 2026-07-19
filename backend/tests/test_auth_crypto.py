@@ -39,6 +39,20 @@ def test_access_token_rejects_tampered(monkeypatch: pytest.MonkeyPatch) -> None:
         decode_access_token(token + "x")
 
 
+def test_access_token_rejects_malformed_subject(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UNTANGLED_JWT_SECRET", "unit-test-secret-at-least-32-bytes!!")
+    from untangled.auth.settings import jwt_secret
+    from untangled.auth.tokens import ACCESS_TOKEN_ALGORITHM
+
+    token = jwt.encode(
+        {"sub": "not-a-uuid", "typ": "access"},
+        jwt_secret(),
+        algorithm=ACCESS_TOKEN_ALGORITHM,
+    )
+    with pytest.raises(jwt.InvalidTokenError, match="invalid subject"):
+        decode_access_token(token)
+
+
 def test_access_token_rejects_expired(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UNTANGLED_JWT_SECRET", "unit-test-secret-at-least-32-bytes!!")
     monkeypatch.setenv("UNTANGLED_ACCESS_TOKEN_TTL_SECONDS", "1")

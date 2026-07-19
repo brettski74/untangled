@@ -148,3 +148,83 @@ def test_migrate_transaction_rolls_back_on_failure(
         """
     ).fetchone()
     assert exists is None
+
+
+def test_migrate_ensures_stub_actor_before_audit_fks(
+    db_conn: Connection,
+    repo_definitions: Path,
+) -> None:
+    """Orphan STUB_ACTOR_ID stamps must not block ADD FOREIGN KEY on upgrade."""
+    from datetime import datetime, timezone
+    from decimal import Decimal
+
+    from untangled.persistence.actor import STUB_ACTOR_ID
+    from untangled.persistence.ids import new_uuid7
+
+    _drop_managed(db_conn, repo_definitions)
+    ensure_bootstrap_tables(db_conn)
+
+    desired = desired_schema_from_definitions(repo_definitions)
+    by_name = {t.name: t for t in desired.tables}
+    for name in ("user", "demo_item"):
+        table = by_name[name]
+        bare = TableIR(
+            name=table.name,
+            columns=table.columns,
+            primary_key=table.primary_key,
+            foreign_keys=(),
+            indexes=(),
+            checks=table.checks,
+        )
+        db_conn.execute(compile_op(CreateTable(table=bare)))
+
+    now = datetime.now(timezone.utc)
+    item_id = new_uuid7()
+    db_conn.execute(
+        """
+        INSERT INTO demo_item (
+            id, created_at, updated_at, created_by, updated_by,
+            title, summary, is_active, quantity, unit_price, fixed_amount, due_at
+        ) VALUES (
+            %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s
+        )
+        """,
+        (
+            item_id,
+            now,
+            now,
+            STUB_ACTOR_ID,
+            STUB_ACTOR_ID,
+            "orphan-audit-row",
+            None,
+            True,
+            1,
+            None,
+            Decimal("1.00"),
+            None,
+        ),
+    )
+    db_conn.commit()
+
+    user_count = db_conn.execute('SELECT count(*) FROM "user"').fetchone()[0]
+    assert user_count == 0
+
+    messages: list[str] = []
+    result = migrate(db_conn, repo_definitions, progress=messages.append)
+    assert result.applied
+    assert any("ensure stub actor" in m for m in messages)
+    assert any("ADD FOREIGN KEY" in m for m in messages)
+
+    stub = db_conn.execute(
+        'SELECT id FROM "user" WHERE id = %s',
+        (STUB_ACTOR_ID,),
+    ).fetchone()
+    assert stub is not None
+    assert (
+        db_conn.execute(
+            "SELECT created_by FROM demo_item WHERE id = %s",
+            (item_id,),
+        ).fetchone()[0]
+        == STUB_ACTOR_ID
+    )

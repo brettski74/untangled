@@ -8,7 +8,11 @@ from psycopg import Connection, sql
 
 from untangled.auth.passwords import hash_password
 from untangled.auth.store import normalize_username
-from untangled.seed.users import SEED_USERS, password_for
+from untangled.persistence.actor import STUB_ACTOR_ID
+from untangled.seed.users import SEED_ADMIN_ID, SEED_USERS, password_for
+
+# Placeholder hash only for migrate FK safety; ``make seed`` overwrites with real creds.
+_MIGRATE_STUB_PASSWORD = "migrate-stub-not-for-login"
 
 
 def seed_users(conn: Connection) -> list[str]:
@@ -52,6 +56,44 @@ def seed_users(conn: Connection) -> list[str]:
         touched.append(username)
     conn.commit()
     return touched
+
+
+def upsert_stub_actor(conn: Connection) -> None:
+    """Insert ``STUB_ACTOR_ID`` if missing so audit FKs can apply. Does not commit.
+
+    Used by migrate before ``AddForeignKey`` ops that reference ``user``. Leaves
+    an existing row untouched (including passwords set by ``seed_users``).
+    """
+    assert SEED_ADMIN_ID == STUB_ACTOR_ID
+    admin = SEED_USERS[0]
+    now = datetime.now(timezone.utc)
+    username = normalize_username(admin.username)
+    password_hash = hash_password(_MIGRATE_STUB_PASSWORD)
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "INSERT INTO {} ("
+                "id, created_at, updated_at, created_by, updated_by, "
+                "username, password_hash, display_name, is_active"
+                ") VALUES ("
+                "{}, {}, {}, {}, {}, {}, {}, {}, {}"
+                ") ON CONFLICT (id) DO NOTHING"
+            ).format(
+                sql.Identifier("user"),
+                *[sql.Placeholder() for _ in range(9)],
+            ),
+            (
+                admin.id,
+                now,
+                now,
+                admin.id,
+                admin.id,
+                username,
+                password_hash,
+                admin.display_name,
+                True,
+            ),
+        )
 
 
 def ensure_stub_actor_user(conn: Connection) -> None:
