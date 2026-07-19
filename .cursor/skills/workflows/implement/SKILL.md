@@ -19,7 +19,7 @@ Use this workflow when building and shipping work for an agreed GitHub issue: pl
 - The issue must be **open**; if it is closed or marked duplicate, confirm with the user before proceeding.
 - **Assignment:** the issue must be either **unassigned** or assigned to the **current user**. If it is assigned to someone else, **stop** and warn the user that someone else may already be working on this ticket—do not reassign or continue. If it is unassigned, assign it to the current user.
 - The issue must be labelled **READY**. If it is not, inform the user that it does not appear to have been refined before developing a plan and get their acknowledgement before proceeding with anything more.
-- Avoid raw git commands whenever possible. Use the git-ai skill scripts wherever possible. User refine-preflight.sh to orient yourself in a new chat.
+- Avoid raw git commands whenever possible. Use the git-ai skill scripts wherever possible. Use `git-status.sh <N>` to orient yourself in a new chat (branch, dirty state, matching `feature/<N>-*` branches).
 
 ## Steps
 
@@ -43,7 +43,7 @@ Use this workflow when building and shipping work for an agreed GitHub issue: pl
 
 ## Notes
 
-- Covered local git operations (sync default, create/switch branch, stage/commit, push) go through the **git-ai** skill scripts—do not hand-assemble equivalent `git` chains unless the user asks for raw git or no script covers the need. See `.cursor/skills/git-ai/SKILL.md`.
+- Covered local git operations (status/orientation, sync default, create/switch branch, stage/commit, push) go through the **git-ai** skill scripts—do not hand-assemble equivalent `git` chains unless the user asks for raw git or no script covers the need. See `.cursor/skills/git-ai/SKILL.md`.
 - If scope drifts during implementation, pause and reconcile with the issue or run the **refine** skill before piling on unrelated changes.
 - The PR is the review surface; keep the issue updated only when the team wants cross-links, not as a substitute for the PR description.
 - Avoid restating project conventions that already live in rules, skills, or **AGENTS.md**—apply them; do not paste or paraphrase that material into the plan, narrative, or PR.

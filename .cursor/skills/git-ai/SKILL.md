@@ -1,11 +1,11 @@
 ---
 name: git-ai
 description: >-
-  Run common local git operations via vetted scripts: sync default branch,
-  create/switch branches, stage and commit explicit paths, push without force,
-  and optionally delete a merged local branch. Use whenever those git steps
-  apply—inside refine/implement/verify, future workflows, or ad-hoc chat—unless
-  the user explicitly wants raw git.
+  Run common local git operations via vetted scripts: worktree orientation
+  (branch/status), sync default branch, create/switch branches, stage and
+  commit explicit paths, push without force, and optionally delete a merged
+  local branch. Use whenever those git steps apply—inside refine/implement/verify,
+  future workflows, or ad-hoc chat—unless the user explicitly wants raw git.
 ---
 
 # Git AI tooling
@@ -18,6 +18,8 @@ Prefer these scripts over ad-hoc `git … && git …` chains. Project convention
 
 | Need | Script |
 | ---- | ------ |
+| Read-only worktree orientation (branch, dirty, upstream, optional issue `N` feature branches) | `scripts/git-status.sh` |
+| Read-only topic-vs-default commits + diffstat (verify checklist; not for routine implement) | `scripts/branch-diff.sh` |
 | Sync default from `origin` (FF-only); optional local topic-branch cleanup | `scripts/sync-default.sh` |
 | Create or switch to a named branch | `scripts/checkout-branch.sh` |
 | Stage explicit paths; optionally commit | `scripts/stage-commit.sh` |
@@ -28,6 +30,9 @@ Prefer these scripts over ad-hoc `git … && git …` chains. Project convention
 Invocation needs **no leading `cd`**: scripts self-locate the repo root. Absolute or workspace-relative paths are fine regardless of shell cwd.
 
 ```bash
+.cursor/skills/git-ai/scripts/git-status.sh
+.cursor/skills/git-ai/scripts/git-status.sh 28
+.cursor/skills/git-ai/scripts/branch-diff.sh
 .cursor/skills/git-ai/scripts/sync-default.sh
 .cursor/skills/git-ai/scripts/sync-default.sh --delete-branch feature/17-git-ai-tooling
 .cursor/skills/git-ai/scripts/checkout-branch.sh feature/17-git-ai-tooling
@@ -50,6 +55,19 @@ Don't invent "helpful" hand-rolled git command chains because some nonsense in t
 If the user explicitly requests raw git, or no script covers the need, raw git is allowed. Otherwise prefer scripts.
 
 ## Script contracts (summary)
+
+### `git-status.sh [N]`
+
+- Read-only orientation: branch, dirty/untracked, upstream and vs-default ahead/behind, porcelain paths.
+- Optional `N`: matching local/remote `feature/<N>-*` branches and `on_issue_branch`.
+- Detached HEAD reported, not refused. No fetch/checkout/mutation.
+- Fails closed on bad args, missing `origin`, or bootstrap failure.
+
+### `branch-diff.sh [ref]`
+
+- Read-only topic-vs-default summary for verify checklists: `git log --oneline` (two-dot) and `git diff --stat` (three-dot) vs `origin/<default>`.
+- Optional `ref` (default `HEAD`). No full patch dump. Implement should not call this routinely.
+- Fails closed on bad args, unresolvable refs, missing `origin`, or bootstrap failure.
 
 ### `sync-default.sh [--delete-branch <name>]`
 

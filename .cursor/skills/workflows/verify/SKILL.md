@@ -20,13 +20,13 @@ Use this workflow for **developer-led acceptance testing** after implementation 
 - The issue must be **open**; if it is closed or marked duplicate, confirm with the user before proceeding.
 - **Assignment:** the issue must be either **unassigned** or assigned to the **current user**. If it is assigned to someone else, **stop** and warn the user that someone else may already be working on this ticket—do not reassign or continue. If it is unassigned, assign it to the current user.
 - The issue must be labelled **IMPLEMENTED**. If it is not, inform the user that it does not appear to have completed the **implement** workflow and get their acknowledgement before proceeding with anything more.
-- Avoid raw git commands whenever possible. Use the git-ai skill scripts wherever possible. User refine-preflight.sh to orient yourself in a new chat.
+- Avoid raw git commands whenever possible. Use the git-ai skill scripts wherever possible. Use `git-status.sh <N>` to orient yourself in a new chat (branch, dirty state, matching `feature/<N>-*` branches). Use `branch-diff.sh` after checkout for commits + diffstat vs default—do **not** hand-roll `git log` / `git diff` for that.
 
 ## Steps
 
 1. **Confirm readiness**: the issue must be **open**, labelled `IMPLEMENTED`, and either **unassigned** or assigned to the **current user**. If it is assigned to someone else, **stop** and warn. If it is unassigned, assign it to the current user. If it is not open or not labelled `IMPLEMENTED`, inform the user and obtain acknowledgement before continuing.
-2. **Setup for testing**: check out the feature branch under test via the **git-ai** skill (`scripts/checkout-branch.sh`) if not already on it. Do not further investigate or validate the environment unless explicitly asked.
-3. **Confirm** from the code changes, ticket details, and acceptance criteria what is being tested. Display a suggested testing checklist for the user in the chat, then **stop** and wait for further instructions.
+2. **Setup for testing**: run **git-ai** `scripts/git-status.sh <N>` to confirm current branch / matching `feature/<N>-*` branches, then check out the feature branch under test via `scripts/checkout-branch.sh` if not already on it. Do not further investigate or validate the environment unless explicitly asked.
+3. **Confirm** from the code changes, ticket details, and acceptance criteria what is being tested. Run **git-ai** `scripts/branch-diff.sh` (after checkout) for commits and diffstat versus `origin/<default>`—do not hand-roll `git log` / `git diff`. Display a suggested testing checklist for the user in the chat, then **stop** and wait for further instructions.
 4. Support **developer-led** testing: answer questions, reproduce reported behaviour, and distinguish expected versus defective behaviour using the issue as reference.
 5. If the user reports a **bug** or **requirement gap**, fix code or docs as agreed and **record** the gap and resolution in **issue comments** (not by rewriting the issue body). Reserve body edits for explicit **refinement**—if the requirements document itself must change, suggest switching to the **refine** workflow in a fresh chat. Do not rewrite the issue body while within this workflow.
 6. **Work on one issue at a time** and review the proposed fix with the user before implementing it. Design and implement tests before implementing the fix to any reported issues.
@@ -38,7 +38,7 @@ Use this workflow for **developer-led acceptance testing** after implementation 
 
 ## Notes
 
-- Covered local git operations (checkout, stage/commit, push, post-merge sync/cleanup) go through the **git-ai** skill scripts—do not hand-assemble equivalent `git` chains unless the user asks for raw git or no script covers the need. See `.cursor/skills/git-ai/SKILL.md`.
+- Covered local git operations (status/orientation, branch-diff, checkout, stage/commit, push, post-merge sync/cleanup) go through the **git-ai** skill scripts—do not hand-assemble equivalent `git` chains unless the user asks for raw git or no script covers the need. See `.cursor/skills/git-ai/SKILL.md`.
 - Verification is not the place to silently broaden scope; capture product decisions in comments or run the **refine** skill when the specification must change.
 - If a gap is purely operational (data, config), document it in comments and fix procedures or README as appropriate without changing the issue’s acceptance story unless the user asks.
 - Avoid restating project conventions that already live in rules, skills, or **AGENTS.md**—apply them; do not paste or paraphrase that material into comments or the PR.
