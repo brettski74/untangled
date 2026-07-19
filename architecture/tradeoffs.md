@@ -16,7 +16,7 @@ Known compromises and the reasoning behind them.
 - **Choice:** convention-based mapping and visible SQL; Pydantic/Zod **generated from YAML**, never hand-coded.
 - **Why:** predictable behaviour, less magic, single schema intent for Python and JS validation.
 - **Cost:** more explicit persistence patterns; less automatic relationship loading.
-- *(confirmed for codegen rule; inferred otherwise — AGENTS §3.6)*
+- *(confirmed)*
 
 ## YAML class definitions as schema source of truth vs migration history
 
