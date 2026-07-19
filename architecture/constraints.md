@@ -23,8 +23,8 @@ Hard rules that must not be violated.
 
 ## Data & identity
 
-- Primary keys: **UUIDv7**, PostgreSQL `uuid`, exposed as hyphenated strings. *(inferred, high — AGENTS §3.5)*
-- No traditional heavy ORM; thin convention-based mapping; SQL stays visible. *(inferred, high — AGENTS §3.6)*
+- Primary keys: **UUIDv7**, PostgreSQL `uuid`, exposed as hyphenated strings. *(confirmed, high — AGENTS §3.5)*
+- No traditional heavy ORM; thin convention-based mapping; SQL stays visible. *(confirmed, high — AGENTS §3.6)*
 - **Pydantic and Zod models are generated from YAML class definitions — never hand-coded.** *(confirmed)*
 - Naming: SQL/Python/JSON/JS = `snake_case`; YAML = `kebab-case`; classes = PascalCase. *(inferred, high — AGENTS §3.7)*
 - Relationships:
