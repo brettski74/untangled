@@ -50,9 +50,11 @@ def test_generate_demo_pydantic_accepts_and_rejects(
     pydantic_out = tmp_path / "pydantic"
     zod_out = tmp_path / "zod"
     result = generate_models(repo_definitions, pydantic_out, zod_out)
-    assert len(result.definitions) == 1
+    assert {d.name_snake for d in result.definitions} == {"demo_item", "demo_link"}
     assert (pydantic_out / "demo_item.py").is_file()
+    assert (pydantic_out / "demo_link.py").is_file()
     assert (zod_out / "demo_item.ts").is_file()
+    assert (zod_out / "demo_link.ts").is_file()
 
     module = _load_module(pydantic_out / "demo_item.py", "generated_demo_item")
     demo_item = module.DemoItem

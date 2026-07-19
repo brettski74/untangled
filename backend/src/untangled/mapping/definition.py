@@ -24,6 +24,8 @@ class AttributeDefinition:
     name_snake: str
     type_name: str
     required: bool
+    # Kebab-case class name this attribute references (FK to that table's ``id``).
+    references: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +59,9 @@ def load_definitions(definitions_dir: Path) -> list[ClassDefinition]:
     if not paths:
         raise DefinitionError(f"no YAML class definitions found in {definitions_dir}")
 
-    return [load_definition(path) for path in paths]
+    definitions = [load_definition(path) for path in paths]
+    _validate_references(definitions)
+    return definitions
 
 
 def load_definition(path: Path) -> ClassDefinition:
@@ -122,7 +126,21 @@ def load_definition(path: Path) -> ClassDefinition:
         if not isinstance(required, bool):
             raise DefinitionError(f"{path}: attribute '{attr_kebab}'.required must be a boolean")
 
-        unknown = set(spec) - {"type", "required"}
+        references_raw = spec.get("references")
+        references: str | None = None
+        if references_raw is not None:
+            if not isinstance(references_raw, str) or not references_raw.strip():
+                raise DefinitionError(
+                    f"{path}: attribute '{attr_kebab}'.references must be a non-empty string"
+                )
+            references = references_raw.strip()
+            _require_kebab(references, path, f"attribute '{attr_kebab}'.references")
+            if type_name != "uuid":
+                raise DefinitionError(
+                    f"{path}: attribute '{attr_kebab}' with references must have type uuid"
+                )
+
+        unknown = set(spec) - {"type", "required", "references"}
         if unknown:
             raise DefinitionError(
                 f"{path}: attribute '{attr_kebab}' has unknown keys: {sorted(unknown)}"
@@ -134,6 +152,7 @@ def load_definition(path: Path) -> ClassDefinition:
                 name_snake=snake,
                 type_name=type_name,
                 required=required,
+                references=references,
             )
         )
 
@@ -149,6 +168,19 @@ def load_definition(path: Path) -> ClassDefinition:
         attributes=tuple(attributes),
         source_path=path,
     )
+
+
+def _validate_references(definitions: list[ClassDefinition]) -> None:
+    known = {defn.name_kebab for defn in definitions}
+    for defn in definitions:
+        for attr in defn.attributes:
+            if attr.references is None:
+                continue
+            if attr.references not in known:
+                raise DefinitionError(
+                    f"{defn.source_path}: attribute '{attr.name_kebab}' references "
+                    f"unknown class {attr.references!r}"
+                )
 
 
 def _require_kebab(value: str, path: Path, label: str) -> None:

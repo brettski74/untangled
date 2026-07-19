@@ -1,4 +1,8 @@
-"""Materialize / sync PostgreSQL tables from class definitions."""
+"""Materialize / sync PostgreSQL tables from class definitions.
+
+Shared operational path is :func:`untangled.schema.migrate.migrate`. The helpers
+here remain as thin wrappers / non-authoritative reset utilities.
+"""
 
 from __future__ import annotations
 
@@ -6,25 +10,34 @@ from pathlib import Path
 
 from psycopg import Connection, sql
 
-from untangled.mapping.definition import ClassDefinition, load_definitions
+from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELDS
 from untangled.persistence.sql_types import postgres_type
+from untangled.schema.migrate import migrate
 
 
-def apply_schema(conn: Connection, definitions_dir: Path) -> list[ClassDefinition]:
-    """Load all definitions under ``definitions_dir`` and sync each table.
+def apply_schema(
+    conn: Connection,
+    definitions_dir: Path,
+    *,
+    allow_destructive: bool = True,
+) -> list[ClassDefinition]:
+    """Reconcile DB to definitions via diff-based ``migrate()``.
 
-    Dev/test sync is recreate-friendly: existing tables for defined classes are
-    dropped and recreated. Formal versioned migrations are a later ticket.
+    Defaults to ``allow_destructive=True`` so callers that previously relied on
+    drop/recreate can still reach the desired schema. Prefer calling ``migrate``
+    directly when the destructive gate matters.
     """
-    definitions = load_definitions(definitions_dir)
-    for definition in definitions:
-        sync_table(conn, definition)
-    return definitions
+    result = migrate(conn, definitions_dir, allow_destructive=allow_destructive)
+    return list(result.definitions)
 
 
 def sync_table(conn: Connection, definition: ClassDefinition) -> None:
-    """Drop and recreate the table for ``definition`` (recreate-friendly sync)."""
+    """Non-authoritative reset: drop and recreate one table (tests / emergency).
+
+    Prefer ``migrate()`` for shared schema evolution. This helper does not
+    update version history or create restore points.
+    """
     table = sql.Identifier(definition.name_snake)
     columns: list[sql.Composable] = []
 

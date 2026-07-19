@@ -42,8 +42,8 @@ def test_yaml_types_map_to_postgres() -> None:
     assert YAML_TO_POSTGRES["uuid"] == "uuid"
 
 
-def test_apply_schema_creates_demo_table(db_conn, demo_schema, demo_definition) -> None:
-    assert any(d.name_snake == "demo_item" for d in demo_schema)
+def test_migrate_creates_demo_tables(db_conn, demo_schema, demo_definition) -> None:
+    assert {d.name_snake for d in demo_schema} >= {"demo_item", "demo_link"}
     row = db_conn.execute(
         """
         SELECT column_name, data_type, is_nullable
@@ -57,6 +57,14 @@ def test_apply_schema_creates_demo_table(db_conn, demo_schema, demo_definition) 
     assert names[:5] == ["id", "created_at", "updated_at", "created_by", "updated_by"]
     assert "title" in names
     assert "fixed_amount" in names
+    link_cols = db_conn.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'demo_link'
+        """
+    ).fetchall()
+    assert "demo_item_id" in {r[0] for r in link_cols}
 
 
 def test_create_fetch_update_round_trip(

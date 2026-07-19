@@ -9,9 +9,9 @@ from untangled.mapping.definition import DefinitionError, load_definition, load_
 
 def test_load_demo_item(repo_definitions: Path) -> None:
     definitions = load_definitions(repo_definitions)
-    assert len(definitions) == 1
-    demo = definitions[0]
-    assert demo.name_kebab == "demo-item"
+    by_kebab = {d.name_kebab: d for d in definitions}
+    assert set(by_kebab) == {"demo-item", "demo-link"}
+    demo = by_kebab["demo-item"]
     assert demo.name_snake == "demo_item"
     assert demo.display_name == "Demo Item"
     assert "fixture class" in demo.description.lower()
@@ -23,6 +23,16 @@ def test_load_demo_item(repo_definitions: Path) -> None:
     assert by_name["unit_price"].type_name == "float"
     assert by_name["fixed_amount"].type_name == "decimal"
     assert by_name["due_at"].type_name == "datetime"
+
+
+def test_load_demo_link_fk(repo_definitions: Path) -> None:
+    definitions = load_definitions(repo_definitions)
+    link = next(d for d in definitions if d.name_kebab == "demo-link")
+    by_name = {attr.name_snake: attr for attr in link.attributes}
+    assert by_name["demo_item_id"].type_name == "uuid"
+    assert by_name["demo_item_id"].required
+    assert by_name["demo_item_id"].references == "demo-item"
+    assert by_name["label"].type_name == "string"
 
 
 @pytest.mark.parametrize(
@@ -88,6 +98,50 @@ def test_rejects_missing_description(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     with pytest.raises(DefinitionError, match="description"):
+        load_definition(path)
+
+
+def test_rejects_unknown_references(tmp_path: Path) -> None:
+    path = tmp_path / "bad.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: orphan-link",
+                "display-name: Orphan",
+                "description: Bad reference.",
+                "attributes:",
+                "  parent-id:",
+                "    type: uuid",
+                "    required: true",
+                "    references: missing-class",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="unknown class"):
+        load_definitions(tmp_path)
+
+
+def test_rejects_references_on_non_uuid(tmp_path: Path) -> None:
+    path = tmp_path / "bad.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: bad-ref",
+                "display-name: Bad",
+                "description: Non-uuid reference.",
+                "attributes:",
+                "  parent-id:",
+                "    type: string",
+                "    required: true",
+                "    references: bad-ref",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="must have type uuid"):
         load_definition(path)
 
 
