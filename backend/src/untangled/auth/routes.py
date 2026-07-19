@@ -1,19 +1,31 @@
-"""Auth HTTP routes: login, refresh, logout, and ``/auth/me`` probe."""
+"""Auth HTTP routes: login, refresh, logout, ``/auth/me``, and RBAC probe."""
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from untangled.auth.dependencies import CurrentUser, DbConn
-from untangled.auth.schemas import LogoutRequest, RefreshRequest, TokenPair, UserProfile
+from untangled.auth.schemas import (
+    LogoutRequest,
+    RbacProbeResponse,
+    RefreshRequest,
+    TokenPair,
+    UserProfile,
+)
 from untangled.auth.store import (
     authenticate_user,
     issue_token_pair,
     revoke_refresh_token,
     rotate_refresh_token,
+)
+from untangled.rbac.dependencies import require_class_operation
+from untangled.rbac.keys import class_operation_key
+from untangled.rbac.store import (
+    fetch_effective_permission_keys,
+    fetch_role_names_for_user,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -23,6 +35,8 @@ _INVALID_CREDENTIALS = HTTPException(
     detail="Invalid username or password",
     headers={"WWW-Authenticate": "Bearer"},
 )
+
+_DEMO_ITEM_READ = class_operation_key("demo-item", "read")
 
 
 @router.post("/login", response_model=TokenPair)
@@ -58,11 +72,23 @@ def logout(body: LogoutRequest, conn: DbConn) -> None:
 
 
 @router.get("/me", response_model=UserProfile)
-def me(user: CurrentUser) -> UserProfile:
-    """Return the authenticated user's non-secret profile."""
+def me(user: CurrentUser, conn: DbConn) -> UserProfile:
+    """Return the authenticated user's non-secret profile plus RBAC context."""
+    roles = fetch_role_names_for_user(conn, user["id"])
+    permissions = sorted(fetch_effective_permission_keys(conn, user["id"]))
     return UserProfile(
         id=user["id"],
         username=user["username"],
         display_name=user["display_name"],
         is_active=user["is_active"],
+        roles=roles,
+        permissions=permissions,
     )
+
+
+@router.get("/rbac-probe", response_model=RbacProbeResponse)
+def rbac_probe(
+    _user: Annotated[dict[str, Any], Depends(require_class_operation("demo-item", "read"))],
+) -> RbacProbeResponse:
+    """RBAC proof route: requires ``demo-item:read`` (or ``admin`` allow-all)."""
+    return RbacProbeResponse(required_permission=_DEMO_ITEM_READ)

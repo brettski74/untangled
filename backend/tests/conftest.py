@@ -67,7 +67,16 @@ def demo_model_cls(repo_definitions: Path, tmp_path: Path):
 @pytest.fixture
 def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefinition]:
     # Clear managed data so new audit FKs / unique indexes can apply on shared DBs.
-    for table in ("demo_link", "demo_item", "refresh_token", "user"):
+    for table in (
+        "user_role",
+        "role_permission",
+        "demo_link",
+        "demo_item",
+        "refresh_token",
+        "role",
+        "permission",
+        "user",
+    ):
         db_conn.execute(
             sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(table))
         )

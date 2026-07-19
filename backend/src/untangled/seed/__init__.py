@@ -1,4 +1,4 @@
-"""Idempotent seed of the three baseline local users."""
+"""Idempotent seed of baseline local users and RBAC attachments."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from psycopg import Connection, sql
 from untangled.auth.passwords import hash_password
 from untangled.auth.store import normalize_username
 from untangled.persistence.actor import STUB_ACTOR_ID
+from untangled.seed.rbac import seed_rbac
 from untangled.seed.users import SEED_ADMIN_ID, SEED_USERS, password_for
 
 # Placeholder hash only for migrate FK safety; ``make seed`` overwrites with real creds.
@@ -58,6 +59,13 @@ def seed_users(conn: Connection) -> list[str]:
     return touched
 
 
+def seed_all(conn: Connection) -> dict[str, object]:
+    """Upsert seed users then RBAC catalog/attachments. Returns a summary dict."""
+    usernames = seed_users(conn)
+    rbac_counts = seed_rbac(conn)
+    return {"users": usernames, "rbac": rbac_counts}
+
+
 def upsert_stub_actor(conn: Connection) -> None:
     """Insert ``STUB_ACTOR_ID`` if missing so audit FKs can apply. Does not commit.
 
@@ -97,5 +105,5 @@ def upsert_stub_actor(conn: Connection) -> None:
 
 
 def ensure_stub_actor_user(conn: Connection) -> None:
-    """Ensure the stub/admin seed user exists (FK-safe for persistence tests)."""
-    seed_users(conn)
+    """Ensure baseline seed users and RBAC exist (FK-safe for persistence/auth tests)."""
+    seed_all(conn)

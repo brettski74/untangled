@@ -34,3 +34,13 @@ class UserProfile(BaseModel):
     username: str
     display_name: str
     is_active: bool
+    roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
+
+
+class RbacProbeResponse(BaseModel):
+    """Proof response for the RBAC-protected probe route."""
+
+    ok: bool = True
+    required_permission: str
+    detail: str = "RBAC check passed"
