@@ -3,8 +3,8 @@
 name: Makefile CI
 
 on:
+  # Run on every branch push (feature/patch branches included), not only main.
   push:
-    branches: ["main"]
   pull_request:
     branches: ["main"]
 
