@@ -8,11 +8,16 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.lock pyproject.toml README.md ./
+COPY class-definitions ./class-definitions
 COPY src ./src
 
 RUN pip install --no-cache-dir -U pip \
     && pip install --no-cache-dir -r requirements.lock \
-    && pip install --no-cache-dir --no-deps .
+    && pip install --no-cache-dir --no-deps . \
+    && python -m untangled.mapping \
+        --definitions ./class-definitions \
+        --pydantic-out ./src/untangled/generated \
+        --zod-out /tmp/zod-generated
 
 EXPOSE 8000
 

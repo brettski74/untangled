@@ -9,7 +9,11 @@ import yaml
 
 from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
-from untangled.mapping.types import SUPPORTED_TYPES
+from untangled.mapping.types import (
+    DEFAULT_FRIENDLY_ID_PAD_WIDTH,
+    MIN_FRIENDLY_ID_PAD_WIDTH,
+    SUPPORTED_TYPES,
+)
 
 
 class DefinitionError(ValueError):
@@ -27,6 +31,10 @@ class AttributeDefinition:
     # Kebab-case class name this attribute references (FK to that table's ``id``).
     references: str | None = None
     unique: bool = False
+    # friendly-id only:
+    prefix: str | None = None
+    pad_width: int = DEFAULT_FRIENDLY_ID_PAD_WIDTH
+    start_at: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +47,13 @@ class ClassDefinition:
     description: str
     attributes: tuple[AttributeDefinition, ...]
     source_path: Path
+
+    def friendly_id_attr(self) -> AttributeDefinition | None:
+        """Return the sole friendly-id attribute, if any."""
+        for attr in self.attributes:
+            if attr.type_name == "friendly-id":
+                return attr
+        return None
 
 
 def load_definitions(definitions_dir: Path) -> list[ClassDefinition]:
@@ -62,6 +77,7 @@ def load_definitions(definitions_dir: Path) -> list[ClassDefinition]:
 
     definitions = [load_definition(path) for path in paths]
     _validate_references(definitions)
+    _validate_friendly_id_prefixes(definitions)
     return definitions
 
 
@@ -99,6 +115,7 @@ def load_definition(path: Path) -> ClassDefinition:
 
     attributes: list[AttributeDefinition] = []
     seen_snake: set[str] = set()
+    friendly_id_count = 0
     for attr_kebab, spec in attributes_raw.items():
         if not isinstance(attr_kebab, str):
             raise DefinitionError(f"{path}: attribute keys must be strings")
@@ -145,7 +162,70 @@ def load_definition(path: Path) -> ClassDefinition:
         if not isinstance(unique, bool):
             raise DefinitionError(f"{path}: attribute '{attr_kebab}'.unique must be a boolean")
 
-        unknown = set(spec) - {"type", "required", "references", "unique"}
+        prefix: str | None = None
+        pad_width = DEFAULT_FRIENDLY_ID_PAD_WIDTH
+        start_at: int | None = None
+
+        if type_name == "friendly-id":
+            friendly_id_count += 1
+            if friendly_id_count > 1:
+                raise DefinitionError(
+                    f"{path}: at most one friendly-id attribute is allowed per class"
+                )
+            if references is not None:
+                raise DefinitionError(
+                    f"{path}: attribute '{attr_kebab}' friendly-id cannot have references"
+                )
+            prefix_raw = spec.get("prefix")
+            if not isinstance(prefix_raw, str) or not prefix_raw.strip():
+                raise DefinitionError(
+                    f"{path}: attribute '{attr_kebab}'.prefix is required for friendly-id"
+                )
+            prefix = prefix_raw.strip()
+            if not prefix.isalnum():
+                raise DefinitionError(
+                    f"{path}: attribute '{attr_kebab}'.prefix must be alphanumeric, "
+                    f"got {prefix!r}"
+                )
+
+            if "pad-width" in spec:
+                pad_raw = spec.get("pad-width")
+                if not isinstance(pad_raw, int) or isinstance(pad_raw, bool):
+                    raise DefinitionError(
+                        f"{path}: attribute '{attr_kebab}'.pad-width must be an integer"
+                    )
+                if pad_raw < MIN_FRIENDLY_ID_PAD_WIDTH:
+                    raise DefinitionError(
+                        f"{path}: attribute '{attr_kebab}'.pad-width must be >= "
+                        f"{MIN_FRIENDLY_ID_PAD_WIDTH}, got {pad_raw}"
+                    )
+                pad_width = pad_raw
+
+            if "start-at" in spec:
+                start_raw = spec.get("start-at")
+                if not isinstance(start_raw, int) or isinstance(start_raw, bool):
+                    raise DefinitionError(
+                        f"{path}: attribute '{attr_kebab}'.start-at must be an integer"
+                    )
+                if start_raw < 1:
+                    raise DefinitionError(
+                        f"{path}: attribute '{attr_kebab}'.start-at must be >= 1, "
+                        f"got {start_raw}"
+                    )
+                start_at = start_raw
+
+            # Unique index is required for friendly-id lookup.
+            unique = True
+            allowed = {"type", "required", "prefix", "pad-width", "start-at", "unique"}
+        else:
+            if "prefix" in spec or "pad-width" in spec or "start-at" in spec:
+                raise DefinitionError(
+                    f"{path}: attribute '{attr_kebab}' has friendly-id-only keys "
+                    f"(prefix/pad-width/start-at) but type is {type_name!r}"
+                )
+            allowed = {"type", "required", "references", "unique"}
+
+        unknown = set(spec) - allowed
         if unknown:
             raise DefinitionError(
                 f"{path}: attribute '{attr_kebab}' has unknown keys: {sorted(unknown)}"
@@ -159,6 +239,9 @@ def load_definition(path: Path) -> ClassDefinition:
                 required=required,
                 references=references,
                 unique=unique,
+                prefix=prefix,
+                pad_width=pad_width,
+                start_at=start_at,
             )
         )
 
@@ -187,6 +270,24 @@ def _validate_references(definitions: list[ClassDefinition]) -> None:
                     f"{defn.source_path}: attribute '{attr.name_kebab}' references "
                     f"unknown class {attr.references!r}"
                 )
+
+
+def _validate_friendly_id_prefixes(definitions: list[ClassDefinition]) -> None:
+    """Reject duplicate prefixes case-insensitively across the definitions tree."""
+    seen: dict[str, tuple[Path, str]] = {}
+    for defn in definitions:
+        for attr in defn.attributes:
+            if attr.type_name != "friendly-id" or attr.prefix is None:
+                continue
+            key = attr.prefix.lower()
+            if key in seen:
+                other_path, other_prefix = seen[key]
+                raise DefinitionError(
+                    f"{defn.source_path}: friendly-id prefix {attr.prefix!r} collides "
+                    f"with {other_prefix!r} in {other_path} (prefixes are "
+                    f"case-insensitive)"
+                )
+            seen[key] = (defn.source_path, attr.prefix)
 
 
 def _require_kebab(value: str, path: Path, label: str) -> None:

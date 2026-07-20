@@ -13,6 +13,7 @@ YAML_TO_POSTGRES: dict[str, str] = {
     "decimal": "numeric",
     "uuid": "uuid",
     "datetime": "timestamptz",
+    "friendly-id": "text",
 }
 
 assert set(YAML_TO_POSTGRES) == SUPPORTED_TYPES

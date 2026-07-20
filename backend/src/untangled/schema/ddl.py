@@ -11,10 +11,12 @@ from untangled.schema.plan import (
     AlterColumnNullability,
     AlterColumnType,
     CreateIndex,
+    CreateSequence,
     CreateTable,
     DropColumn,
     DropForeignKey,
     DropIndex,
+    DropSequence,
     DropTable,
     MigrationOp,
 )
@@ -83,6 +85,13 @@ def compile_op(op: MigrationOp) -> sql.Composed:
         )
     if isinstance(op, DropIndex):
         return sql.SQL("DROP INDEX {}").format(sql.Identifier(op.index_name))
+    if isinstance(op, CreateSequence):
+        return sql.SQL("CREATE SEQUENCE {} START WITH {}").format(
+            sql.Identifier(op.sequence.name),
+            sql.Literal(op.sequence.start),
+        )
+    if isinstance(op, DropSequence):
+        return sql.SQL("DROP SEQUENCE {}").format(sql.Identifier(op.sequence_name))
     raise TypeError(f"unsupported migration op: {type(op)!r}")
 
 

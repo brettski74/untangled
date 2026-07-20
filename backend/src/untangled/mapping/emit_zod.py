@@ -32,17 +32,18 @@ _ZOD_TYPE: dict[str, str] = {
     "decimal": "decimalString",
     "uuid": "z.string().uuid()",
     "datetime": "utcDateTime",
+    "friendly-id": "z.string()",
 }
 
 
 def emit_zod_module(definition: ClassDefinition) -> str:
-    """Return TypeScript source for one class's Zod module."""
-    schema_name = f"{snake_to_pascal(definition.name_snake)}Schema"
-    type_name = snake_to_pascal(definition.name_snake)
+    """Return TypeScript source for one class's Zod module (full + create + update)."""
+    pascal = snake_to_pascal(definition.name_snake)
+    writable = [a for a in definition.attributes if a.type_name != "friendly-id"]
     lines: list[str] = [
         _HEADER,
         *_jsdoc_comment(definition),
-        f"export const {schema_name} = z.object({{",
+        f"export const {pascal}Schema = z.object({{",
     ]
 
     for field in SYSTEM_FIELDS:
@@ -53,7 +54,24 @@ def emit_zod_module(definition: ClassDefinition) -> str:
 
     lines.append("});")
     lines.append("")
-    lines.append(f"export type {type_name} = z.infer<typeof {schema_name}>;")
+    lines.append(f"export type {pascal} = z.infer<typeof {pascal}Schema>;")
+    lines.append("")
+
+    lines.append(f"export const {pascal}CreateSchema = z.object({{")
+    for attr in writable:
+        lines.append(f"  {_zod_field_line(attr)},")
+    lines.append("});")
+    lines.append("")
+    lines.append(f"export type {pascal}Create = z.infer<typeof {pascal}CreateSchema>;")
+    lines.append("")
+
+    lines.append(f"export const {pascal}UpdateSchema = z.object({{")
+    for attr in writable:
+        expr = _ZOD_TYPE[attr.type_name]
+        lines.append(f"  {attr.name_snake}: {expr}.optional().nullable(),")
+    lines.append("});")
+    lines.append("")
+    lines.append(f"export type {pascal}Update = z.infer<typeof {pascal}UpdateSchema>;")
     lines.append("")
     return "\n".join(lines)
 

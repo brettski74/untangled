@@ -11,8 +11,10 @@ def test_load_demo_item(repo_definitions: Path) -> None:
     definitions = load_definitions(repo_definitions)
     by_kebab = {d.name_kebab: d for d in definitions}
     assert set(by_kebab) == {
+        "change-request",
         "demo-item",
         "demo-link",
+        "incident",
         "permission",
         "refresh-token",
         "role",

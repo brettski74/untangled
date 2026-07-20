@@ -10,6 +10,7 @@ from untangled.auth.passwords import hash_password
 from untangled.auth.store import normalize_username
 from untangled.persistence.actor import STUB_ACTOR_ID
 from untangled.seed.rbac import seed_rbac
+from untangled.seed.tickets import seed_tickets
 from untangled.seed.users import SEED_ADMIN_ID, SEED_USERS, password_for
 
 # Placeholder hash only for migrate FK safety; ``make seed`` overwrites with real creds.
@@ -60,10 +61,11 @@ def seed_users(conn: Connection) -> list[str]:
 
 
 def seed_all(conn: Connection) -> dict[str, object]:
-    """Upsert seed users then RBAC catalog/attachments. Returns a summary dict."""
+    """Upsert seed users, RBAC, then sample tickets. Returns a summary dict."""
     usernames = seed_users(conn)
     rbac_counts = seed_rbac(conn)
-    return {"users": usernames, "rbac": rbac_counts}
+    tickets = seed_tickets(conn)
+    return {"users": usernames, "rbac": rbac_counts, "tickets": tickets}
 
 
 def upsert_stub_actor(conn: Connection) -> None:

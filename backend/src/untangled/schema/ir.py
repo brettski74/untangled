@@ -54,7 +54,26 @@ class TableIR:
 
 
 @dataclass(frozen=True, slots=True)
+class SequenceIR:
+    """Managed PostgreSQL sequence (friendly-id allocation).
+
+    ``start`` is used only when creating the sequence. Re-migrate never alters
+    an existing sequence's start value.
+    """
+
+    name: str
+    start: int
+    # Optional metadata for max+1 start resolution at create time when YAML
+    # omitted ``start-at``. Ignored for equality/diff once the sequence exists.
+    table_name: str = ""
+    column_name: str = ""
+    prefix: str = ""
+    resolve_start_from_data: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class SchemaIR:
     """Whole-schema snapshot: desired (YAML) or current (introspected)."""
 
     tables: tuple[TableIR, ...]
+    sequences: tuple[SequenceIR, ...] = ()
