@@ -109,8 +109,103 @@ Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
    - `GET /incidents/{locator}` / `GET /change-requests/{locator}` with either the stable seed UUID or the friendly number (`INC…` / `CHG…`).
    - `POST` create (omit `number` — server assigns it), `PATCH` update, `DELETE` (admin only among seed roles).
    - Junk locators → **400**; missing records → **404**; readonly cannot create → **403**.
-6. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
-7. `POST /auth/logout` with the refresh token to revoke it.
+6. Exercise predicate search (same Authorize token; requires `{class}:read`):
+   - `POST /incidents/search` and `POST /change-requests/search` with a JSON body (see [Predicate search](#predicate-search) below).
+   - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
+   - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
+7. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
+8. `POST /auth/logout` with the refresh token to revoke it.
+
+### Predicate search
+
+Generic, definition-driven search for any class mounted via the class router factory. First wired collections: Incident and Change Request.
+
+| Method | Path | Permission |
+| ------ | ---- | ---------- |
+| `POST` | `/{collection}/search` | `{class}:read` |
+
+Examples: `POST /incidents/search`, `POST /change-requests/search`.
+
+#### Request envelope
+
+| Field | Required | Rules |
+| ----- | -------- | ----- |
+| `predicate` | no | Omit or `null` → match all rows. Otherwise a single predicate tree root (below). |
+| `sort` | no | Array of `{ "attribute", "direction" }` where `direction` is `asc` or `desc`. Default `[]` (stability suffix only). Unknown attribute or bad direction → **400**. |
+| `attributes` | no | Snake_case names to include **in addition to `id`**. Omit or `[]` → `{ "id": … }` only. Unknown names → **400**. Duplicates ignored (first wins). |
+| `limit` | no | Default **20**, maximum **200**. Outside 1..200 → **400**. |
+| `offset` | no | Default **0**. Negative → **400**. |
+
+#### Predicate grammar (delivered)
+
+Every node has an `op` (kebab-case string values). Logical nodes:
+
+| `op` | Children | Meaning |
+| ---- | -------- | ------- |
+| `and` | `predicates`: non-empty array | All children match |
+| `or` | `predicates`: non-empty array | Any child matches |
+| `not` | `predicate`: one child | Negation |
+
+Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies and system fields):
+
+| `op` | Extra | Meaning |
+| ---- | ----- | ------- |
+| `eq` | `value` (required, non-null) | Equals |
+| `ne` | `value` (required, non-null) | Not equals |
+| `empty` | *(none)* | `IS NULL` |
+| `not-empty` | *(none)* | `IS NOT NULL` |
+
+- `eq` / `ne` / `empty` / `not-empty` apply to **all** mapped attribute types (including system fields).
+- Text comparisons are **case-sensitive**. No trim; no implicit casting across incompatible types.
+- Use `empty` / `not-empty` for null checks — `value: null` on `eq`/`ne` → **400**.
+- Unknown `op`, unknown `attribute`, wrong shape, or wrong value type → **400**.
+- Operators reserved for later slices (`gt` / `gte` / `lt` / `lte`, `contains` / `starts-with` / `ends-with` / `regexp`) are rejected as **not implemented yet** (**400**) until those children ship.
+
+#### Sort stability
+
+1. Apply caller `sort` entries in order.
+2. Unless `created_at` already appears, append `{ "attribute": "created_at", "direction": "desc" }`.
+3. Unless `id` already appears, append `{ "attribute": "id", "direction": "desc" }`.
+
+#### Response
+
+```json
+{
+  "items": [{ "id": "…", "number": "INC00000001", "status": "new" }],
+  "limit": 20,
+  "offset": 0,
+  "total": 123
+}
+```
+
+`total` is the match count before limit/offset. Each item always includes `id`; other fields only if requested via `attributes`.
+
+#### Hard-coded nesting guardrails (M1)
+
+| Constant | Value | Effect |
+| -------- | ----- | ------ |
+| `max-search-nesting-depth` | 3 | Root at depth 1; children of logical nodes increment depth. Exceed → **400**. |
+| `max-search-nesting-length` | 50 | Max children in any one `predicates` array. Exceed → **400**. |
+
+Configurable system parameters for these limits are deferred.
+
+#### Example
+
+```json
+{
+  "predicate": {
+    "op": "and",
+    "predicates": [
+      { "op": "eq", "attribute": "status", "value": "new" },
+      { "op": "ne", "attribute": "severity", "value": "Low" }
+    ]
+  },
+  "sort": [{ "attribute": "status", "direction": "asc" }],
+  "attributes": ["number", "summary", "status"],
+  "limit": 20,
+  "offset": 0
+}
+```
 
 ### Seed tickets (environment-local numbers)
 
@@ -196,7 +291,8 @@ The welcome page does not call the API in this milestone slice; the env and netw
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
 | Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI login; hardening #33 |
-| Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly-id locator | Predicate search #11 |
+| Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly-id locator | — |
+| Predicate search (`POST …/search`) | Slice A: envelope, `and`/`or`/`not`, `eq`/`ne`/`empty`/`not-empty`, sort/projection/pagination (#51 / epic #11) | Ordered ops (#52); text pattern ops (#53); configurable nesting limits |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |

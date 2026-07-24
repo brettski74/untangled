@@ -25,7 +25,8 @@ Hard rules that must not be violated.
 
 - Primary keys: **UUIDv7**, PostgreSQL `uuid`, exposed as hyphenated strings. *(confirmed, high — AGENTS §3.5)*
 - No traditional heavy ORM; thin convention-based mapping; SQL stays visible. *(confirmed, high — AGENTS §3.6)*
-- **Pydantic and Zod models are generated from YAML class definitions — never hand-coded.** *(confirmed)*
+- **Persisted domain shapes:** Pydantic and Zod models for database-backed class/record fields are **generated from YAML class definitions — never hand-coded.** *(confirmed)*
+- **Operation protocol:** Hand-authored Pydantic/Zod (or equivalent) models are allowed for HTTP/API operation contracts — request/response envelopes, query/body protocols, and other non-persisted wire shapes that are not YAML class definitions. *(confirmed)*
 - Naming: SQL/Python/JSON/JS = `snake_case`; YAML = `kebab-case`; classes = PascalCase. *(inferred, high — AGENTS §3.7)*
 - Relationships:
   - Explicit FKs: `<object>_id`, or `<prefix>_<object>_id` when a table has multiple FKs to the same target (prefix names the role, e.g. `next_<object>_id` / `previous_<object>_id`). *(confirmed)*

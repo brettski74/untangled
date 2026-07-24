@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from untangled.auth.dependencies import DbConn
 from untangled.rbac.dependencies import require_class_operation
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
+from untangled.records.search_models import SearchRequest, SearchResponse, SearchValidationError
 
 
 def build_class_router(
@@ -16,7 +17,7 @@ def build_class_router(
     prefix: str,
     tags: list[str],
 ) -> APIRouter:
-    """Build authenticated CRUD routes for a class with optional friendly-id locator."""
+    """Build authenticated CRUD + search routes for a class with optional friendly-id locator."""
     create_cls: type[BaseModel] = model(class_kebab, "Create")
     update_cls: type[BaseModel] = model(class_kebab, "Update")
     router = APIRouter(prefix=prefix, tags=tags)
@@ -31,6 +32,35 @@ def build_class_router(
     ) -> Any:
         store = record_store(conn, class_kebab, actor_id=user["id"])
         return store.create(body.model_dump())
+
+    @router.post("/search", response_model=SearchResponse)
+    def search_records(
+        body: SearchRequest,
+        conn: DbConn,
+        user: Annotated[
+            dict[str, Any], Depends(require_class_operation(class_kebab, "read"))
+        ],
+    ) -> SearchResponse:
+        store = record_store(conn, class_kebab, actor_id=user["id"])
+        try:
+            result = store.search(
+                predicate=body.predicate,
+                sort=body.sort,
+                attributes=body.attributes,
+                limit=body.limit,
+                offset=body.offset,
+            )
+        except SearchValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        return SearchResponse(
+            items=result.items,
+            limit=result.limit,
+            offset=result.offset,
+            total=result.total,
+        )
 
     @router.get("/{locator}")
     def fetch_record(

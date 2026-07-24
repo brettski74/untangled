@@ -27,5 +27,5 @@ Unresolved questions, risks, and open architectural gaps.
 | (product framing) | Enterprise-grade ITSM, not “developer-grade” / toy — see `principles.md` |
 | (auth posture) | Auth required on all endpoints except optional minimal health check; RBAC enforced — see `constraints.md` |
 | (FK naming) | `<object>_id` / `<prefix>_<object>_id`; user FKs usually `<actioned>_by` — see `constraints.md` |
-| (validators) | Pydantic/Zod generated from YAML only — see `constraints.md` |
+| (validators) | Persisted Pydantic/Zod generated from YAML; protocol/API models may be hand-authored — see `constraints.md` |
 | (architecture access) | Only architect skills may read/write `/architecture/` — see `constraints.md` / `boundaries.md` |

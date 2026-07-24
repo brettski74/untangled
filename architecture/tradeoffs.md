@@ -13,9 +13,9 @@ Known compromises and the reasoning behind them.
 
 ## Thin mapping + generated validators vs heavy ORM
 
-- **Choice:** convention-based mapping and visible SQL; Pydantic/Zod **generated from YAML**, never hand-coded.
-- **Why:** predictable behaviour, less magic, single schema intent for Python and JS validation.
-- **Cost:** more explicit persistence patterns; less automatic relationship loading.
+- **Choice:** convention-based mapping and visible SQL; Pydantic/Zod for **persisted** class/record shapes **generated from YAML**, never hand-coded. Operation protocol models (HTTP envelopes, query/body contracts) may be hand-authored.
+- **Why:** single YAML intent for persisted validation across Python and JS; operations can define protocol without inventing YAML for every non-persisted wire shape.
+- **Cost:** more explicit persistence patterns; less automatic relationship loading; reviewers must distinguish protocol models from persisted domain models.
 - *(confirmed)*
 
 ## YAML class definitions as schema source of truth vs migration history
