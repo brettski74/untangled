@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from untangled.schema.ir import CheckIR, ForeignKeyIR, IndexIR, SchemaIR, TableIR
+from untangled.schema.ir import CheckIR, ForeignKeyIR, IndexIR, SchemaIR, SequenceIR, TableIR
 
 
 def canonical_bytes(schema: SchemaIR) -> bytes:
@@ -21,7 +21,11 @@ def table_canonical_bytes(table: TableIR) -> bytes:
 def canonical_dict(schema: SchemaIR) -> dict[str, Any]:
     """Return a JSON-ready dict with stable ordering of tables and members."""
     tables = sorted(schema.tables, key=lambda t: t.name)
-    return {"tables": [_table_dict(t) for t in tables]}
+    sequences = sorted(schema.sequences, key=lambda s: s.name)
+    return {
+        "sequences": [_sequence_dict(s) for s in sequences],
+        "tables": [_table_dict(t) for t in tables],
+    }
 
 
 def _table_dict(table: TableIR) -> dict[str, Any]:
@@ -42,6 +46,11 @@ def _table_dict(table: TableIR) -> dict[str, Any]:
         "indexes": [_index_dict(idx) for idx in indexes],
         "checks": [_check_dict(chk) for chk in checks],
     }
+
+
+def _sequence_dict(seq: SequenceIR) -> dict[str, Any]:
+    # Start is create-time only; hash identity is the sequence name.
+    return {"name": seq.name}
 
 
 def _foreign_key_dict(fk: ForeignKeyIR) -> dict[str, Any]:

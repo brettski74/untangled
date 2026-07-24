@@ -50,8 +50,39 @@ SQL, JSON, Python, and JavaScript.
 | `decimal` | Fixed-point decimal (exact; JSON string at boundaries) | `numeric` |
 | `uuid` | UUID (hyphenated string at JSON boundaries) | `uuid` |
 | `datetime` | Timezone-aware timestamp; **UTC** in storage and mapped attributes | `timestamptz` |
+| `friendly-id` | Server-assigned operational id (`prefix` + zero-padded sequence) | `text` |
 
 Keep this vocabulary small.
+
+### Friendly-id attributes
+
+At most **one** `friendly-id` attribute per class. Across the definitions tree,
+`prefix` values must be unique **case-insensitively** (sequence names use the
+lowercased prefix).
+
+| YAML key | Required | Meaning |
+| -------- | -------- | ------- |
+| `prefix` | yes | Literal prefix stored on every value (e.g. `INC`, `CHG`) |
+| `pad-width` | no | Zero-pad width; **default 8**; reject values **&lt; 4** |
+| `start-at` | no | Sequence start when first created; if omitted, migrate uses max(numeric portion of matching existing values)+1, or 1 |
+
+Sequence name: `friendly_id_{prefix_lower}` (e.g. prefix `CHG` → `friendly_id_chg`).
+Migrate owns `CREATE SEQUENCE` (and the unique index on the column). Persistence
+owns `nextval` + formatting on create. Clients must not supply the friendly-id
+on create or update.
+
+**Pad overflow:** if the decimal body is longer than `pad-width`, emit the full
+digits (no truncate/wrap/modulo). Padding only left-zero-fills shorter values.
+
+**Start policy:** `start-at` / max+1 applies only when the sequence is **created**.
+Re-migrate does not rewrite live sequence starts. Do not race writers during
+migrate when relying on max+1.
+
+**Identity:** UUIDv7 `id` remains the portable primary key. Friendly numbers are
+**environment-local** (sequences diverge across databases).
+
+**Locators:** fetch / update / delete may use either the UUID `id` or the class’s
+friendly-id value as a single path locator. Junk locators → 400.
 
 ### Injected system fields
 
@@ -181,9 +212,9 @@ not automate dumps or retention.
 ## Persistence write rules
 
 - **Create:** generate UUIDv7 `id`; stamp `created_at`, `updated_at`, `created_by`,
-  `updated_by` (actor stub today).
-- **Update:** stamp `updated_at` and `updated_by` only; leave `id` and `created_*`
-  unchanged.
+  `updated_by`; assign `friendly-id` via sequence when the class defines one.
+- **Update:** stamp `updated_at` and `updated_by` only; leave `id`, `created_*`,
+  and friendly-id unchanged.
 - Datetimes are stored as `timestamptz` UTC and exposed as UTC on mapped
   attributes / JSON.
 

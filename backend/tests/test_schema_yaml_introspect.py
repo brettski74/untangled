@@ -19,8 +19,10 @@ from untangled.schema import (
 )
 
 _MANAGED = {
+    "change_request",
     "demo_item",
     "demo_link",
+    "incident",
     "permission",
     "refresh_token",
     "role",
@@ -34,6 +36,15 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
     desired = desired_schema_from_definitions(repo_definitions)
     by_table = {t.name: t for t in desired.tables}
     assert set(by_table) == _MANAGED
+    assert {s.name for s in desired.sequences} == {"friendly_id_chg", "friendly_id_inc"}
+
+    incident = by_table["incident"]
+    assert IndexIR(
+        name=unique_index_name("incident", "number"),
+        columns=("number",),
+        unique=True,
+    ) in incident.indexes
+    assert by_table["incident"].columns  # smoke
 
     table = by_table["demo_item"]
     assert table.primary_key == ("id",)
@@ -128,7 +139,11 @@ def test_introspect_matches_desired_for_demo(
     assert demo_schema
     desired = desired_schema_from_definitions(repo_definitions)
     managed = [t.name for t in desired.tables]
-    current = introspect_schema(db_conn, managed)
+    current = introspect_schema(
+        db_conn,
+        managed,
+        sequence_names=[s.name for s in desired.sequences],
+    )
 
     assert schema_hash(desired) == schema_hash(current)
     desired_by = {t.name: t for t in desired.tables}

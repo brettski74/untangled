@@ -16,6 +16,7 @@ from untangled.schema.from_yaml import desired_schema_from_classes
 from untangled.schema.introspect import introspect_schema
 from untangled.schema.ir import SchemaIR
 from untangled.schema.plan import AddForeignKey, MigrationOp, MigrationPlan
+from untangled.schema.sequences import resolve_sequence_starts
 from untangled.schema.versions import (
     create_restore_point,
     ensure_bootstrap_tables,
@@ -71,10 +72,13 @@ def migrate(
     definitions = load_definitions(definitions_dir)
     desired = desired_schema_from_classes(definitions)
     managed = [t.name for t in desired.tables]
+    managed_seqs = [s.name for s in desired.sequences]
 
     ensure_bootstrap_tables(conn)
-    current = introspect_schema(conn, managed)
-    plan = diff_schemas(desired, current)
+    current = introspect_schema(conn, managed, sequence_names=managed_seqs)
+    # Resolve max+1 starts only for sequences that will be created.
+    desired_for_plan = resolve_sequence_starts(conn, desired)
+    plan = diff_schemas(desired_for_plan, current)
 
     if plan.is_empty:
         log("migrate: no changes (no-op)")

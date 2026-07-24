@@ -17,9 +17,18 @@ from untangled.schema.migrate import migrate
 from untangled.seed import ensure_stub_actor_user
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _session_generate_models(repo_root: Path) -> None:
+    """Refresh package ``untangled.generated`` for API routers under test."""
+    from untangled.mapping.cli import default_paths
+
+    definitions, pydantic_out, zod_out = default_paths(repo_root)
+    generate_models(definitions, pydantic_out, zod_out)
 
 
 @pytest.fixture
@@ -72,6 +81,8 @@ def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefini
         "role_permission",
         "demo_link",
         "demo_item",
+        "change_request",
+        "incident",
         "refresh_token",
         "role",
         "permission",
@@ -79,6 +90,10 @@ def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefini
     ):
         db_conn.execute(
             sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(table))
+        )
+    for seq in ("friendly_id_inc", "friendly_id_chg"):
+        db_conn.execute(
+            sql.SQL("DROP SEQUENCE IF EXISTS {}").format(sql.Identifier(seq))
         )
     db_conn.commit()
     # allow_destructive so shared test DB can reconcile leftovers to YAML intent.

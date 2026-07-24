@@ -1,0 +1,42 @@
+# Incident — Phase 1 ITSM ticket.
+name: incident
+display-name: Incident
+description: >
+  Operational incident record with a human-friendly INC number. Status and
+  severity are free strings in M1; documented seed vocabulary is new,
+  in-progress, resolved, closed (status) and Critical, High, Medium, Low
+  (severity). Resolution-type vocabulary: User error, Application fault,
+  Hardware fault, Network fault, Other.
+attributes:
+  number:
+    type: friendly-id
+    required: true
+    prefix: INC
+  summary:
+    type: string
+    required: true
+  description:
+    type: string
+    required: false
+  status:
+    type: string
+    required: true
+  severity:
+    type: string
+    required: true
+  resolved-at:
+    type: datetime
+    required: false
+  closed-at:
+    type: datetime
+    required: false
+  assigned-user-id:
+    type: uuid
+    required: false
+    references: user
+  resolution:
+    type: string
+    required: false
+  resolution-type:
+    type: string
+    required: false

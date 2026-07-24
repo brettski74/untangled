@@ -7,7 +7,7 @@ from collections.abc import Iterable, Sequence
 
 from psycopg import Connection
 
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SchemaIR, TableIR
+from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SchemaIR, SequenceIR, TableIR
 from untangled.schema.types import ir_type_from_postgres
 
 
@@ -16,23 +16,30 @@ def introspect_schema(
     table_names: Sequence[str],
     *,
     schema_name: str = "public",
+    sequence_names: Sequence[str] | None = None,
 ) -> SchemaIR:
-    """Introspect ``table_names`` in ``schema_name`` into a Schema IR snapshot.
+    """Introspect ``table_names`` (and optional sequences) into a Schema IR snapshot.
 
     Only the listed tables are included (managed classes). Missing tables are
     omitted so callers can treat absence as empty current state for that name.
+    When ``sequence_names`` is provided, only those sequences are considered;
+    missing names are omitted.
     """
     names = tuple(dict.fromkeys(table_names))  # stable unique order
-    if not names:
-        return SchemaIR(tables=())
-
-    existing = _existing_tables(conn, schema_name, names)
     tables: list[TableIR] = []
-    for name in names:
-        if name not in existing:
-            continue
-        tables.append(_introspect_table(conn, schema_name, name))
-    return SchemaIR(tables=tuple(tables))
+    if names:
+        existing = _existing_tables(conn, schema_name, names)
+        for name in names:
+            if name not in existing:
+                continue
+            tables.append(_introspect_table(conn, schema_name, name))
+
+    sequences: tuple[SequenceIR, ...] = ()
+    if sequence_names is not None:
+        sequences = tuple(
+            _introspect_sequences(conn, schema_name, tuple(dict.fromkeys(sequence_names)))
+        )
+    return SchemaIR(tables=tuple(tables), sequences=sequences)
 
 
 def _existing_tables(conn: Connection, schema_name: str, names: Sequence[str]) -> set[str]:
@@ -189,3 +196,25 @@ def _introspect_indexes(
             columns=tuple(p[1] for p in parts),
             unique=parts[0][2],
         )
+
+
+def _introspect_sequences(
+    conn: Connection,
+    schema_name: str,
+    sequence_names: Sequence[str],
+) -> Iterable[SequenceIR]:
+    """Load managed sequences by name. ``start`` is the catalog start value."""
+    if not sequence_names:
+        return
+    rows = conn.execute(
+        """
+        SELECT sequencename, start_value
+        FROM pg_catalog.pg_sequences
+        WHERE schemaname = %s
+          AND sequencename = ANY(%s)
+        ORDER BY sequencename
+        """,
+        (schema_name, list(sequence_names)),
+    ).fetchall()
+    for sequencename, start_value in rows:
+        yield SequenceIR(name=sequencename, start=int(start_value))

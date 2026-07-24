@@ -1,0 +1,41 @@
+# Change Request — Phase 1 ITSM ticket.
+name: change-request
+display-name: Change Request
+description: >
+  Planned change record with a human-friendly CHG number. Status is a free
+  string in M1; documented seed vocabulary is draft, scheduled, implemented,
+  closed.
+attributes:
+  number:
+    type: friendly-id
+    required: true
+    prefix: CHG
+  summary:
+    type: string
+    required: true
+  description:
+    type: string
+    required: false
+  status:
+    type: string
+    required: true
+  scheduled-start:
+    type: datetime
+    required: true
+  scheduled-end:
+    type: datetime
+    required: true
+  actual-start:
+    type: datetime
+    required: false
+  actual-end:
+    type: datetime
+    required: false
+  assigned-user-id:
+    type: uuid
+    required: false
+    references: user
+  requested-by:
+    type: uuid
+    required: true
+    references: user

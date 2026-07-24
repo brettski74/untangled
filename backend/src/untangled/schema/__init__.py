@@ -15,6 +15,7 @@ from untangled.schema.ir import (
     ForeignKeyIR,
     IndexIR,
     SchemaIR,
+    SequenceIR,
     TableIR,
 )
 from untangled.schema.migrate import DestructivePlanError, MigrateResult, migrate
@@ -30,6 +31,7 @@ __all__ = [
     "MigrateResult",
     "MigrationPlan",
     "SchemaIR",
+    "SequenceIR",
     "TableIR",
     "canonical_bytes",
     "canonical_dict",

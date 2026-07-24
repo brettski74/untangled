@@ -11,10 +11,12 @@ from untangled.schema.plan import (
     AlterColumnNullability,
     AlterColumnType,
     CreateIndex,
+    CreateSequence,
     CreateTable,
     DropColumn,
     DropForeignKey,
     DropIndex,
+    DropSequence,
     DropTable,
     MigrationOp,
     MigrationPlan,
@@ -73,6 +75,12 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
     for name in _topo_sort(drop_names, current_by_name, reverse=True):
         ops.append(DropTable(table_name=name))
 
+    # 3b. Drop sequences removed from desired (after tables that may use them).
+    desired_seqs = {s.name: s for s in desired.sequences}
+    current_seqs = {s.name: s for s in current.sequences}
+    for seq_name in sorted(current_seqs.keys() - desired_seqs.keys()):
+        ops.append(DropSequence(sequence_name=seq_name))
+
     # 4. Create tables (dependencies before dependents); FKs/indexes added later.
     for name in _topo_sort(create_names, desired_by_name, reverse=False):
         table = desired_by_name[name]
@@ -86,6 +94,10 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
         for col in sorted(desired_table.columns, key=lambda c: c.name):
             if col.name not in current_cols:
                 ops.append(AddColumn(table_name=name, column=col))
+
+    # 5b. Create missing sequences (never alter start of existing ones).
+    for seq_name in sorted(desired_seqs.keys() - current_seqs.keys()):
+        ops.append(CreateSequence(sequence=desired_seqs[seq_name]))
 
     # 6. Add indexes (new tables + shared tables missing/changed indexes).
     for name in sorted(desired_names):

@@ -31,6 +31,8 @@ def _drop_managed(conn: Connection, repo_definitions: Path) -> None:
     # CASCADE handles FK order among managed tables.
     for name in sorted(t.name for t in desired.tables):
         conn.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(name)))
+    for name in sorted(s.name for s in desired.sequences):
+        conn.execute(sql.SQL("DROP SEQUENCE IF EXISTS {}").format(sql.Identifier(name)))
     conn.execute("DROP TABLE IF EXISTS schema_version_class_hashes CASCADE")
     conn.execute("DROP TABLE IF EXISTS schema_versions CASCADE")
     conn.commit()
@@ -54,7 +56,11 @@ def test_migrate_empty_to_desired_and_noop(
     assert any("UNIQUE INDEX" in m for m in messages)
 
     desired = desired_schema_from_definitions(repo_definitions)
-    current = introspect_schema(db_conn, [t.name for t in desired.tables])
+    current = introspect_schema(
+        db_conn,
+        [t.name for t in desired.tables],
+        sequence_names=[s.name for s in desired.sequences],
+    )
     assert schema_hash(desired) == schema_hash(current)
 
     row = current_version_row(db_conn)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, TableIR
+from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SequenceIR, TableIR
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +170,34 @@ class DropIndex:
         return f"DROP INDEX {self.index_name}"
 
 
+@dataclass(frozen=True, slots=True)
+class CreateSequence:
+    """Create a PostgreSQL sequence (friendly-id allocation)."""
+
+    sequence: SequenceIR
+
+    @property
+    def destructive(self) -> bool:
+        return False
+
+    def describe(self) -> str:
+        return f"CREATE SEQUENCE {self.sequence.name} START {self.sequence.start}"
+
+
+@dataclass(frozen=True, slots=True)
+class DropSequence:
+    """Drop a managed sequence."""
+
+    sequence_name: str
+
+    @property
+    def destructive(self) -> bool:
+        return True
+
+    def describe(self) -> str:
+        return f"DROP SEQUENCE {self.sequence_name}"
+
+
 MigrationOp = (
     CreateTable
     | DropTable
@@ -181,6 +209,8 @@ MigrationOp = (
     | DropForeignKey
     | CreateIndex
     | DropIndex
+    | CreateSequence
+    | DropSequence
 )
 
 

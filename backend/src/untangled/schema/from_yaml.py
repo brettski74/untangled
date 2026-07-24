@@ -7,7 +7,8 @@ from pathlib import Path
 from untangled.mapping.definition import ClassDefinition, load_definitions
 from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.system_fields import AUDIT_USER_TABLE, SYSTEM_FIELDS
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SchemaIR, TableIR
+from untangled.mapping.types import friendly_id_sequence_name
+from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SchemaIR, SequenceIR, TableIR
 from untangled.schema.types import ir_type_from_yaml
 
 
@@ -23,7 +24,8 @@ def desired_schema_from_classes(definitions: list[ClassDefinition]) -> SchemaIR:
     tables = tuple(
         _table_from_definition(defn, include_audit_fks=include_audit_fks) for defn in definitions
     )
-    return SchemaIR(tables=tables)
+    sequences = tuple(_sequences_from_definitions(definitions))
+    return SchemaIR(tables=tables, sequences=sequences)
 
 
 def foreign_key_constraint_name(table_name: str, *columns: str) -> str:
@@ -34,6 +36,26 @@ def foreign_key_constraint_name(table_name: str, *columns: str) -> str:
 def unique_index_name(table_name: str, *columns: str) -> str:
     """Stable unique-index name: ``{table}_{col}_key``."""
     return f"{table_name}_{'_'.join(columns)}_key"
+
+
+def _sequences_from_definitions(definitions: list[ClassDefinition]) -> list[SequenceIR]:
+    sequences: list[SequenceIR] = []
+    for defn in definitions:
+        attr = defn.friendly_id_attr()
+        if attr is None or attr.prefix is None:
+            continue
+        start = attr.start_at if attr.start_at is not None else 1
+        sequences.append(
+            SequenceIR(
+                name=friendly_id_sequence_name(attr.prefix),
+                start=start,
+                table_name=defn.name_snake,
+                column_name=attr.name_snake,
+                prefix=attr.prefix,
+                resolve_start_from_data=attr.start_at is None,
+            )
+        )
+    return sorted(sequences, key=lambda s: s.name)
 
 
 def _table_from_definition(
