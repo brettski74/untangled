@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -11,35 +12,105 @@ from fastapi import HTTPException, status
 from psycopg import Connection
 from pydantic import BaseModel
 
+import untangled
 from untangled.mapping.definition import ClassDefinition, load_definitions
 from untangled.mapping.generate import generate_models
 from untangled.mapping.naming import snake_to_pascal
 from untangled.persistence.store import RecordStore
 from untangled.records.locator import classify_locator
 
+DEFINITIONS_DIR_ENV = "UNTANGLED_DEFINITIONS_DIR"
 
-def _backend_root() -> Path:
-    # …/backend/src/untangled/records → backend/
-    return Path(__file__).resolve().parents[3]
+
+def _source_tree_definitions(*, records_file: Path | None = None) -> Path | None:
+    """Return class-definitions when running from ``backend/src/untangled/records``."""
+    path = (records_file or Path(__file__)).resolve()
+    parts = path.parts
+    if len(parts) < 4:
+        return None
+    if parts[-3:] != ("untangled", "records", path.name):
+        return None
+    if parts[-4] != "src":
+        return None
+    candidate = path.parents[3] / "class-definitions"
+    return candidate if candidate.is_dir() else None
+
+
+def resolve_definitions_dir(
+    *,
+    records_file: Path | None = None,
+    cwd: Path | None = None,
+    environ: dict[str, str] | None = None,
+) -> Path:
+    """Locate YAML class-definitions for runtime (src tree, Compose ``/app``, or env)."""
+    env_map = os.environ if environ is None else environ
+    raw = env_map.get(DEFINITIONS_DIR_ENV)
+    tried: list[Path] = []
+    if raw:
+        env_path = Path(raw).expanduser().resolve()
+        if env_path.is_dir():
+            return env_path
+        tried.append(env_path)
+
+    source = _source_tree_definitions(records_file=records_file)
+    if source is not None:
+        return source.resolve()
+    if records_file is not None:
+        # Still record the would-be source path for error messages when probing.
+        probe = records_file.resolve().parents[3] / "class-definitions"
+        tried.append(probe)
+
+    cwd_path = (cwd if cwd is not None else Path.cwd()) / "class-definitions"
+    tried.append(cwd_path)
+    if cwd_path.is_dir():
+        return cwd_path.resolve()
+
+    tried_msg = ", ".join(str(p) for p in tried) if tried else "(none)"
+    raise RuntimeError(
+        "class-definitions directory not found. "
+        f"Tried: {tried_msg}. "
+        f"Set {DEFINITIONS_DIR_ENV} for unusual layouts."
+    )
 
 
 def definitions_dir() -> Path:
-    return _backend_root() / "class-definitions"
+    """Return the class-definitions directory used by record routers and seeds."""
+    return resolve_definitions_dir()
+
+
+def resolve_pydantic_out(*, package_root: Path | None = None) -> Path:
+    """Return the importable ``untangled.generated`` directory."""
+    root = package_root
+    if root is None:
+        root = Path(untangled.__file__).resolve().parent
+    return root / "generated"
 
 
 def _pydantic_out() -> Path:
-    return _backend_root() / "src" / "untangled" / "generated"
+    return resolve_pydantic_out()
+
+
+def _has_create_models(out: Path) -> bool:
+    incident = out / "incident.py"
+    return incident.is_file() and "class IncidentCreate" in incident.read_text(
+        encoding="utf-8"
+    )
 
 
 @lru_cache(maxsize=1)
 def ensure_generated_package() -> None:
-    """Generate Pydantic models when missing or stale (no Create/Update variants)."""
-    out = _pydantic_out()
-    incident = out / "incident.py"
-    if incident.is_file() and "class IncidentCreate" in incident.read_text(encoding="utf-8"):
+    """Ensure Create/Update models exist; regen only from a monorepo src tree."""
+    out = resolve_pydantic_out()
+    if _has_create_models(out):
         return
-    zod_tmp = _backend_root() / ".zod-generated-tmp"
-    generate_models(definitions_dir(), out, zod_tmp)
+    if _source_tree_definitions() is None:
+        raise RuntimeError(
+            "untangled.generated is missing Create/Update models. "
+            "Rebuild the API image (bake models at build time) or run `make models` "
+            "for local src development."
+        )
+    zod_tmp = out.parent / ".zod-generated-tmp"
+    generate_models(resolve_definitions_dir(), out, zod_tmp)
 
 
 @lru_cache(maxsize=1)

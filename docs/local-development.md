@@ -45,6 +45,7 @@ Inside the **api** container, Compose sets `DATABASE_URL` to use the `postgres` 
 | `UNTANGLED_JWT_SECRET` | `local-dev-only-change-me-untangled-jwt-secret` (dev only) |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
 | `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days) |
+| `UNTANGLED_DEFINITIONS_DIR` | Optional. Absolute path to YAML class-definitions for unusual layouts only; Compose uses `/app/class-definitions` via the image WORKDIR (do not set this for normal local Compose). |
 
 Seed users (usernames are case-normalized to lowercase):
 
