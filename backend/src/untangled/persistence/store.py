@@ -15,6 +15,7 @@ from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
 from untangled.mapping.types import format_friendly_id, friendly_id_sequence_name
 from untangled.persistence.actor import STUB_ACTOR_ID
 from untangled.persistence.ids import new_uuid7
+from untangled.persistence.search import SearchResult, SortSpec, execute_search
 
 
 class RecordStore[T: BaseModel]:
@@ -151,6 +152,27 @@ class RecordStore[T: BaseModel]:
             deleted = cur.rowcount > 0
         self._conn.commit()
         return deleted
+
+    def search(
+        self,
+        *,
+        predicate: Mapping[str, Any] | None = None,
+        sort: list[SortSpec] | None = None,
+        attributes: list[str] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> SearchResult:
+        """Definition-driven predicate search with projection and pagination."""
+        pred = dict(predicate) if predicate is not None else None
+        return execute_search(
+            self._conn,
+            self._definition,
+            predicate=pred,
+            sort=sort,
+            attributes=attributes,
+            limit=limit,
+            offset=offset,
+        )
 
     def _allocate_friendly_id(self) -> str:
         assert self._friendly is not None and self._friendly.prefix is not None
