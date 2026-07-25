@@ -152,14 +152,21 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 | ---- | ----- | ------- |
 | `eq` | `value` (required, non-null) | Equals |
 | `ne` | `value` (required, non-null) | Not equals |
+| `contains` | `value` (required, string) | Substring match (`LIKE`, case-sensitive) |
+| `starts-with` | `value` (required, string) | Prefix match (`LIKE`, case-sensitive) |
+| `ends-with` | `value` (required, string) | Suffix match (`LIKE`, case-sensitive) |
+| `regexp` | `value` (required, string) | POSIX regex match (`~`, case-sensitive) |
 | `empty` | *(none)* | `IS NULL` |
 | `not-empty` | *(none)* | `IS NOT NULL` |
 
 - `eq` / `ne` / `empty` / `not-empty` apply to **all** mapped attribute types (including system fields).
+- `contains` / `starts-with` / `ends-with` / `regexp` apply only to **`string`** and **`friendly-id`**. Other types → **422**.
 - Text comparisons are **case-sensitive**. No trim; no implicit casting across incompatible types.
-- Use `empty` / `not-empty` for null checks — `value: null` on `eq`/`ne` → **422**.
-- Unknown `op`, unknown `attribute`, wrong value type, or invalid typed values → **422**.
-- Operators reserved for later slices (`gt` / `gte` / `lt` / `lte`, `contains` / `starts-with` / `ends-with` / `regexp`) are rejected as **not implemented yet** (**422**) until those children ship.
+- LIKE pattern ops treat `%`, `_`, and `\` in the search value as **literals** (escaped; SQL uses `ESCAPE '\'`).
+- Use `empty` / `not-empty` for null checks — `value: null` on value-taking ops → **422**.
+- Unknown `op`, unknown `attribute`, wrong value type, invalid typed values, or invalid `regexp` pattern → **422**.
+- Operators reserved for a later slice (`gt` / `gte` / `lt` / `lte`) are rejected as **not implemented yet** (**422**) until that child ships.
+- Pathological regex or leading-wildcard `LIKE` can be expensive at scale; M1 treats that as a client foot-gun (no dedicated timeout/length cap in this slice).
 
 #### Sort stability
 
