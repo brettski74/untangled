@@ -82,7 +82,7 @@ migrate when relying on max+1.
 **environment-local** (sequences diverge across databases).
 
 **Locators:** fetch / update / delete may use either the UUID `id` or the class’s
-friendly-id value as a single path locator. Junk locators → 400.
+friendly-id value as a single path locator. Junk locators → 422.
 
 ### Injected system fields
 

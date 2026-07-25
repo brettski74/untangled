@@ -52,8 +52,9 @@ class SearchRequest(BaseModel):
     predicate: dict[str, Any] | None = None
     sort: list[SortSpec] | None = None
     attributes: list[str] | None = None
-    limit: int | None = Field(default=None)
-    offset: int | None = Field(default=None)
+    # Bounds also enforced in the search compiler for non-HTTP callers.
+    limit: int | None = Field(default=None, ge=1, le=200)
+    offset: int | None = Field(default=None, ge=0)
 
 
 class SearchResponse(BaseModel):

@@ -103,10 +103,15 @@ def test_change_request_create_requires_schedule(tickets_client: TestClient) -> 
     assert created.json()["number"].startswith("CHG")
 
 
-def test_junk_locator_is_400(tickets_client: TestClient) -> None:
+def test_junk_locator_is_422(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "readonly")
-    response = tickets_client.get("/incidents/not-a-locator", headers=headers)
-    assert response.status_code == 400
+    for locator in ("not-a-locator", "256"):
+        response = tickets_client.get(f"/incidents/{locator}", headers=headers)
+        assert response.status_code == 422, locator
+
+
+def test_unauthenticated_junk_locator_is_401(tickets_client: TestClient) -> None:
+    assert tickets_client.get("/incidents/256").status_code == 401
 
 
 def test_unauthenticated_is_401(tickets_client: TestClient) -> None:
@@ -135,7 +140,29 @@ def test_reject_client_supplied_number(tickets_client: TestClient) -> None:
             "number": "INC99999999",
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
+
+
+def test_create_missing_required_field_is_400(tickets_client: TestClient) -> None:
+    headers = _headers(tickets_client, "admin")
+    response = tickets_client.post(
+        "/incidents",
+        headers=headers,
+        json={"status": "new", "severity": "Low"},
+    )
+    assert response.status_code == 400
+    assert any(err.get("type") == "missing" for err in response.json()["detail"])
+
+
+def test_create_invalid_json_is_400(tickets_client: TestClient) -> None:
+    headers = _headers(tickets_client, "admin")
+    response = tickets_client.post(
+        "/incidents",
+        content=b'{"summary":',
+        headers={**headers, "content-type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert any(err.get("type") == "json_invalid" for err in response.json()["detail"])
 
 
 def test_seed_incident_fetchable(tickets_client: TestClient) -> None:

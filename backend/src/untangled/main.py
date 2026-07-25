@@ -8,12 +8,14 @@ from fastapi import FastAPI
 
 from untangled.auth import auth_router
 from untangled.records import change_requests_router, incidents_router
+from untangled.request_validation import register_request_validation_handlers
 
 app = FastAPI(
     title="Untangled ITSM",
     description="Backend API scaffold for Milestone 1.",
     version="0.1.0",
 )
+register_request_validation_handlers(app)
 app.include_router(auth_router)
 app.include_router(incidents_router)
 app.include_router(change_requests_router)

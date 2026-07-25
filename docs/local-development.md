@@ -108,7 +108,7 @@ Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
 5. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
    - `GET /incidents/{locator}` / `GET /change-requests/{locator}` with either the stable seed UUID or the friendly number (`INC…` / `CHG…`).
    - `POST` create (omit `number` — server assigns it), `PATCH` update, `DELETE` (admin only among seed roles).
-   - Junk locators → **400**; missing records → **404**; readonly cannot create → **403**.
+   - Junk locators → **422**; missing records → **404**; readonly cannot create → **403**.
 6. Exercise predicate search (same Authorize token; requires `{class}:read`):
    - `POST /incidents/search` and `POST /change-requests/search` with a JSON body (see [Predicate search](#predicate-search) below).
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
@@ -189,7 +189,7 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 
 Configurable system parameters for these limits are deferred.
 
-Search client-input failures: container shape, unexpected keys, and absent required children → **400**; values, ranges, enums, and domain rules → **422**. [#56](https://github.com/brettski74/untangled/issues/56) still covers framework reclassification (e.g. unrecognized JSON keys via `extra="forbid"`, wrong container shape at the envelope before the compiler runs).
+Search client-input failures: container shape, unexpected keys, missing required fields/children, and JSON parse failures → **400**; values, ranges, enums, typed-field mismatches, and domain rules → **422**. Framework (FastAPI/Pydantic) validation is reclassified at the app level using the same taxonomy.
 
 #### Example
 
