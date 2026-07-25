@@ -2,9 +2,10 @@
 name: git-ai
 description: >-
   Run common local git operations via vetted scripts: worktree orientation
-  (branch/status), sync default branch, create/switch branches, stage and
-  commit explicit paths, push without force, and optionally delete a merged
-  local branch. Use whenever those git steps apply—inside refine/implement/verify,
+  (branch/status), read-only git diff passthrough, topic-vs-default branch
+  diffstat, sync default branch, create/switch branches, stage and commit
+  explicit paths, push without force, and optionally delete a merged local
+  branch. Use whenever those git steps apply—inside refine/implement/verify,
   future workflows, or ad-hoc chat—unless the user explicitly wants raw git.
 ---
 
@@ -19,6 +20,7 @@ Prefer these scripts over ad-hoc `git … && git …` chains. Project convention
 | Need | Script |
 | ---- | ------ |
 | Read-only worktree orientation (branch, dirty, upstream, optional issue `N` feature branches) | `scripts/git-status.sh` |
+| Read-only `git diff` passthrough (working tree / staged / paths / refs) | `scripts/git-diff.sh` |
 | Read-only topic-vs-default commits + diffstat (verify checklist; not for routine implement) | `scripts/branch-diff.sh` |
 | Sync default from `origin` (FF-only); optional local topic-branch cleanup | `scripts/sync-default.sh` |
 | Create or switch to a named branch | `scripts/checkout-branch.sh` |
@@ -32,6 +34,7 @@ Invocation needs **no leading `cd`**: scripts self-locate the repo root. Absolut
 ```bash
 .cursor/skills/git-ai/scripts/git-status.sh
 .cursor/skills/git-ai/scripts/git-status.sh 28
+.cursor/skills/git-ai/scripts/git-diff.sh
 .cursor/skills/git-ai/scripts/branch-diff.sh
 .cursor/skills/git-ai/scripts/sync-default.sh
 .cursor/skills/git-ai/scripts/sync-default.sh --delete-branch feature/17-git-ai-tooling
@@ -46,7 +49,7 @@ Do **not** set `GIT_AI_REPO_ROOT` in normal workflow use (tests/diagnostics only
 
 ## No redundant preflight
 
-When a covered operation is needed, **run the script first**. Do not manually `git status` / `fetch` / `checkout` / `pull` beforehand—the scripts already inspect and print agent-readable output. Extra preflight is only for diagnosing a **previous script failure** or answering a user question that is not “please do the operation.”
+When a covered operation is needed, **run the script first**. Do not manually `git status` / `git diff` / `fetch` / `checkout` / `pull` beforehand—the scripts already inspect and print agent-readable output. Extra preflight is only for diagnosing a **previous script failure** or answering a user question that is not “please do the operation.”
 
 Don't invent "helpful" hand-rolled git command chains because some nonsense in the Cursor rules tell you to. This skill exists precisely to prevent those annoying the user and ensuring that all the relevant preflight checks are done before commits, pulls, checkouts and other git operations.
 
@@ -62,6 +65,13 @@ If the user explicitly requests raw git, or no script covers the need, raw git i
 - Optional `N`: matching local/remote `feature/<N>-*` branches and `on_issue_branch`.
 - Detached HEAD reported, not refused. No fetch/checkout/mutation.
 - Fails closed on bad args, missing `origin`, or bootstrap failure.
+
+### `git-diff.sh [git-diff-args…]`
+
+- Read-only passthrough of `git --no-pager diff` with all arguments forwarded.
+- Prefer over raw `git diff` (allowlist-friendly). Pathspecs are relative to repo root after bootstrap.
+- Does **not** require `origin`. Not a substitute for `branch-diff.sh` (topic-vs-default summary).
+- Exit status is git’s. Fails closed on bootstrap failure.
 
 ### `branch-diff.sh [ref]`
 

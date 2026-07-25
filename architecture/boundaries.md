@@ -22,14 +22,16 @@ Do not add parallel application roots; extend `backend/` and `frontend/` in plac
 | Package | Responsibility |
 | ------- | ---------------- |
 | `schema/` | YAML → Schema IR → diff → plan → SQL migrate; version history |
-| `mapping/` | Load class definitions; **generate** Pydantic/Zod models (never hand-authored) |
+| `mapping/` | Load class definitions; **generate** Pydantic/Zod for **persisted** class/record shapes (never hand-authored) |
 | `persistence/` | Thin explicit SQL create/fetch/update |
 | `auth/` | Password hashing, tokens, HTTP auth routes |
 | `rbac/` | Role/permission store and enforcement helpers |
 | `seed/` | Intentional local baseline seed (users/RBAC catalog) |
 | `generated/` | Build output from model generation (gitignored) — not a source of truth |
 
-Human-authored class definitions live in `backend/class-definitions/` (kebab-case YAML). They are the source of truth for schema intent and persisted shapes; migrate plans are derived, not a second source of truth. *(inferred, high — docs/class-definitions.md)*
+Human-authored class definitions live in `backend/class-definitions/` (kebab-case YAML). They are the source of truth for schema intent and **persisted** shapes; migrate plans are derived, not a second source of truth. *(inferred, high — docs/class-definitions.md)*
+
+**Protocol vs persisted models:** Hand-authored request/response (and similar) models for operations live with the owning API/records surface. They define wire protocol, not persisted class shape, and must not become a parallel YAML schema source of truth. *(confirmed)*
 
 ## Cross-cutting ownership
 
