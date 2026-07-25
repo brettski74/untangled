@@ -200,6 +200,54 @@ def test_search_sort_stability_and_explicit_created_at(tickets_client: TestClien
     assert ids == sorted(ids)
 
 
+def test_search_sort_direction_defaults_to_asc(tickets_client: TestClient) -> None:
+    """Omitted or null direction is asc; must match explicit asc and differ from desc."""
+    body_common = {"attributes": ["status"], "limit": 50}
+    omit = _search(
+        tickets_client,
+        "/incidents/search",
+        {**body_common, "sort": [{"attribute": "status"}]},
+    )
+    null_direction = _search(
+        tickets_client,
+        "/incidents/search",
+        {**body_common, "sort": [{"attribute": "status", "direction": None}]},
+    )
+    explicit_asc = _search(
+        tickets_client,
+        "/incidents/search",
+        {**body_common, "sort": [{"attribute": "status", "direction": "asc"}]},
+    )
+    explicit_desc = _search(
+        tickets_client,
+        "/incidents/search",
+        {**body_common, "sort": [{"attribute": "status", "direction": "desc"}]},
+    )
+    assert omit.status_code == 200, omit.text
+    assert null_direction.status_code == 200, null_direction.text
+    assert explicit_asc.status_code == 200
+    assert explicit_desc.status_code == 200
+
+    omit_ids = [item["id"] for item in omit.json()["items"]]
+    null_ids = [item["id"] for item in null_direction.json()["items"]]
+    asc_ids = [item["id"] for item in explicit_asc.json()["items"]]
+    desc_ids = [item["id"] for item in explicit_desc.json()["items"]]
+    assert omit_ids == asc_ids == null_ids
+    assert omit_ids != desc_ids
+    assert [item["status"] for item in omit.json()["items"]] == sorted(
+        item["status"] for item in omit.json()["items"]
+    )
+
+    # Direction values are case-sensitive; only lowercase asc/desc are valid.
+    for bad in ("ASC", "DESC", "Asc", "deSc"):
+        response = _search(
+            tickets_client,
+            "/incidents/search",
+            {**body_common, "sort": [{"attribute": "status", "direction": bad}]},
+        )
+        assert response.status_code == 422, (bad, response.text)
+
+
 def test_search_empty_result_is_200(tickets_client: TestClient) -> None:
     response = _search(
         tickets_client,
@@ -257,11 +305,11 @@ def test_search_guardrails_and_validation_400(tickets_client: TestClient) -> Non
         == 400
     )
 
-    cases = [
+    # Domain / compiler validation → 400.
+    domain_cases = [
         {"limit": 0},
         {"limit": 201},
         {"offset": -1},
-        {"sort": [{"attribute": "status", "direction": "sideways"}]},
         {"attributes": ["not_a_real_field"]},
         {
             "predicate": {
@@ -274,7 +322,16 @@ def test_search_guardrails_and_validation_400(tickets_client: TestClient) -> Non
         {"predicate": {"op": "bogus", "attribute": "status", "value": "a"}},
         {"predicate": {"op": "and", "predicates": []}},
         {"predicate": {"op": "empty", "attribute": "status", "value": "x"}},
+        {"sort": [{"attribute": "not_a_real_field", "direction": "asc"}]},
     ]
-    for body in cases:
+    for body in domain_cases:
         response = _search(tickets_client, "/incidents/search", body)
         assert response.status_code == 400, (body, response.text)
+
+    # Framework / Pydantic validation (enum) → 422 (data / value error).
+    bad_direction = _search(
+        tickets_client,
+        "/incidents/search",
+        {"sort": [{"attribute": "status", "direction": "sideways"}]},
+    )
+    assert bad_direction.status_code == 422, bad_direction.text

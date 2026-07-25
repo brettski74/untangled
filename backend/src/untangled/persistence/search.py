@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from psycopg import Connection, sql
 from psycopg.rows import dict_row
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELDS
@@ -20,6 +20,8 @@ MAX_SEARCH_NESTING_DEPTH = 3
 MAX_SEARCH_NESTING_LENGTH = 50
 DEFAULT_SEARCH_LIMIT = 20
 MAX_SEARCH_LIMIT = 200
+
+SortDirection = Literal["asc", "desc"]
 
 # Slice A operators. B/C ops are rejected as unimplemented until those children ship.
 SLICE_A_OPS: frozenset[str] = frozenset(
@@ -53,16 +55,7 @@ _TYPE_ADAPTERS: dict[str, TypeAdapter[Any]] = {
 
 
 class SearchValidationError(ValueError):
-    """Invalid search envelope or predicate tree (maps to HTTP 400)."""
-
-
-class SortSpec(BaseModel):
-    """One sort key in caller order."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    attribute: str
-    direction: str
+    """Invalid search envelope or predicate tree (raised by the search compiler)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +92,7 @@ def execute_search(
     definition: ClassDefinition,
     *,
     predicate: dict[str, Any] | None = None,
-    sort: list[SortSpec] | None = None,
+    sort: list[tuple[str, SortDirection]] | None = None,
     attributes: list[str] | None = None,
     limit: int | None = None,
     offset: int | None = None,
@@ -191,21 +184,25 @@ def _resolve_projection(
 
 
 def _resolve_sort(
-    sort: list[SortSpec] | None,
+    sort: list[tuple[str, SortDirection]] | None,
     attrs: dict[str, SearchableAttribute],
-) -> list[tuple[str, str]]:
-    order: list[tuple[str, str]] = []
+) -> list[tuple[str, SortDirection]]:
+    """Apply caller sort keys then stability suffix.
+
+    Directions must already be normalised ``asc``/``desc`` at the protocol edge.
+    A bad direction here is a programming error, not a client validation failure.
+    """
+    order: list[tuple[str, SortDirection]] = []
     seen: set[str] = set()
-    for spec in sort or []:
-        if spec.attribute not in attrs:
-            raise SearchValidationError(f"unknown sort attribute: {spec.attribute!r}")
-        direction = spec.direction.lower()
-        if direction not in {"asc", "desc"}:
-            raise SearchValidationError(
-                f"sort direction must be 'asc' or 'desc' (got {spec.direction!r})"
+    for attribute, direction in sort or []:
+        if attribute not in attrs:
+            raise SearchValidationError(f"unknown sort attribute: {attribute!r}")
+        if direction not in ("asc", "desc"):
+            raise RuntimeError(
+                f"invalid sort direction reached persistence: {direction!r}"
             )
-        order.append((spec.attribute, direction))
-        seen.add(spec.attribute)
+        order.append((attribute, direction))
+        seen.add(attribute)
     if "created_at" not in seen:
         order.append(("created_at", "desc"))
     if "id" not in seen:

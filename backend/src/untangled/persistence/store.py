@@ -15,7 +15,7 @@ from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
 from untangled.mapping.types import format_friendly_id, friendly_id_sequence_name
 from untangled.persistence.actor import STUB_ACTOR_ID
 from untangled.persistence.ids import new_uuid7
-from untangled.persistence.search import SearchResult, SortSpec, execute_search
+from untangled.persistence.search import SearchResult, SortDirection, execute_search
 
 
 class RecordStore[T: BaseModel]:
@@ -157,7 +157,7 @@ class RecordStore[T: BaseModel]:
         self,
         *,
         predicate: Mapping[str, Any] | None = None,
-        sort: list[SortSpec] | None = None,
+        sort: list[tuple[str, SortDirection]] | None = None,
         attributes: list[str] | None = None,
         limit: int | None = None,
         offset: int | None = None,

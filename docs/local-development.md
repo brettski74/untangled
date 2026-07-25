@@ -131,10 +131,10 @@ Examples: `POST /incidents/search`, `POST /change-requests/search`.
 | Field | Required | Rules |
 | ----- | -------- | ----- |
 | `predicate` | no | Omit or `null` → match all rows. Otherwise a single predicate tree root (below). |
-| `sort` | no | Array of `{ "attribute", "direction" }` where `direction` is `asc` or `desc`. Default `[]` (stability suffix only). Unknown attribute or bad direction → **400**. |
-| `attributes` | no | Snake_case names to include **in addition to `id`**. Omit or `[]` → `{ "id": … }` only. Unknown names → **400**. Duplicates ignored (first wins). |
-| `limit` | no | Default **20**, maximum **200**. Outside 1..200 → **400**. |
-| `offset` | no | Default **0**. Negative → **400**. |
+| `sort` | no | Array of `{ "attribute", "direction" }` where `direction` is exactly `asc` or `desc` (case-sensitive). `direction` defaults to `asc` if omitted or `null` (nullable in the schema). Default `[]` (stability suffix only). Bad direction → **422**. Unknown sort attribute → **400** today (see status-code note below). |
+| `attributes` | no | Snake_case names to include **in addition to `id`**. Omit or `[]` → `{ "id": … }` only. Unknown names → **400** today. Duplicates ignored (first wins). |
+| `limit` | no | Default **20**, maximum **200**. Outside 1..200 → **400** today. |
+| `offset` | no | Default **0**. Negative → **400** today. |
 
 #### Predicate grammar (delivered)
 
@@ -157,9 +157,9 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 
 - `eq` / `ne` / `empty` / `not-empty` apply to **all** mapped attribute types (including system fields).
 - Text comparisons are **case-sensitive**. No trim; no implicit casting across incompatible types.
-- Use `empty` / `not-empty` for null checks — `value: null` on `eq`/`ne` → **400**.
-- Unknown `op`, unknown `attribute`, wrong shape, or wrong value type → **400**.
-- Operators reserved for later slices (`gt` / `gte` / `lt` / `lte`, `contains` / `starts-with` / `ends-with` / `regexp`) are rejected as **not implemented yet** (**400**) until those children ship.
+- Use `empty` / `not-empty` for null checks — `value: null` on `eq`/`ne` → **400** today.
+- Unknown `op`, unknown `attribute`, wrong shape, or wrong value type → **400** today.
+- Operators reserved for later slices (`gt` / `gte` / `lt` / `lte`, `contains` / `starts-with` / `ends-with` / `regexp`) are rejected as **not implemented yet** (**400** today) until those children ship.
 
 #### Sort stability
 
@@ -184,10 +184,12 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 
 | Constant | Value | Effect |
 | -------- | ----- | ------ |
-| `max-search-nesting-depth` | 3 | Root at depth 1; children of logical nodes increment depth. Exceed → **400**. |
-| `max-search-nesting-length` | 50 | Max children in any one `predicates` array. Exceed → **400**. |
+| `max-search-nesting-depth` | 3 | Root at depth 1; children of logical nodes increment depth. Exceed → **400** today. |
+| `max-search-nesting-length` | 50 | Max children in any one `predicates` array. Exceed → **400** today. |
 
 Configurable system parameters for these limits are deferred.
+
+Search client-input failures today: framework/Pydantic shape and enum failures → **422**; search-compiler/`SearchValidationError` failures → **400**. [#56](https://github.com/brettski74/untangled/issues/56) will align those codes to the structural-vs-semantic taxonomy (and reclassify framework emissions where needed). Until then, treat either **400** or **422** as “fix the request.”
 
 #### Example
 

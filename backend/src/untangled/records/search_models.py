@@ -4,16 +4,35 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from untangled.persistence.search import SearchValidationError, SortSpec
+from untangled.persistence.search import SearchValidationError, SortDirection
 
 __all__ = [
     "SearchRequest",
     "SearchResponse",
     "SearchValidationError",
+    "SortDirection",
     "SortSpec",
 ]
+
+
+class SortSpec(BaseModel):
+    """One sort key in caller order (wire protocol)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    attribute: str
+    # ``None`` is accepted on the wire (OpenAPI nullable) and means the same as omit → ``asc``.
+    direction: SortDirection | None = "asc"
+
+    @field_validator("direction", mode="before")
+    @classmethod
+    def null_means_asc(cls, value: object) -> object:
+        """Explicit JSON null is equivalent to omitting direction (default asc)."""
+        if value is None:
+            return "asc"
+        return value
 
 
 class SearchRequest(BaseModel):

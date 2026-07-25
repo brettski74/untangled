@@ -42,10 +42,21 @@ def build_class_router(
         ],
     ) -> SearchResponse:
         store = record_store(conn, class_kebab, actor_id=user["id"])
+        sort_keys = (
+            [
+                (
+                    spec.attribute,
+                    "asc" if spec.direction is None else spec.direction,
+                )
+                for spec in body.sort
+            ]
+            if body.sort is not None
+            else None
+        )
         try:
             result = store.search(
                 predicate=body.predicate,
-                sort=body.sort,
+                sort=sort_keys,
                 attributes=body.attributes,
                 limit=body.limit,
                 offset=body.offset,
