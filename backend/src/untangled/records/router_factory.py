@@ -67,6 +67,7 @@ def build_class_router(
                 offset=body.offset,
             )
         except SearchStructuralError as exc:
+            # Structural taxonomy aligned with request_validation (issue #56).
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(exc),

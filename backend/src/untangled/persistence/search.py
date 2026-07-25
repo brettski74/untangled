@@ -288,8 +288,10 @@ def _compile_logical_list(
             f"{op!r} requires a non-empty 'predicates' array"
         )
     if len(children) == 0:
-        raise SearchSemanticError(
-            f"{op!r} 'predicates' must contain at least one predicate"
+        # Empty required child collection → structural (same taxonomy as #56 /
+        # request_validation.STRUCTURAL_VALIDATION_TYPES).
+        raise SearchStructuralError(
+            f"{op!r} requires a non-empty 'predicates' array"
         )
     if len(children) > MAX_SEARCH_NESTING_LENGTH:
         raise SearchSemanticError(

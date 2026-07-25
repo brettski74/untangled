@@ -320,7 +320,6 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         },
         {"predicate": {"op": "gt", "attribute": "status", "value": "a"}},
         {"predicate": {"op": "bogus", "attribute": "status", "value": "a"}},
-        {"predicate": {"op": "and", "predicates": []}},
         {"sort": [{"attribute": "not_a_real_field", "direction": "asc"}]},
     ]
     for body in semantic_cases:
@@ -332,6 +331,10 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         {"predicate": {"op": "empty", "attribute": "status", "value": "x"}},
         {"predicate": {"op": "eq", "attribute": "status"}},
         {"predicate": {"op": "eq", "value": "new"}},
+        {"predicate": {"op": "and", "predicates": []}},
+        {"not_a_field": True},
+        {"sort": {"attribute": "status", "direction": "asc"}},
+        {"attributes": "status"},
     ]
     for body in structural_cases:
         response = _search(tickets_client, "/incidents/search", body)
@@ -344,3 +347,11 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         {"sort": [{"attribute": "status", "direction": "sideways"}]},
     )
     assert bad_direction.status_code == 422, bad_direction.text
+
+    # Typed-field scalar mismatch on the envelope → 422.
+    bad_limit_type = _search(
+        tickets_client,
+        "/incidents/search",
+        {"limit": "twenty"},
+    )
+    assert bad_limit_type.status_code == 422, bad_limit_type.text
