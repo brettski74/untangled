@@ -286,13 +286,13 @@ def test_search_unauthenticated_401(tickets_client: TestClient) -> None:
     assert tickets_client.post("/incidents/search", json={}).status_code == 401
 
 
-def test_search_guardrails_and_validation_400(tickets_client: TestClient) -> None:
+def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> None:
     deep = {"op": "eq", "attribute": "status", "value": "new"}
     for _ in range(3):
         deep = {"op": "not", "predicate": deep}
     # depth: root=1, three nots → depth 4 at leaf → exceed max 3
     deep = {"op": "not", "predicate": deep}
-    assert _search(tickets_client, "/incidents/search", {"predicate": deep}).status_code == 400
+    assert _search(tickets_client, "/incidents/search", {"predicate": deep}).status_code == 422
 
     too_wide = {
         "op": "and",
@@ -302,11 +302,11 @@ def test_search_guardrails_and_validation_400(tickets_client: TestClient) -> Non
     }
     assert (
         _search(tickets_client, "/incidents/search", {"predicate": too_wide}).status_code
-        == 400
+        == 422
     )
 
-    # Domain / compiler validation → 400.
-    domain_cases = [
+    # Search compiler semantic/value failures → 422.
+    semantic_cases = [
         {"limit": 0},
         {"limit": 201},
         {"offset": -1},
@@ -321,10 +321,19 @@ def test_search_guardrails_and_validation_400(tickets_client: TestClient) -> Non
         {"predicate": {"op": "gt", "attribute": "status", "value": "a"}},
         {"predicate": {"op": "bogus", "attribute": "status", "value": "a"}},
         {"predicate": {"op": "and", "predicates": []}},
-        {"predicate": {"op": "empty", "attribute": "status", "value": "x"}},
         {"sort": [{"attribute": "not_a_real_field", "direction": "asc"}]},
     ]
-    for body in domain_cases:
+    for body in semantic_cases:
+        response = _search(tickets_client, "/incidents/search", body)
+        assert response.status_code == 422, (body, response.text)
+
+    # Malformed predicate shape / unexpected keys / absent required children → 400.
+    structural_cases = [
+        {"predicate": {"op": "empty", "attribute": "status", "value": "x"}},
+        {"predicate": {"op": "eq", "attribute": "status"}},
+        {"predicate": {"op": "eq", "value": "new"}},
+    ]
+    for body in structural_cases:
         response = _search(tickets_client, "/incidents/search", body)
         assert response.status_code == 400, (body, response.text)
 

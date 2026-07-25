@@ -8,7 +8,12 @@ from pydantic import BaseModel
 from untangled.auth.dependencies import DbConn
 from untangled.rbac.dependencies import require_class_operation
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
-from untangled.records.search_models import SearchRequest, SearchResponse, SearchValidationError
+from untangled.records.search_models import (
+    SearchRequest,
+    SearchResponse,
+    SearchStructuralError,
+    SearchValidationError,
+)
 
 
 def build_class_router(
@@ -61,9 +66,16 @@ def build_class_router(
                 limit=body.limit,
                 offset=body.offset,
             )
-        except SearchValidationError as exc:
+        except SearchStructuralError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        except SearchValidationError as exc:
+            # Semantic/value/domain failures (limit/offset range, unknown
+            # attribute/op, invalid typed values, nesting guardrails, …).
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
         return SearchResponse(

@@ -6,11 +6,16 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from untangled.persistence.search import SearchValidationError, SortDirection
+from untangled.persistence.search import (
+    SearchStructuralError,
+    SearchValidationError,
+    SortDirection,
+)
 
 __all__ = [
     "SearchRequest",
     "SearchResponse",
+    "SearchStructuralError",
     "SearchValidationError",
     "SortDirection",
     "SortSpec",

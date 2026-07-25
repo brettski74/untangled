@@ -55,7 +55,15 @@ _TYPE_ADAPTERS: dict[str, TypeAdapter[Any]] = {
 
 
 class SearchValidationError(ValueError):
-    """Invalid search envelope or predicate tree (raised by the search compiler)."""
+    """Invalid search request (base for compiler validation failures)."""
+
+
+class SearchStructuralError(SearchValidationError):
+    """Malformed request shape, unexpected keys, or absent required children."""
+
+
+class SearchSemanticError(SearchValidationError):
+    """Invalid values, ranges, enums, or domain/rule failures."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,9 +155,9 @@ def _resolve_limit(limit: int | None) -> int:
     if limit is None:
         return DEFAULT_SEARCH_LIMIT
     if not isinstance(limit, int) or isinstance(limit, bool):
-        raise SearchValidationError("limit must be an integer")
+        raise SearchSemanticError("limit must be an integer")
     if limit < 1 or limit > MAX_SEARCH_LIMIT:
-        raise SearchValidationError(
+        raise SearchSemanticError(
             f"limit must be between 1 and {MAX_SEARCH_LIMIT} (got {limit})"
         )
     return limit
@@ -159,9 +167,9 @@ def _resolve_offset(offset: int | None) -> int:
     if offset is None:
         return 0
     if not isinstance(offset, int) or isinstance(offset, bool):
-        raise SearchValidationError("offset must be an integer")
+        raise SearchSemanticError("offset must be an integer")
     if offset < 0:
-        raise SearchValidationError(f"offset must be non-negative (got {offset})")
+        raise SearchSemanticError(f"offset must be non-negative (got {offset})")
     return offset
 
 
@@ -175,7 +183,7 @@ def _resolve_projection(
         return columns
     for name in attributes:
         if name not in attrs:
-            raise SearchValidationError(f"unknown attribute: {name!r}")
+            raise SearchSemanticError(f"unknown attribute: {name!r}")
         if name in seen:
             continue
         seen.add(name)
@@ -196,7 +204,7 @@ def _resolve_sort(
     seen: set[str] = set()
     for attribute, direction in sort or []:
         if attribute not in attrs:
-            raise SearchValidationError(f"unknown sort attribute: {attribute!r}")
+            raise SearchSemanticError(f"unknown sort attribute: {attribute!r}")
         if direction not in ("asc", "desc"):
             raise RuntimeError(
                 f"invalid sort direction reached persistence: {direction!r}"
@@ -217,7 +225,7 @@ def _compile_predicate_root(
     if predicate is None:
         return sql.SQL("TRUE"), []
     if not isinstance(predicate, dict):
-        raise SearchValidationError("predicate must be an object or null")
+        raise SearchStructuralError("predicate must be an object or null")
     params: list[Any] = []
     compiled = _compile_predicate(predicate, attrs, depth=1, params=params)
     return compiled, params
@@ -231,22 +239,22 @@ def _compile_predicate(
     params: list[Any],
 ) -> sql.Composable:
     if depth > MAX_SEARCH_NESTING_DEPTH:
-        raise SearchValidationError(
+        raise SearchSemanticError(
             f"predicate nesting depth exceeds maximum of {MAX_SEARCH_NESTING_DEPTH}"
         )
     if not isinstance(node, dict):
-        raise SearchValidationError("each predicate node must be an object")
+        raise SearchStructuralError("each predicate node must be an object")
     if "op" not in node:
-        raise SearchValidationError("predicate node requires 'op'")
+        raise SearchStructuralError("predicate node requires 'op'")
     op = node["op"]
     if not isinstance(op, str):
-        raise SearchValidationError("predicate 'op' must be a string")
+        raise SearchSemanticError("predicate 'op' must be a string")
     if op in DEFERRED_OPS:
-        raise SearchValidationError(
+        raise SearchSemanticError(
             f"operator {op!r} is not implemented yet (reserved for a later slice)"
         )
     if op not in SLICE_A_OPS:
-        raise SearchValidationError(f"unknown operator: {op!r}")
+        raise SearchSemanticError(f"unknown operator: {op!r}")
 
     if op in {"and", "or"}:
         return _compile_logical_list(op, node, attrs, depth=depth, params=params)
@@ -260,7 +268,7 @@ def _compile_predicate(
 def _unexpected_keys(node: dict[str, Any], allowed: set[str]) -> None:
     extra = set(node) - allowed
     if extra:
-        raise SearchValidationError(
+        raise SearchStructuralError(
             f"unexpected predicate properties: {sorted(extra)}"
         )
 
@@ -275,12 +283,16 @@ def _compile_logical_list(
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "predicates"})
     children = node.get("predicates")
-    if not isinstance(children, list) or len(children) == 0:
-        raise SearchValidationError(
+    if not isinstance(children, list):
+        raise SearchStructuralError(
             f"{op!r} requires a non-empty 'predicates' array"
         )
+    if len(children) == 0:
+        raise SearchSemanticError(
+            f"{op!r} 'predicates' must contain at least one predicate"
+        )
     if len(children) > MAX_SEARCH_NESTING_LENGTH:
-        raise SearchValidationError(
+        raise SearchSemanticError(
             f"{op!r} 'predicates' length exceeds maximum of "
             f"{MAX_SEARCH_NESTING_LENGTH} (got {len(children)})"
         )
@@ -301,7 +313,7 @@ def _compile_not(
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "predicate"})
     if "predicate" not in node:
-        raise SearchValidationError("'not' requires a 'predicate' child")
+        raise SearchStructuralError("'not' requires a 'predicate' child")
     child = _compile_predicate(node["predicate"], attrs, depth=depth + 1, params=params)
     return sql.SQL("NOT ({})").format(child)
 
@@ -316,10 +328,10 @@ def _compile_comparison(
     _unexpected_keys(node, {"op", "attribute", "value"})
     attr = _require_attribute(node, attrs)
     if "value" not in node:
-        raise SearchValidationError(f"{op!r} requires 'value'")
+        raise SearchStructuralError(f"{op!r} requires 'value'")
     raw = node["value"]
     if raw is None:
-        raise SearchValidationError(
+        raise SearchSemanticError(
             f"{op!r} does not accept value: null; use empty / not-empty for null checks"
         )
     typed = _coerce_value(attr, raw)
@@ -348,30 +360,32 @@ def _require_attribute(
     node: dict[str, Any],
     attrs: dict[str, SearchableAttribute],
 ) -> SearchableAttribute:
-    name = node.get("attribute")
+    if "attribute" not in node:
+        raise SearchStructuralError("comparison predicate requires 'attribute'")
+    name = node["attribute"]
     if not isinstance(name, str) or not name:
-        raise SearchValidationError("comparison predicate requires string 'attribute'")
+        raise SearchSemanticError("comparison predicate 'attribute' must be a non-empty string")
     try:
         return attrs[name]
     except KeyError as exc:
-        raise SearchValidationError(f"unknown attribute: {name!r}") from exc
+        raise SearchSemanticError(f"unknown attribute: {name!r}") from exc
 
 
 def _coerce_value(attr: SearchableAttribute, raw: Any) -> Any:
     adapter = _TYPE_ADAPTERS.get(attr.type_name)
     if adapter is None:
-        raise SearchValidationError(
+        raise SearchSemanticError(
             f"unsupported attribute type for search: {attr.type_name!r}"
         )
     try:
         value = adapter.validate_python(raw)
     except ValidationError as exc:
-        raise SearchValidationError(
+        raise SearchSemanticError(
             f"value for attribute {attr.name!r} ({attr.type_name}) is invalid: {exc}"
         ) from exc
     if attr.type_name == "datetime":
         if value.tzinfo is None:
-            raise SearchValidationError(
+            raise SearchSemanticError(
                 f"value for attribute {attr.name!r} must be timezone-aware (UTC)"
             )
         return value.astimezone(timezone.utc)
