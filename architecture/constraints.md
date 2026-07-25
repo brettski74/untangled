@@ -44,6 +44,22 @@ Hard rules that must not be violated.
 - Human-authored schema/config: YAML. System/UI/API structured payloads: JSON. *(inferred, high — AGENTS §4.1)*
 - Persisted JSON (Git/exports): pretty-printed, stable key order, deterministic. Runtime API JSON: accept any valid JSON; do not pretty-print unless requested. *(inferred, high — AGENTS §4.2)*
 
+## HTTP client-error status codes
+
+Distinguish **structural** vs **semantic** request failures. Do not rely on framework defaults when they blur that line. *(confirmed — #56)*
+
+- **400 Bad Request** — structural issues with the request, including:
+  - JSON parsing failure
+  - Missing mandatory attributes
+  - Unrecognized attributes
+  - Wrong data shape (e.g. object vs array)
+- **422 Unprocessable Entity** — semantic issues with request data that is otherwise well-formed, including:
+  - Failed value constraints (ranges, formats, enums)
+  - Cross-field validation failures (e.g. only one of two fields allowed; attribute mandatory when another is set; incompatible values across attributes)
+  - Domain rule failures
+  - Invalid data type for a field (e.g. non-numeric value for a numeric field)
+- Where a framework emits the wrong code (e.g. FastAPI/Pydantic treating structural problems as 422), **capture and reclassify** before returning the response. *(confirmed — #56)*
+
 ## Deployment & process
 
 - Containerized (Docker); Kubernetes for orchestration when scaling. *(inferred, high — AGENTS §3.11)*

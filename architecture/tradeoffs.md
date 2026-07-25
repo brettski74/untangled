@@ -52,3 +52,10 @@ Known compromises and the reasoning behind them.
 - **Why:** schema apply is consequential; keep it explicit.
 - **Cost:** extra steps for new environments; footgun if forgotten.
 - *(inferred, high — README)*
+
+## Own 400/422 classification vs framework defaults
+
+- **Choice:** classify client errors by structural (400) vs semantic (422) meaning; reclassify framework output when it disagrees.
+- **Why:** clients and operators need a stable, intentional contract; FastAPI/Pydantic often map many structural failures to 422.
+- **Cost:** explicit error-mapping layer and tests; cannot treat framework status codes as authoritative.
+- *(confirmed — #56)*
