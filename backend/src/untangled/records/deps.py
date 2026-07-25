@@ -151,7 +151,7 @@ def fetch_by_locator(
     definition: ClassDefinition,
     locator: str,
 ) -> Any:
-    """Resolve locator and fetch; raise 400/404 as appropriate."""
+    """Resolve locator and fetch; raise 422/404 as appropriate."""
     kind, value = classify_locator(definition, locator)
     if kind == "id":
         assert isinstance(value, UUID)

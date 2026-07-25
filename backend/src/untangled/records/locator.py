@@ -18,8 +18,9 @@ def classify_locator(
 ) -> tuple[LocatorKind, UUID | str]:
     """Classify a path locator as UUIDv7 id or friendly-id value.
 
-    Raises HTTP 400 when the locator is neither a valid UUID nor a valid
-    friendly id for this class (prefix + numeric body).
+    Raises HTTP 422 when the locator is neither a valid UUID nor a valid
+    friendly id for this class (prefix + numeric body) — format/value failure,
+    not an envelope/shape problem.
     """
     try:
         return ("id", UUID(locator))
@@ -29,7 +30,7 @@ def classify_locator(
     attr = definition.friendly_id_attr()
     if attr is None or attr.prefix is None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 f"locator {locator!r} is not a valid UUID and class "
                 f"{definition.name_kebab!r} has no friendly-id"
@@ -45,7 +46,7 @@ def classify_locator(
         return ("friendly", locator)
 
     raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=(
             f"locator {locator!r} is neither a valid id nor a valid "
             f"{prefix}… friendly id for {definition.name_kebab}"

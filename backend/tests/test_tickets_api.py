@@ -103,10 +103,15 @@ def test_change_request_create_requires_schedule(tickets_client: TestClient) -> 
     assert created.json()["number"].startswith("CHG")
 
 
-def test_junk_locator_is_400(tickets_client: TestClient) -> None:
+def test_junk_locator_is_422(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "readonly")
-    response = tickets_client.get("/incidents/not-a-locator", headers=headers)
-    assert response.status_code == 400
+    for locator in ("not-a-locator", "256"):
+        response = tickets_client.get(f"/incidents/{locator}", headers=headers)
+        assert response.status_code == 422, locator
+
+
+def test_unauthenticated_junk_locator_is_401(tickets_client: TestClient) -> None:
+    assert tickets_client.get("/incidents/256").status_code == 401
 
 
 def test_unauthenticated_is_401(tickets_client: TestClient) -> None:
