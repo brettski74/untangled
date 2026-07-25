@@ -617,6 +617,60 @@ test_branch_diff_missing_origin() {
   assert_fail "missing origin" "$SCRIPTS/branch-diff.sh"
 }
 
+# --- git-diff ---
+test_git_diff_clean_empty() {
+  local out
+  out="$("$SCRIPTS/git-diff.sh" 2>&1)" || {
+    echo "  FAIL: git-diff clean (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("git-diff clean")
+    return 0
+  }
+  assert_eq "clean empty output" "" "$out"
+}
+
+test_git_diff_unstaged_and_cached() {
+  echo "changed" >"$REPO/README"
+  local out
+  out="$("$SCRIPTS/git-diff.sh" 2>&1)" || {
+    echo "  FAIL: git-diff unstaged (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("git-diff unstaged")
+    return 0
+  }
+  echo "$out" | grep -q '^+changed'
+  assert_eq "unstaged shows change" "0" "$?"
+
+  git -C "$REPO" add README
+  out="$("$SCRIPTS/git-diff.sh" --cached 2>&1)" || {
+    echo "  FAIL: git-diff --cached (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("git-diff --cached")
+    return 0
+  }
+  echo "$out" | grep -q '^+changed'
+  assert_eq "cached shows staged" "0" "$?"
+
+  out="$("$SCRIPTS/git-diff.sh" -- README 2>&1)" || {
+    echo "  FAIL: git-diff pathspec (rc=$?)"
+    echo "$out" | sed 's/^/    /'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("git-diff pathspec")
+    return 0
+  }
+  # Staged-only: unstaged pathspec diff is empty
+  assert_eq "pathspec unstaged empty after stage" "" "$out"
+}
+
+test_git_diff_bad_args_and_no_origin_ok() {
+  assert_fail "invalid option" "$SCRIPTS/git-diff.sh" --not-a-real-diff-flag
+  git -C "$REPO" remote remove origin
+  assert_ok "no origin still ok" "$SCRIPTS/git-diff.sh"
+}
+
 # --- refine-publish ---
 test_refine_publish_happy_path() {
   mkdir -p "$REPO/.refinement"
@@ -725,6 +779,9 @@ main() {
   with_fixture "branch-diff feature" test_branch_diff_feature_commits_and_stat
   with_fixture "branch-diff bad args" test_branch_diff_bad_args
   with_fixture "branch-diff no origin" test_branch_diff_missing_origin
+  with_fixture "git-diff clean" test_git_diff_clean_empty
+  with_fixture "git-diff unstaged+cached" test_git_diff_unstaged_and_cached
+  with_fixture "git-diff bad args / no origin" test_git_diff_bad_args_and_no_origin_ok
   with_fixture "refine publish" test_refine_publish_happy_path
   with_fixture "refine publish bad args" test_refine_publish_bad_args_and_missing_draft
 

@@ -86,6 +86,25 @@ Failure modes (non-zero):
 
 Intended for implement/verify orientation instead of hand-rolled `git branch` / `git status` chains.
 
+## `git-diff.sh`
+
+| Arg | Meaning |
+| --- | ------- |
+| `[git-diff-args…]` | Forwarded unchanged to `git diff` |
+
+Behaviour:
+
+- Standard bootstrap (`common.sh`). Does **not** require `origin`.
+- **Read-only passthrough:** runs `git --no-pager diff` with all arguments forwarded. No arg validation beyond what git itself does.
+- Pathspecs are relative to the resolved repo root (bootstrap `cd`), not the agent’s prior shell cwd.
+- Prefer this over raw `git diff` so Cursor auto-run can allowlist the script without allowlisting arbitrary `git`.
+- **Not** a substitute for `branch-diff.sh`, which prints a structured topic-vs-default commits + diffstat summary for verify checklists.
+
+Failure modes (non-zero):
+
+- Not inside a git work tree / bootstrap failure
+- Any non-zero exit from `git diff` (e.g. invalid options)
+
 ## `branch-diff.sh`
 
 | Arg | Meaning |
@@ -107,7 +126,7 @@ Failure modes (non-zero):
 - Not inside a git work tree / bootstrap failure
 - No `origin` remote
 
-**Verify** uses this to build the acceptance checklist from code changes. **Implement** should not call it routinely (keeps large diffstat out of implement context). Prefer this over hand-rolled `git log` / `git diff`.
+**Verify** uses this to build the acceptance checklist from code changes. **Implement** should not call it routinely (keeps large diffstat out of implement context). Prefer this over hand-rolled `git log` / `git diff --stat` for topic-vs-default. For arbitrary patch content, use `git-diff.sh`.
 
 ## `refine-preflight.sh`
 
