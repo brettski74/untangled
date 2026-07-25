@@ -282,6 +282,188 @@ def test_search_change_requests_endpoint(tickets_client: TestClient) -> None:
         assert item["number"].startswith("CHG")
 
 
+def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
+    # contains / starts-with / ends-with / regexp against seed incident 1.
+    contains = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "contains",
+                "attribute": "summary",
+                "value": "outbound",
+            },
+            "attributes": ["summary"],
+        },
+    )
+    assert contains.status_code == 200, contains.text
+    ids = {item["id"] for item in contains.json()["items"]}
+    assert str(SEED_INCIDENT_1_ID) in ids
+
+    starts = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "starts-with",
+                "attribute": "summary",
+                "value": "Email",
+            },
+            "attributes": ["summary"],
+        },
+    )
+    assert starts.status_code == 200
+    assert str(SEED_INCIDENT_1_ID) in {i["id"] for i in starts.json()["items"]}
+
+    ends = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "ends-with",
+                "attribute": "summary",
+                "value": "delayed",
+            },
+            "attributes": ["summary"],
+        },
+    )
+    assert ends.status_code == 200
+    assert str(SEED_INCIDENT_1_ID) in {i["id"] for i in ends.json()["items"]}
+
+    regexp = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "regexp",
+                "attribute": "summary",
+                "value": r"^Email.*delayed$",
+            },
+            "attributes": ["summary"],
+        },
+    )
+    assert regexp.status_code == 200
+    assert str(SEED_INCIDENT_1_ID) in {i["id"] for i in regexp.json()["items"]}
+
+    # friendly-id starts-with on change-requests (shared factory path).
+    chg = _search(
+        tickets_client,
+        "/change-requests/search",
+        {
+            "predicate": {
+                "op": "starts-with",
+                "attribute": "number",
+                "value": "CHG",
+            },
+            "attributes": ["number"],
+        },
+    )
+    assert chg.status_code == 200, chg.text
+    assert chg.json()["total"] >= 1
+    for item in chg.json()["items"]:
+        assert item["number"].startswith("CHG")
+
+
+def test_search_text_pattern_case_sensitive(tickets_client: TestClient) -> None:
+    response = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "contains",
+                "attribute": "summary",
+                "value": "EMAIL",
+            }
+        },
+    )
+    assert response.status_code == 200
+    assert str(SEED_INCIDENT_1_ID) not in {i["id"] for i in response.json()["items"]}
+
+
+def test_search_text_pattern_like_literals(tickets_client: TestClient) -> None:
+    headers = _headers(tickets_client, "readwrite")
+    created = tickets_client.post(
+        "/incidents",
+        headers=headers,
+        json={
+            "summary": "100%_done marker",
+            "status": "new",
+            "severity": "Low",
+        },
+    )
+    assert created.status_code == 201, created.text
+    created_id = created.json()["id"]
+
+    # Wildcard chars in the value must match literally, not as LIKE wildcards.
+    response = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "contains",
+                "attribute": "summary",
+                "value": "100%_done",
+            },
+            "attributes": ["summary"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    ids = {item["id"] for item in response.json()["items"]}
+    assert created_id in ids
+
+    # A lone % must not match every row as a LIKE wildcard.
+    wild = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "contains",
+                "attribute": "summary",
+                "value": "%",
+            },
+            "attributes": ["summary"],
+        },
+    )
+    assert wild.status_code == 200
+    wild_ids = {item["id"] for item in wild.json()["items"]}
+    assert created_id in wild_ids
+    # Seed summaries have no literal % — only the created row should match.
+    assert str(SEED_INCIDENT_1_ID) not in wild_ids
+    assert str(SEED_INCIDENT_2_ID) not in wild_ids
+
+
+def test_search_text_pattern_type_rejection_and_invalid_regexp(
+    tickets_client: TestClient,
+) -> None:
+    for attribute in ("id", "created_at"):
+        response = _search(
+            tickets_client,
+            "/incidents/search",
+            {
+                "predicate": {
+                    "op": "contains",
+                    "attribute": attribute,
+                    "value": "x",
+                }
+            },
+        )
+        assert response.status_code == 422, (attribute, response.text)
+
+    bad_re = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "regexp",
+                "attribute": "summary",
+                "value": "(",
+            }
+        },
+    )
+    assert bad_re.status_code == 422, bad_re.text
+    assert "regular expression" in bad_re.json()["detail"].lower()
+
+
 def test_search_unauthenticated_401(tickets_client: TestClient) -> None:
     assert tickets_client.post("/incidents/search", json={}).status_code == 401
 

@@ -9,6 +9,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from psycopg import Connection, sql
+from psycopg.errors import InvalidRegularExpression
 from psycopg.rows import dict_row
 from pydantic import TypeAdapter, ValidationError
 
@@ -23,24 +24,28 @@ MAX_SEARCH_LIMIT = 200
 
 SortDirection = Literal["asc", "desc"]
 
-# Slice A operators. B/C ops are rejected as unimplemented until those children ship.
-SLICE_A_OPS: frozenset[str] = frozenset(
-    {"and", "or", "not", "eq", "ne", "empty", "not-empty"}
-)
-DEFERRED_OPS: frozenset[str] = frozenset(
+# Delivered operators (slices A + C). Ordered comparisons (slice B) stay deferred.
+IMPLEMENTED_OPS: frozenset[str] = frozenset(
     {
-        "gt",
-        "gte",
-        "lt",
-        "lte",
+        "and",
+        "or",
+        "not",
+        "eq",
+        "ne",
+        "empty",
+        "not-empty",
         "contains",
         "starts-with",
         "ends-with",
         "regexp",
     }
 )
+DEFERRED_OPS: frozenset[str] = frozenset({"gt", "gte", "lt", "lte"})
 
 _VALUE_OPS = frozenset({"eq", "ne"})
+_TEXT_PATTERN_OPS = frozenset({"contains", "starts-with", "ends-with", "regexp"})
+_TEXT_PATTERN_TYPES = frozenset({"string", "friendly-id"})
+_LIKE_ESCAPE_CHAR = "\\"
 
 _TYPE_ADAPTERS: dict[str, TypeAdapter[Any]] = {
     "string": TypeAdapter(str),
@@ -134,13 +139,21 @@ def execute_search(
         sql.Placeholder(),
     )
 
-    with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(count_query, params)
-        count_row = cur.fetchone()
-        assert count_row is not None
-        total = int(count_row["count"])
-        cur.execute(select_query, [*params, resolved_limit, resolved_offset])
-        rows = cur.fetchall()
+    select_params = [*params, resolved_limit, resolved_offset]
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(count_query, params)
+            count_row = cur.fetchone()
+            assert count_row is not None
+            total = int(count_row["count"])
+            cur.execute(select_query, select_params)
+            rows = cur.fetchall()
+    except InvalidRegularExpression as exc:
+        # SQLSTATE 2201B from a client regexp pattern — semantic, not a server fault.
+        conn.rollback()
+        raise SearchSemanticError(
+            "invalid regular expression in regexp predicate"
+        ) from exc
 
     items = [_serialize_row(dict(row), select_columns) for row in rows]
     return SearchResult(
@@ -253,7 +266,7 @@ def _compile_predicate(
         raise SearchSemanticError(
             f"operator {op!r} is not implemented yet (reserved for a later slice)"
         )
-    if op not in SLICE_A_OPS:
+    if op not in IMPLEMENTED_OPS:
         raise SearchSemanticError(f"unknown operator: {op!r}")
 
     if op in {"and", "or"}:
@@ -262,6 +275,8 @@ def _compile_predicate(
         return _compile_not(node, attrs, depth=depth, params=params)
     if op in _VALUE_OPS:
         return _compile_comparison(op, node, attrs, params=params)
+    if op in _TEXT_PATTERN_OPS:
+        return _compile_text_pattern(op, node, attrs, params=params)
     return _compile_null_check(op, node, attrs)
 
 
@@ -356,6 +371,60 @@ def _compile_null_check(
     if op == "empty":
         return sql.SQL("{} IS NULL").format(sql.Identifier(attr.name))
     return sql.SQL("{} IS NOT NULL").format(sql.Identifier(attr.name))
+
+
+def _compile_text_pattern(
+    op: str,
+    node: dict[str, Any],
+    attrs: dict[str, SearchableAttribute],
+    *,
+    params: list[Any],
+) -> sql.Composable:
+    _unexpected_keys(node, {"op", "attribute", "value"})
+    attr = _require_attribute(node, attrs)
+    if attr.type_name not in _TEXT_PATTERN_TYPES:
+        raise SearchSemanticError(
+            f"operator {op!r} is not applicable to attribute {attr.name!r} "
+            f"(type {attr.type_name!r}; requires string or friendly-id)"
+        )
+    if "value" not in node:
+        raise SearchStructuralError(f"{op!r} requires 'value'")
+    raw = node["value"]
+    if raw is None:
+        raise SearchSemanticError(
+            f"{op!r} does not accept value: null; use empty / not-empty for null checks"
+        )
+    typed = _coerce_value(attr, raw)
+    if not isinstance(typed, str):
+        raise SearchSemanticError(
+            f"value for attribute {attr.name!r} must be a string for operator {op!r}"
+        )
+    if op == "regexp":
+        params.append(typed)
+        return sql.SQL("{} ~ {}").format(sql.Identifier(attr.name), sql.Placeholder())
+
+    escaped = _escape_like_literal(typed)
+    if op == "contains":
+        pattern = f"%{escaped}%"
+    elif op == "starts-with":
+        pattern = f"{escaped}%"
+    else:
+        pattern = f"%{escaped}"
+    params.append(pattern)
+    return sql.SQL("{} LIKE {} ESCAPE {}").format(
+        sql.Identifier(attr.name),
+        sql.Placeholder(),
+        sql.Literal(_LIKE_ESCAPE_CHAR),
+    )
+
+
+def _escape_like_literal(value: str) -> str:
+    """Escape LIKE metacharacters so the value is matched as a literal substring."""
+    return (
+        value.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
 
 
 def _require_attribute(
