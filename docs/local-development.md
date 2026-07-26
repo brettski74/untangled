@@ -108,8 +108,8 @@ Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http
 
 - Unauthenticated routes redirect to `/login` (fail-closed).
 - Login calls `POST /auth/login` from the web tier; only the **access** JWT is stored in an httpOnly session cookie (refresh discarded until #14).
-- The authenticated stub loads `GET /auth/me` once per navigation tree and shows display name + effective permissions (real RBAC — compare `admin` vs `readonly`).
-- Access expiry / API **401** clears the cookie and returns to login; **403** keeps the session. Token refresh is #14; shell chrome/nav are later #12 children; broader auth security review is #67.
+- The authenticated layout loads `GET /auth/me` once per navigation tree; the header user chip uses display name (hover = username). Real RBAC permissions still come from `/auth/me` for later YAML nav (#66).
+- Access expiry / API **401** clears the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67.
 
 Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-origin authenticated SSR form actions), `secure` on by default with explicit local opt-out, cookie `maxAge` derived from the access JWT `exp` claim. The JWT is never exposed to browser JavaScript. Login-form CSRF and broader hardening are tracked in #67.
 
@@ -330,7 +330,7 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |
 | Persistence (`untangled.persistence`) | Thin SQL create/fetch/update/delete + friendly-id assign | Domain routes stamp authenticated actor |
 | Actor stub (`STUB_ACTOR_ID`) | Matches seeded admin UUID for FK-safe tests | Prefer current-user dependency on HTTP writes |
-| Frontend SSR login gate | Real `/login`, httpOnly access JWT cookie, `/auth/me` stub | Shell chrome (#65), YAML nav (#66), refresh (#14) |
+| Frontend SSR login + shell chrome | Real `/login`, httpOnly access JWT cookie, header/nav/context chrome | YAML nav (#66), refresh (#14) |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |
 | `frontend/package-lock.json` | Pinned deps | Regenerate when `package.json` changes |
 

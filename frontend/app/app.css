@@ -3,6 +3,14 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  /* Operator shell chrome (#65 / epic #12) */
+  --color-shell-chrome: #1e293b;
+  --color-shell-chrome-fg: #e2e8f0;
+  --color-shell-chrome-muted: #94a3b8;
+  --color-shell-separator: #475569;
+  --color-shell-context: #334155;
+  --color-shell-content: #f8fafc;
 }
 
 html,
@@ -12,4 +20,19 @@ body {
   @media (prefers-color-scheme: dark) {
     color-scheme: dark;
   }
+}
+
+.shell-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: var(--color-shell-chrome);
+  color: var(--color-shell-chrome-fg);
+}
+
+.shell-skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
 }
