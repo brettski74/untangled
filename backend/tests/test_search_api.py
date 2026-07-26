@@ -282,6 +282,146 @@ def test_search_change_requests_endpoint(tickets_client: TestClient) -> None:
         assert item["number"].startswith("CHG")
 
 
+def test_search_ordered_ops(tickets_client: TestClient) -> None:
+    # string gt on seed incident status vocabulary
+    status_gt = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {"op": "gt", "attribute": "status", "value": "m"},
+            "attributes": ["status"],
+        },
+    )
+    assert status_gt.status_code == 200, status_gt.text
+    assert status_gt.json()["total"] >= 1
+    for item in status_gt.json()["items"]:
+        assert item["status"] > "m"
+
+    # friendly-id starts-with-style bound via gte on INC numbers
+    number_gte = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {"op": "gte", "attribute": "number", "value": "INC"},
+            "attributes": ["number"],
+        },
+    )
+    assert number_gte.status_code == 200, number_gte.text
+    assert number_gte.json()["total"] >= 2
+
+    # datetime lt far-future created_at matches existing rows
+    created = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "lt",
+                "attribute": "created_at",
+                "value": "2099-01-01T00:00:00Z",
+            },
+            "attributes": ["created_at"],
+        },
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["total"] >= 2
+
+    # integer ordered ops on change-requests (shared factory path)
+    high_risk = _search(
+        tickets_client,
+        "/change-requests/search",
+        {
+            "predicate": {"op": "gte", "attribute": "risk_score", "value": 50},
+            "attributes": ["risk_score", "summary"],
+        },
+    )
+    assert high_risk.status_code == 200, high_risk.text
+    assert high_risk.json()["total"] >= 1
+    for item in high_risk.json()["items"]:
+        assert item["risk_score"] >= 50
+
+    low_risk = _search(
+        tickets_client,
+        "/change-requests/search",
+        {
+            "predicate": {"op": "lt", "attribute": "risk_score", "value": 50},
+            "attributes": ["risk_score"],
+        },
+    )
+    assert low_risk.status_code == 200, low_risk.text
+    assert low_risk.json()["total"] >= 1
+    for item in low_risk.json()["items"]:
+        assert item["risk_score"] < 50
+
+
+def test_search_ordered_text_uses_c_collation(tickets_client: TestClient) -> None:
+    """C puts uppercase before lowercase; typical en_US does not.
+
+    Fixture: summary 'Zebra' vs bound 'apple'. Under COLLATE \"C\",
+    'Zebra' < 'apple' is true; under a common locale primary strength,
+    case folds and 'apple' < 'Zebra'. This must stay discriminating —
+    do not simplify to a pair that orders the same under both collations.
+    """
+    headers = _headers(tickets_client, "readwrite")
+    created = tickets_client.post(
+        "/incidents",
+        headers=headers,
+        json={
+            "summary": "Zebra",
+            "status": "new",
+            "severity": "Low",
+        },
+    )
+    assert created.status_code == 201, created.text
+    zebra_id = created.json()["id"]
+
+    response = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {"op": "lt", "attribute": "summary", "value": "apple"},
+            "attributes": ["summary"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    ids = {item["id"] for item in response.json()["items"]}
+    assert zebra_id in ids
+
+
+def test_search_ordered_null_does_not_match(tickets_client: TestClient) -> None:
+    # Seed incident 2 has description NULL — ordered ops must not match it.
+    response = _search(
+        tickets_client,
+        "/incidents/search",
+        {
+            "predicate": {
+                "op": "and",
+                "predicates": [
+                    {"op": "eq", "attribute": "status", "value": "in-progress"},
+                    {"op": "gt", "attribute": "description", "value": ""},
+                ],
+            },
+            "attributes": ["description", "status"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    ids = {item["id"] for item in response.json()["items"]}
+    assert str(SEED_INCIDENT_2_ID) not in ids
+
+
+def test_search_ordered_type_rejection(tickets_client: TestClient) -> None:
+    for attribute, value in (
+        ("id", "01900000-0000-7000-8000-000000000021"),
+        ("assigned_user_id", "01900000-0000-7000-8000-000000000001"),
+        ("major_incident", True),
+    ):
+        response = _search(
+            tickets_client,
+            "/incidents/search",
+            {"predicate": {"op": "gt", "attribute": attribute, "value": value}},
+        )
+        assert response.status_code == 422, (attribute, response.text)
+
+
 def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
     # contains / starts-with / ends-with / regexp against seed incident 1.
     contains = _search(
@@ -500,7 +640,7 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
                 "value": None,
             }
         },
-        {"predicate": {"op": "gt", "attribute": "status", "value": "a"}},
+        {"predicate": {"op": "gt", "attribute": "major_incident", "value": True}},
         {"predicate": {"op": "bogus", "attribute": "status", "value": "a"}},
         {"sort": [{"attribute": "not_a_real_field", "direction": "asc"}]},
     ]

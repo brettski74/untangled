@@ -24,6 +24,11 @@ attributes:
   severity:
     type: string
     required: true
+  major-incident:
+    # Optional boolean is tri-state (NULL ≠ false). Prefer required+default when
+    # schema defaults/backfill land (#62). Unset rows match neither eq true nor eq false.
+    type: boolean
+    required: false
   resolved-at:
     type: datetime
     required: false

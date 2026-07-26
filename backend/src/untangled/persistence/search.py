@@ -24,7 +24,6 @@ MAX_SEARCH_LIMIT = 200
 
 SortDirection = Literal["asc", "desc"]
 
-# Delivered operators (slices A + C). Ordered comparisons (slice B) stay deferred.
 IMPLEMENTED_OPS: frozenset[str] = frozenset(
     {
         "and",
@@ -32,6 +31,10 @@ IMPLEMENTED_OPS: frozenset[str] = frozenset(
         "not",
         "eq",
         "ne",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
         "empty",
         "not-empty",
         "contains",
@@ -40,9 +43,19 @@ IMPLEMENTED_OPS: frozenset[str] = frozenset(
         "regexp",
     }
 )
-DEFERRED_OPS: frozenset[str] = frozenset({"gt", "gte", "lt", "lte"})
 
 _VALUE_OPS = frozenset({"eq", "ne"})
+_ORDERED_OPS = frozenset({"gt", "gte", "lt", "lte"})
+_ORDERED_TYPES = frozenset(
+    {"string", "integer", "float", "decimal", "datetime", "friendly-id"}
+)
+_TEXT_ORDERED_TYPES = frozenset({"string", "friendly-id"})
+_ORDERED_SQL = {
+    "gt": sql.SQL(">"),
+    "gte": sql.SQL(">="),
+    "lt": sql.SQL("<"),
+    "lte": sql.SQL("<="),
+}
 _TEXT_PATTERN_OPS = frozenset({"contains", "starts-with", "ends-with", "regexp"})
 _TEXT_PATTERN_TYPES = frozenset({"string", "friendly-id"})
 _LIKE_ESCAPE_CHAR = "\\"
@@ -262,10 +275,6 @@ def _compile_predicate(
     op = node["op"]
     if not isinstance(op, str):
         raise SearchSemanticError("predicate 'op' must be a string")
-    if op in DEFERRED_OPS:
-        raise SearchSemanticError(
-            f"operator {op!r} is not implemented yet (reserved for a later slice)"
-        )
     if op not in IMPLEMENTED_OPS:
         raise SearchSemanticError(f"unknown operator: {op!r}")
 
@@ -275,6 +284,8 @@ def _compile_predicate(
         return _compile_not(node, attrs, depth=depth, params=params)
     if op in _VALUE_OPS:
         return _compile_comparison(op, node, attrs, params=params)
+    if op in _ORDERED_OPS:
+        return _compile_ordered_comparison(op, node, attrs, params=params)
     if op in _TEXT_PATTERN_OPS:
         return _compile_text_pattern(op, node, attrs, params=params)
     return _compile_null_check(op, node, attrs)
@@ -357,6 +368,41 @@ def _compile_comparison(
     return sql.SQL("{} {} {}").format(
         sql.Identifier(attr.name),
         operator,
+        sql.Placeholder(),
+    )
+
+
+def _compile_ordered_comparison(
+    op: str,
+    node: dict[str, Any],
+    attrs: dict[str, SearchableAttribute],
+    *,
+    params: list[Any],
+) -> sql.Composable:
+    _unexpected_keys(node, {"op", "attribute", "value"})
+    attr = _require_attribute(node, attrs)
+    if attr.type_name not in _ORDERED_TYPES:
+        raise SearchSemanticError(
+            f"operator {op!r} is not applicable to attribute {attr.name!r} "
+            f"(type {attr.type_name!r}; requires an ordered type)"
+        )
+    if "value" not in node:
+        raise SearchStructuralError(f"{op!r} requires 'value'")
+    raw = node["value"]
+    if raw is None:
+        raise SearchSemanticError(
+            f"{op!r} does not accept value: null; use empty / not-empty for null checks"
+        )
+    typed = _coerce_value(attr, raw)
+    params.append(typed)
+    column: sql.Composable = sql.Identifier(attr.name)
+    if attr.type_name in _TEXT_ORDERED_TYPES:
+        # Pin byte/codepoint order so case-sensitive text bounds are portable
+        # across database locales (see docs; text sort collation is separate).
+        column = sql.SQL('{} COLLATE "C"').format(column)
+    return sql.SQL("{} {} {}").format(
+        column,
+        _ORDERED_SQL[op],
         sql.Placeholder(),
     )
 

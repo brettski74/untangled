@@ -19,6 +19,10 @@ attributes:
   status:
     type: string
     required: true
+  risk-score:
+    # Integer 0–100 inclusive (M1 convention; not range-enforced in the compiler yet).
+    type: integer
+    required: false
   scheduled-start:
     type: datetime
     required: true
