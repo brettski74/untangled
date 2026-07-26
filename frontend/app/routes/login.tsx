@@ -60,8 +60,12 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold text-slate-900 tracking-tight mb-1">
-          Untangled
+        <h1 className="mb-1">
+          <img
+            src="/UntangledLogo-nobg-black.svg"
+            alt="Untangled"
+            className="h-10 w-auto"
+          />
         </h1>
         <p className="text-sm text-slate-600 mb-8">
           Sign in with your Untangled credentials.
