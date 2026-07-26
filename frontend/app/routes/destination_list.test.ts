@@ -111,4 +111,25 @@ describe("destination_list loader", () => {
     ).rejects.toMatchObject({ status: 404 });
     expect(search_collection).not.toHaveBeenCalled();
   });
+
+  it("throws 403 Forbidden when search is denied", async () => {
+    const { ApiForbiddenError } = await import("../auth/errors");
+    search_collection.mockRejectedValue(new ApiForbiddenError());
+
+    const { loader } = await import("../routes/destination_list");
+    const cookie = await session_cookie();
+    await expect(
+      loader({
+        request: new Request(
+          "http://web.test/change-requests/lists/open",
+          { headers: { Cookie: cookie } },
+        ),
+        params: { collection: "change-requests", list_id: "open" },
+        context: {},
+      } as never),
+    ).rejects.toMatchObject({
+      status: 403,
+      statusText: "Forbidden",
+    });
+  });
 });

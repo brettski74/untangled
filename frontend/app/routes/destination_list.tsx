@@ -2,6 +2,7 @@ import { data } from "react-router";
 
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
+  forbidden_response,
   redirect_unauthenticated,
   redirect_unauthorized,
 } from "../auth/gate.server";
@@ -77,7 +78,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       throw await redirect_unauthorized(request);
     }
     if (error instanceof ApiForbiddenError) {
-      throw new Response("Forbidden", { status: 403 });
+      throw forbidden_response();
     }
     throw error;
   }
