@@ -2,7 +2,9 @@
 
 React Router v7 **framework mode** SSR application for Milestone 1.
 
-Login gate lives under `app/routes/` and `app/auth/`; operator chrome under `app/shell/`; product-default nav YAML under `app/config/nav-bar.yaml`. Destination placeholders are replaced in place by list/detail/new (#13); token refresh and live search wiring are #14.
+Login gate lives under `app/routes/` and `app/auth/`; operator chrome under `app/shell/`; product-default nav YAML under `app/config/nav-bar.yaml`. List destinations are replaced in place by the schema-driven list (#13 / #75); detail + new are #71; token refresh is #14.
+
+Generated Zod schemas and class field metadata live under `app/generated/` (gitignored) — run `make models` from the repo root before typecheck/build when that tree is missing.
 
 ## Commands
 

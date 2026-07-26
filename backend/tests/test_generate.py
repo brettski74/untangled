@@ -72,6 +72,18 @@ def test_generate_demo_pydantic_accepts_and_rejects(
     assert (zod_out / "user.ts").is_file()
     assert (zod_out / "role.ts").is_file()
     assert (zod_out / "permission.ts").is_file()
+    assert result.field_meta_path.is_file()
+    assert result.field_meta_path.name == "field_meta.ts"
+    field_meta = result.field_meta_path.read_text(encoding="utf-8")
+    assert "CLASS_FIELD_META" in field_meta
+    assert '"incident"' in field_meta
+    # YAML / IR order for Incident: number is first; meta must not reorder.
+    assert 'friendly_id_attr: "number"' in field_meta
+    number_pos = field_meta.index('name_snake: "number"')
+    summary_pos = field_meta.index('name_snake: "summary"')
+    assigned_pos = field_meta.index('name_snake: "assigned_user_id"')
+    assert number_pos < summary_pos < assigned_pos
+    assert 'references: "user"' in field_meta
 
     module = _load_module(pydantic_out / "demo_item.py", "generated_demo_item")
     demo_item = module.DemoItem

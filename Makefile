@@ -62,7 +62,7 @@ frontend-dev: frontend-install ## Run the React Router dev server in the foregro
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
 		npm run dev -- --host 127.0.0.1 --port 5173
 
-models: backend-install ## Generate Pydantic and Zod models from YAML class definitions
+models: backend-install ## Generate Pydantic, Zod, and field-meta from YAML class definitions
 	$(BACKEND_PYTHON) -m untangled.mapping
 
 migrate: backend-install ## Apply YAML schema intent to PostgreSQL (intentional; not part of up)
@@ -81,11 +81,11 @@ backend-lint: backend-install ## Lint backend Python sources
 backend-test: backend-install frontend-install db-up ## Run backend pytest suite (includes DB-backed persistence tests)
 	PYTHONPATH=$(BACKEND_DIR)/src $(BACKEND_PYTHON) -m pytest $(BACKEND_DIR)
 
-frontend-lint: frontend-install ## Typecheck the frontend (minimal lint until ESLint is added)
+frontend-lint: frontend-install models ## Typecheck the frontend (minimal lint until ESLint is added)
 	# CI=1: react-router typegen ignores vite clearScreen and wipes TTY scrollback otherwise
 	cd $(FRONTEND_DIR) && CI=1 npm run typecheck
 
-frontend-test: frontend-install ## Run frontend unit tests and SSR production build smoke
+frontend-test: frontend-install models ## Run frontend unit tests and SSR production build smoke
 	cd $(FRONTEND_DIR) && CI=1 npm test
 	cd $(FRONTEND_DIR) && CI=1 npm run build
 

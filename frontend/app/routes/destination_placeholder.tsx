@@ -12,8 +12,8 @@ export type DestinationPlaceholderProps = {
 };
 
 /**
- * Thin content-pane stand-in until #13 replaces list/detail/new in place.
- * Predicate echo is non-authoritative until search executes (#13/#14).
+ * Thin content-pane stand-in until detail/new (#71) replaces new destinations.
+ * List destinations are owned by #13 / #75 and no longer use this placeholder.
  */
 export function DestinationPlaceholder({
   section_display_name,
@@ -31,14 +31,21 @@ export function DestinationPlaceholder({
       <p className="text-sm text-slate-600 max-w-prose mb-4">
         Placeholder destination (<code className="text-xs">{path}</code>,{" "}
         <code className="text-xs">{class_name}</code>, {option_type}). Real
-        list/detail/new UI lands in{" "}
+        detail/new UI lands in{" "}
+        <a
+          className="underline"
+          href="https://github.com/brettski74/untangled/issues/71"
+        >
+          #71
+        </a>
+        ; list view is{" "}
         <a
           className="underline"
           href="https://github.com/brettski74/untangled/issues/13"
         >
           #13
         </a>
-        ; live search and richer session wiring in{" "}
+        ; token refresh / richer session in{" "}
         <a
           className="underline"
           href="https://github.com/brettski74/untangled/issues/14"
@@ -55,7 +62,7 @@ export function DestinationPlaceholder({
         </pre>
       ) : (
         <p className="text-sm text-slate-600">
-          New-object form placeholder — no API create yet.
+          New-object form placeholder — replaced in place by #71.
         </p>
       )}
       <p className="mt-6 text-xs text-slate-500">

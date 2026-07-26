@@ -272,7 +272,7 @@ After a fresh migrate + seed, sample rows use **stable UUIDs** (safe for docs / 
 | `make frontend-dev` | Run React Router dev server on the host (port 5173) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
 | `make test` | Backend pytest (starts DB; uses migrate path) + frontend build smoke test |
-| `make models` | Generate Pydantic + Zod models from `backend/class-definitions/` |
+| `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
 | `make clean` | Same as `clean-models` (clean source tree of codegen output) |
 
