@@ -249,10 +249,10 @@ After a fresh migrate + seed, sample rows use **stable UUIDs** (safe for docs / 
 
 | Class | Stable seed UUID | Typical first number on a fresh DB |
 | ----- | ---------------- | ---------------------------------- |
-| Incident | `01900000-0000-7000-8000-000000000021` | `INC00000001` |
-| Incident | `01900000-0000-7000-8000-000000000022` | `INC00000002` |
-| Change Request | `01900000-0000-7000-8000-000000000031` | `CHG00000001` |
-| Change Request | `01900000-0000-7000-8000-000000000032` | `CHG00000002` |
+| Incident | `01900000-0000-7000-8000-000000000021` … `026` | `INC00000001` … |
+| Change Request | `01900000-0000-7000-8000-000000000031` … `039`, `040` … `044` | `CHG00000001` … |
+
+Six incident rows and fourteen change-request rows are seeded; full stable UUID constants live in `backend/src/untangled/seed/tickets.py`.
 
 `GET /health` and `/docs` stay public. There is no “auth disabled” mode.
 
