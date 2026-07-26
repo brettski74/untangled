@@ -3,10 +3,10 @@ name: incident
 display-name: Incident
 description: >
   Operational incident record with a human-friendly INC number. Status and
-  severity are free strings in M1; documented seed vocabulary is new,
-  in-progress, resolved, closed (status) and Critical, High, Medium, Low
-  (severity). Resolution-type vocabulary: User error, Application fault,
-  Hardware fault, Network fault, Other.
+  severity are free strings in M1; documented status vocabulary (progression)
+  is new → in-progress → resolved → closed, plus terminal off-ramp cancelled.
+  Severity vocabulary: Critical, High, Medium, Low. Resolution-type vocabulary:
+  User error, Application fault, Hardware fault, Network fault, Other.
 attributes:
   number:
     type: friendly-id

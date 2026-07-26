@@ -22,6 +22,8 @@ from untangled.seed.rbac_catalog import (
 )
 from untangled.seed.users import (
     SEED_ADMIN_ID,
+    SEED_CHANGE_ID,
+    SEED_INCIDENT_ID,
     SEED_READONLY_ID,
     SEED_READWRITE_ID,
     SEED_USERS,
@@ -33,8 +35,20 @@ def test_seed_attaches_roles_to_users(demo_schema, db_conn: Connection) -> None:
     assert fetch_role_names_for_user(db_conn, SEED_ADMIN_ID) == ["admin"]
     assert fetch_role_names_for_user(db_conn, SEED_READONLY_ID) == ["read-only"]
     assert fetch_role_names_for_user(db_conn, SEED_READWRITE_ID) == ["read-write"]
-    assert len(SEED_USER_ROLES) == 3
-    assert {r.name for r in SEED_ROLES} == {"admin", "read-only", "read-write"}
+    assert fetch_role_names_for_user(db_conn, SEED_CHANGE_ID) == [
+        "change-request-read-write"
+    ]
+    assert fetch_role_names_for_user(db_conn, SEED_INCIDENT_ID) == [
+        "incident-read-only"
+    ]
+    assert len(SEED_USER_ROLES) == 5
+    assert {r.name for r in SEED_ROLES} == {
+        "admin",
+        "read-only",
+        "read-write",
+        "change-request-read-write",
+        "incident-read-only",
+    }
 
 
 def test_seed_permission_catalog_includes_delete_keys(
@@ -84,6 +98,30 @@ def test_readonly_and_readwrite_effective_sets(
     assert ADMIN_PERMISSION_KEY not in readwrite
     assert not user_has_permission(db_conn, SEED_READWRITE_ID, "demo-item:delete")
     assert user_has_permission(db_conn, SEED_READWRITE_ID, "demo-item:update")
+
+
+def test_change_and_incident_scoped_effective_sets(
+    demo_schema, db_conn: Connection
+) -> None:
+    assert demo_schema
+    change_keys = fetch_effective_permission_keys(db_conn, SEED_CHANGE_ID)
+    incident_keys = fetch_effective_permission_keys(db_conn, SEED_INCIDENT_ID)
+
+    assert change_keys == frozenset(
+        {
+            class_operation_key("change-request", "create"),
+            class_operation_key("change-request", "read"),
+            class_operation_key("change-request", "update"),
+        }
+    )
+    assert not user_has_permission(db_conn, SEED_CHANGE_ID, "incident:read")
+    assert not user_has_permission(db_conn, SEED_CHANGE_ID, "demo-item:read")
+    assert not user_has_permission(db_conn, SEED_CHANGE_ID, "change-request:delete")
+
+    assert incident_keys == frozenset({class_operation_key("incident", "read")})
+    assert not user_has_permission(db_conn, SEED_INCIDENT_ID, "incident:create")
+    assert not user_has_permission(db_conn, SEED_INCIDENT_ID, "change-request:read")
+    assert not user_has_permission(db_conn, SEED_INCIDENT_ID, "demo-item:read")
 
 
 def test_multi_role_union(demo_schema, db_conn: Connection) -> None:
@@ -139,7 +177,13 @@ def test_seed_all_is_idempotent(demo_schema, db_conn: Connection) -> None:
         assert cur.fetchone()[0] == len(SEED_PERMISSIONS)
         cur.execute("SELECT COUNT(*) FROM user_role")
         assert cur.fetchone()[0] == len(SEED_USER_ROLES)
-    assert {u.username for u in SEED_USERS} == {"admin", "readonly", "readwrite"}
+    assert {u.username for u in SEED_USERS} == {
+        "admin",
+        "readonly",
+        "readwrite",
+        "change",
+        "incident",
+    }
 
 
 def test_unknown_user_has_empty_permissions(demo_schema, db_conn: Connection) -> None:

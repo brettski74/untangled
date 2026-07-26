@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from untangled.rbac.keys import ADMIN_PERMISSION_KEY, OPERATIONS, class_operation_key
-from untangled.seed.users import SEED_ADMIN_ID, SEED_READONLY_ID, SEED_READWRITE_ID
+from untangled.seed.users import (
+    SEED_ADMIN_ID,
+    SEED_CHANGE_ID,
+    SEED_INCIDENT_ID,
+    SEED_READONLY_ID,
+    SEED_READWRITE_ID,
+)
 
 # Seeded YAML class names that receive a full CRUD permission catalog in M1.
 # Pre-seeding incident / change-request keys does not create those domain tables.
@@ -19,6 +25,10 @@ SEEDED_PERMISSION_CLASSES: tuple[str, ...] = (
 SEED_ROLE_ADMIN_ID = UUID("01900000-0000-7000-8000-000000000011")
 SEED_ROLE_READ_ONLY_ID = UUID("01900000-0000-7000-8000-000000000012")
 SEED_ROLE_READ_WRITE_ID = UUID("01900000-0000-7000-8000-000000000013")
+SEED_ROLE_CHANGE_REQUEST_READ_WRITE_ID = UUID(
+    "01900000-0000-7000-8000-000000000014"
+)
+SEED_ROLE_INCIDENT_READ_ONLY_ID = UUID("01900000-0000-7000-8000-000000000015")
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +45,16 @@ SEED_ROLES: tuple[SeedRole, ...] = (
         id=SEED_ROLE_READ_WRITE_ID,
         name="read-write",
         display_name="Read Write",
+    ),
+    SeedRole(
+        id=SEED_ROLE_CHANGE_REQUEST_READ_WRITE_ID,
+        name="change-request-read-write",
+        display_name="Change Request Read Write",
+    ),
+    SeedRole(
+        id=SEED_ROLE_INCIDENT_READ_ONLY_ID,
+        name="incident-read-only",
+        display_name="Incident Read Only",
     ),
 )
 
@@ -109,6 +129,13 @@ def _role_permission_keys(role_name: str) -> tuple[str, ...]:
             for operation in ("create", "read", "update"):
                 keys.append(class_operation_key(class_name, operation))
         return tuple(keys)
+    if role_name == "change-request-read-write":
+        return tuple(
+            class_operation_key("change-request", operation)
+            for operation in ("create", "read", "update")
+        )
+    if role_name == "incident-read-only":
+        return (class_operation_key("incident", "read"),)
     raise ValueError(f"unknown seed role: {role_name!r}")
 
 
@@ -153,5 +180,15 @@ SEED_USER_ROLES: tuple[SeedUserRole, ...] = (
         id=_join_id(0x82),
         user_id=SEED_READWRITE_ID,
         role_id=SEED_ROLE_READ_WRITE_ID,
+    ),
+    SeedUserRole(
+        id=_join_id(0x83),
+        user_id=SEED_CHANGE_ID,
+        role_id=SEED_ROLE_CHANGE_REQUEST_READ_WRITE_ID,
+    ),
+    SeedUserRole(
+        id=_join_id(0x84),
+        user_id=SEED_INCIDENT_ID,
+        role_id=SEED_ROLE_INCIDENT_READ_ONLY_ID,
     ),
 )

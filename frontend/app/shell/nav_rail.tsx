@@ -1,5 +1,6 @@
 import { ArrowLeftToLine, ArrowRightToLine } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { NavLink, useLocation } from "react-router";
 
 import {
   NAV_DEFAULT_WIDTH_PX,
@@ -9,15 +10,33 @@ import {
   read_nav_prefs,
   write_nav_prefs,
 } from "./nav_prefs";
+import { find_match_for_path, option_path } from "./nav_paths";
+import type { NavBarView } from "./nav_schema";
 
-export function ShellNavRail() {
+export type ShellNavRailProps = {
+  nav: NavBarView;
+};
+
+export function ShellNavRail({ nav }: ShellNavRailProps) {
+  const location = useLocation();
+  const active = find_match_for_path(nav, location.pathname);
+  const route_open_class = active?.section.class_name ?? null;
+
   const [prefs, set_prefs] = useState<NavPrefs>({
     collapsed: false,
     last_expanded_width: NAV_DEFAULT_WIDTH_PX,
   });
   const [hydrated, set_hydrated] = useState(false);
+  const [user_open_class, set_user_open_class] = useState<string | null>(null);
   const drag_start_x = useRef<number | null>(null);
   const drag_start_width = useRef(NAV_DEFAULT_WIDTH_PX);
+  const collapse_button_ref = useRef<HTMLButtonElement>(null);
+
+  const open_class = user_open_class ?? route_open_class;
+
+  useEffect(() => {
+    set_user_open_class(null);
+  }, [location.pathname]);
 
   useEffect(() => {
     const next = read_nav_prefs(window.localStorage, window.innerWidth);
@@ -58,7 +77,6 @@ export function ShellNavRail() {
   }, [prefs.collapsed]);
 
   const width_px = effective_nav_width(prefs);
-  const collapse_button_ref = useRef<HTMLButtonElement>(null);
 
   function toggle_collapsed() {
     set_prefs((current) => {
@@ -97,19 +115,62 @@ export function ShellNavRail() {
       <div
         id="shell-nav-body"
         hidden={prefs.collapsed}
-        className="min-h-0 flex-1 overflow-auto px-3 pb-3 text-xs text-[var(--color-shell-chrome-muted)]"
+        className="min-h-0 flex-1 overflow-auto px-2 pb-3 text-sm"
       >
-        <p>
-          Navigation body stub. YAML sections, accordion options, and RBAC
-          filtering land in{" "}
-          <a
-            className="underline text-[var(--color-shell-chrome-fg)]"
-            href="https://github.com/brettski74/untangled/issues/66"
-          >
-            #66
-          </a>
-          .
-        </p>
+        {nav.length === 0 ? (
+          <p className="px-2 text-xs text-[var(--color-shell-chrome-muted)]">
+            No navigation options for this account.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {nav.map((section) => {
+              const section_id = `nav-section-${section.class_name}`;
+              const expanded = open_class === section.class_name;
+              return (
+                <li key={section.class_name}>
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-controls={section_id}
+                    onClick={() => set_user_open_class(section.class_name)}
+                    className="flex w-full items-center rounded px-2 py-1.5 text-left font-medium text-[var(--color-shell-chrome-fg)] hover:bg-white/10"
+                  >
+                    {section.display_name}
+                  </button>
+                  <ul
+                    id={section_id}
+                    hidden={!expanded}
+                    className="mt-0.5 space-y-0.5 border-l border-[var(--color-shell-separator)] ml-2 pl-2"
+                  >
+                    {section.options.map((option) => {
+                      const path = option_path(section, option);
+                      if (path == null) {
+                        return null;
+                      }
+                      return (
+                        <li key={`${section.class_name}:${option.display_name}`}>
+                          <NavLink
+                            to={path}
+                            className={({ isActive }) =>
+                              [
+                                "block rounded px-2 py-1 text-[var(--color-shell-chrome-muted)] hover:bg-white/10 hover:text-[var(--color-shell-chrome-fg)]",
+                                isActive
+                                  ? "bg-white/15 text-[var(--color-shell-chrome-fg)]"
+                                  : "",
+                              ].join(" ")
+                            }
+                          >
+                            {option.display_name}
+                          </NavLink>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {!prefs.collapsed ? (

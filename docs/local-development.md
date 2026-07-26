@@ -22,7 +22,7 @@ make migrate   # apply YAML schema intent (Postgres must be reachable)
 make seed      # idempotent baseline users + RBAC (roles/permissions/attachments)
 ```
 
-That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass, reconciles the database to `backend/class-definitions/`, then upserts the three local seed users, RBAC attachments, and sample Incident / Change Request rows.
+That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass, reconciles the database to `backend/class-definitions/`, then upserts the local seed users, RBAC attachments, and sample Incident / Change Request rows.
 
 For host-side lint/test tooling:
 
@@ -57,8 +57,10 @@ Seed users (usernames are case-normalized to lowercase):
 | `admin` | `admin-change-me` | `01900000-0000-7000-8000-000000000001` | `admin` (permission `admin` = allow-all) |
 | `readonly` | `readonly-change-me` | `01900000-0000-7000-8000-000000000002` | `read-only` (`{class}:read`) |
 | `readwrite` | `readwrite-change-me` | `01900000-0000-7000-8000-000000000003` | `read-write` (create/read/update; **no** `:delete`, **no** `admin`) |
+| `change` | `change-change-me` | `01900000-0000-7000-8000-000000000004` | `change-request-read-write` (CHG create/read/update only) |
+| `incident` | `incident-change-me` | `01900000-0000-7000-8000-000000000005` | `incident-read-only` (`incident:read` only) |
 
-Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_READWRITE_PASSWORD` when running `make seed`.
+Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_READWRITE_PASSWORD`, `SEED_CHANGE_PASSWORD`, `SEED_INCIDENT_PASSWORD` when running `make seed`.
 
 ### Permission keys
 
@@ -75,6 +77,8 @@ Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_R
 | `admin` | `01900000-0000-7000-8000-000000000011` | `admin` |
 | `read-only` | `01900000-0000-7000-8000-000000000012` | `{class}:read` for seeded classes |
 | `read-write` | `01900000-0000-7000-8000-000000000013` | `{class}:create`, `:read`, `:update` for seeded classes |
+| `change-request-read-write` | `01900000-0000-7000-8000-000000000014` | `change-request:create`, `:read`, `:update` |
+| `incident-read-only` | `01900000-0000-7000-8000-000000000015` | `incident:read` |
 
 ### Enforcement helpers (for later domain routes)
 
@@ -104,7 +108,7 @@ Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
 
 ### UI login (SSR gate)
 
-Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http://127.0.0.1:5173` and sign in with a seed user (`admin` / `readonly` / `readwrite` and their default passwords above).
+Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http://127.0.0.1:5173` and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above).
 
 - Unauthenticated routes redirect to `/login` (fail-closed).
 - Login calls `POST /auth/login` from the web tier; only the **access** JWT is stored in an httpOnly session cookie (refresh discarded until #14).
@@ -118,7 +122,7 @@ Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-orig
 1. Open `http://127.0.0.1:8000/docs`.
 2. `POST /auth/login` (OAuth2 password form) with a seed username/password — copy `access_token`.
 3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
-4. Hit `GET /auth/rbac-probe` (requires `demo-item:read` or `admin`). All three seed users succeed; a user with no roles gets **403**.
+4. Hit `GET /auth/rbac-probe` (requires `demo-item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo-item:read`) get **403**; a user with no roles gets **403**.
 5. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
    - `GET /incidents/{locator}` / `GET /change-requests/{locator}` with either the stable seed UUID or the friendly number (`INC…` / `CHG…`).
    - `POST` create (omit `number` — server assigns it), `PATCH` update, `DELETE` (admin only among seed roles).

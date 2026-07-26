@@ -39,7 +39,7 @@ Uses `DATABASE_URL` or the documented local default. Migrate is intentional — 
 .venv/bin/python -m untangled.seed
 ```
 
-Assumes migrate has already been applied. Idempotent upsert of admin / readonly / readwrite. See local-development docs for passwords and `/docs` Authorize.
+Assumes migrate has already been applied. Idempotent upsert of seed users (admin / readonly / readwrite / change / incident) and RBAC. See local-development docs for passwords and `/docs` Authorize.
 
 ## Local run
 

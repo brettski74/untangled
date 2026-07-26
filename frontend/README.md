@@ -2,7 +2,7 @@
 
 React Router v7 **framework mode** SSR application for Milestone 1.
 
-Login gate lives under `app/routes/` and `app/auth/`; operator chrome under `app/shell/`. YAML nav destinations (#66) and token refresh (#14) extend this tree in place.
+Login gate lives under `app/routes/` and `app/auth/`; operator chrome under `app/shell/`; product-default nav YAML under `app/config/nav-bar.yaml`. Destination placeholders are replaced in place by list/detail/new (#13); token refresh and live search wiring are #14.
 
 ## Commands
 

@@ -1,0 +1,89 @@
+# Default product nav-bar (M1). Only `class` section type is supported.
+# Option identity for routes is the kebab-case display-name (renames are breaking).
+#
+# Deferred (do not invent syntax yet):
+# - Assigned to Me / Created by Me (need bind variables)
+# - Upcoming / Recent Changes (need relative/elastic date expressions)
+#
+# Instance Git-backed override / admin editor: later; this file is the M1
+# product default shipped with the frontend bundle.
+
+nav-bar:
+  - display-name: Change Requests
+    section-type: class
+    class: change-request
+    options:
+      - display-name: New
+        option-type: new
+
+      - display-name: All
+        option-type: list
+
+      - display-name: Open
+        option-type: list
+        predicate:
+          op: and
+          predicates:
+            - op: ne
+              attribute: status
+              value: closed
+            - op: ne
+              attribute: status
+              value: implemented
+            - op: ne
+              attribute: status
+              value: cancelled
+
+      - display-name: In Progress
+        option-type: list
+        predicate:
+          op: eq
+          attribute: status
+          value: in-progress
+
+      - display-name: Scheduled
+        option-type: list
+        predicate:
+          op: eq
+          attribute: status
+          value: scheduled
+
+  - display-name: Incidents
+    section-type: class
+    class: incident
+    options:
+      - display-name: New
+        option-type: new
+
+      - display-name: All
+        option-type: list
+
+      - display-name: Open
+        option-type: list
+        predicate:
+          op: and
+          predicates:
+            - op: ne
+              attribute: status
+              value: resolved
+            - op: ne
+              attribute: status
+              value: closed
+            - op: ne
+              attribute: status
+              value: cancelled
+
+      - display-name: Closed
+        option-type: list
+        predicate:
+          op: or
+          predicates:
+            - op: eq
+              attribute: status
+              value: resolved
+            - op: eq
+              attribute: status
+              value: closed
+            - op: eq
+              attribute: status
+              value: cancelled

@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 
+import type { NavBarView } from "./nav_schema";
 import { ShellHeader } from "./header";
 import { ShellNavRail } from "./nav_rail";
 
 export type ShellLayoutProps = {
   display_name: string;
   username: string;
+  nav: NavBarView;
   children: ReactNode;
 };
 
@@ -17,6 +19,7 @@ export type ShellLayoutProps = {
 export function ShellLayout({
   display_name,
   username,
+  nav,
   children,
 }: ShellLayoutProps) {
   return (
@@ -28,7 +31,7 @@ export function ShellLayout({
       <ShellHeader display_name={display_name} username={username} />
 
       <div className="flex min-h-0 flex-1">
-        <ShellNavRail />
+        <ShellNavRail nav={nav} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <div

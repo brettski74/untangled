@@ -12,6 +12,8 @@ from untangled.persistence.actor import STUB_ACTOR_ID
 SEED_ADMIN_ID = STUB_ACTOR_ID
 SEED_READONLY_ID = UUID("01900000-0000-7000-8000-000000000002")
 SEED_READWRITE_ID = UUID("01900000-0000-7000-8000-000000000003")
+SEED_CHANGE_ID = UUID("01900000-0000-7000-8000-000000000004")
+SEED_INCIDENT_ID = UUID("01900000-0000-7000-8000-000000000005")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +52,22 @@ SEED_USERS: tuple[SeedUser, ...] = (
         password_env="SEED_READWRITE_PASSWORD",
         default_password="readwrite-change-me",
         intent="read-write role (create/read/update; no delete/admin)",
+    ),
+    SeedUser(
+        id=SEED_CHANGE_ID,
+        username="change",
+        display_name="Local Change Operator",
+        password_env="SEED_CHANGE_PASSWORD",
+        default_password="change-change-me",
+        intent="change-request-read-write (CHG create/read/update only)",
+    ),
+    SeedUser(
+        id=SEED_INCIDENT_ID,
+        username="incident",
+        display_name="Local Incident Reader",
+        password_env="SEED_INCIDENT_PASSWORD",
+        default_password="incident-change-me",
+        intent="incident-read-only (incident:read only)",
     ),
 )
 

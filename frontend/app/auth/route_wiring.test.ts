@@ -3,9 +3,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { public_route_ids } from "../routes";
 import { action as login_action, loader as login_loader } from "../routes/login";
 import { loader as authenticated_loader } from "../routes/authenticated";
+import { loader as home_loader } from "../routes/home";
 import { action as logout_action } from "../routes/logout";
 import { reset_session_storage_for_tests } from "./session.server";
 import { fake_access_token } from "./test_tokens";
+
+const READWRITE_PERMISSIONS = [
+  "incident:create",
+  "incident:read",
+  "incident:update",
+  "change-request:create",
+  "change-request:read",
+  "change-request:update",
+  "demo-item:create",
+  "demo-item:read",
+  "demo-item:update",
+];
+
+async function session_cookie(token = fake_access_token()): Promise<string> {
+  const { commit_access_token } = await import("./session.server");
+  const set_cookie = await commit_access_token(
+    new Request("http://web.test/"),
+    token,
+  );
+  return set_cookie.split(";")[0] ?? set_cookie;
+}
 
 describe("route wiring", () => {
   beforeEach(() => {
@@ -31,12 +53,7 @@ describe("route wiring", () => {
   });
 
   it("authenticated loader returns profile when session + /auth/me succeed", async () => {
-    const token = fake_access_token();
-    const { commit_access_token } = await import("./session.server");
-    const set_cookie = await commit_access_token(
-      new Request("http://web.test/"),
-      token,
-    );
+    const cookie = await session_cookie();
 
     vi.stubGlobal(
       "fetch",
@@ -51,8 +68,8 @@ describe("route wiring", () => {
     );
 
     const result = await authenticated_loader({
-      request: new Request("http://web.test/", {
-        headers: { Cookie: set_cookie.split(";")[0] ?? set_cookie },
+      request: new Request("http://web.test/change-requests/lists/all", {
+        headers: { Cookie: cookie },
       }),
       params: {},
       context: {},
@@ -67,9 +84,130 @@ describe("route wiring", () => {
         },
       },
     });
+    expect(result.data.nav?.map((s: { class_name: string }) => s.class_name)).toEqual(
+      ["change-request", "incident"],
+    );
     expect(result.init?.headers).toMatchObject({
       "Cache-Control": "private, no-store",
     });
+  });
+
+  it("authenticated layout does not redirect on / or /_.data (index owns landing)", async () => {
+    const cookie = await session_cookie();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          username: "admin",
+          display_name: "Admin",
+          roles: ["admin"],
+          permissions: ["admin"],
+        }),
+      ),
+    );
+
+    for (const url of ["http://web.test/", "http://web.test/_.data"]) {
+      const result = await authenticated_loader({
+        request: new Request(url, { headers: { Cookie: cookie } }),
+        params: {},
+        context: {},
+      } as never);
+      expect(result).toMatchObject({
+        data: { me: { username: "admin" } },
+      });
+      expect(result).not.toBeInstanceOf(Response);
+    }
+  });
+
+  it("home loader redirects to Change Requests → All for admin", async () => {
+    const cookie = await session_cookie();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          username: "admin",
+          display_name: "Admin",
+          roles: ["admin"],
+          permissions: ["admin"],
+        }),
+      ),
+    );
+
+    try {
+      await home_loader({
+        request: new Request("http://web.test/_.data", {
+          headers: { Cookie: cookie },
+        }),
+        params: {},
+        context: {},
+      } as never);
+      expect.unreachable("expected redirect");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      const response = error as Response;
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe(
+        "/change-requests/lists/all",
+      );
+    }
+  });
+
+  it("home loader redirects to Change Requests → All for readwrite", async () => {
+    const cookie = await session_cookie();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          username: "readwrite",
+          display_name: "Read Write",
+          roles: ["readwrite"],
+          permissions: READWRITE_PERMISSIONS,
+        }),
+      ),
+    );
+
+    try {
+      await home_loader({
+        request: new Request("http://web.test/", {
+          headers: { Cookie: cookie },
+        }),
+        params: {},
+        context: {},
+      } as never);
+      expect.unreachable("expected redirect");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      const response = error as Response;
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe(
+        "/change-requests/lists/all",
+      );
+    }
+  });
+
+  it("home loader returns null when no destinations are visible", async () => {
+    const cookie = await session_cookie();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          username: "empty",
+          display_name: "Empty",
+          roles: [],
+          permissions: [],
+        }),
+      ),
+    );
+
+    await expect(
+      home_loader({
+        request: new Request("http://web.test/", {
+          headers: { Cookie: cookie },
+        }),
+        params: {},
+        context: {},
+      } as never),
+    ).resolves.toBeNull();
   });
 
   it("login action commits a session cookie on success", async () => {

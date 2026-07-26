@@ -18,7 +18,7 @@ _MIGRATE_STUB_PASSWORD = "migrate-stub-not-for-login"
 
 
 def seed_users(conn: Connection) -> list[str]:
-    """Upsert the three seed users. Returns usernames that were inserted or updated."""
+    """Upsert baseline seed users. Returns usernames that were inserted or updated."""
     touched: list[str] = []
     now = datetime.now(timezone.utc)
     for seed in SEED_USERS:
