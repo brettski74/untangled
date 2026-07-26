@@ -64,7 +64,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
           <img
             src="/UntangledLogo-nobg-black.svg"
             alt="Untangled"
-            className="h-10 w-auto"
+            className="h-[75px] w-auto"
           />
         </h1>
         <p className="text-sm text-slate-600 mb-8">
