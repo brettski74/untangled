@@ -32,3 +32,14 @@ export async function redirect_unauthorized(request: Request): Promise<Response>
     headers: { "Set-Cookie": set_cookie },
   });
 }
+
+/**
+ * Authenticated but denied — preserve session; surface as a route error.
+ * Sets statusText explicitly (Response body alone is not statusText).
+ */
+export function forbidden_response(): Response {
+  return new Response("Forbidden", {
+    status: 403,
+    statusText: "Forbidden",
+  });
+}

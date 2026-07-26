@@ -42,7 +42,8 @@ services:
 
   web:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
     environment:
       # Server-side / in-network API base (Compose DNS). Authenticated browser
       # traffic stays on the web tier (SSR loaders/actions); see ADR 002.

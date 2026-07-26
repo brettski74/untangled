@@ -249,10 +249,10 @@ After a fresh migrate + seed, sample rows use **stable UUIDs** (safe for docs / 
 
 | Class | Stable seed UUID | Typical first number on a fresh DB |
 | ----- | ---------------- | ---------------------------------- |
-| Incident | `01900000-0000-7000-8000-000000000021` | `INC00000001` |
-| Incident | `01900000-0000-7000-8000-000000000022` | `INC00000002` |
-| Change Request | `01900000-0000-7000-8000-000000000031` | `CHG00000001` |
-| Change Request | `01900000-0000-7000-8000-000000000032` | `CHG00000002` |
+| Incident | `01900000-0000-7000-8000-000000000021` … `026` | `INC00000001` … |
+| Change Request | `01900000-0000-7000-8000-000000000031` … `039`, `040` … `044` | `CHG00000001` … |
+
+Six incident rows and fourteen change-request rows are seeded; full stable UUID constants live in `backend/src/untangled/seed/tickets.py`.
 
 `GET /health` and `/docs` stay public. There is no “auth disabled” mode.
 
@@ -272,7 +272,7 @@ After a fresh migrate + seed, sample rows use **stable UUIDs** (safe for docs / 
 | `make frontend-dev` | Run React Router dev server on the host (port 5173) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
 | `make test` | Backend pytest (starts DB; uses migrate path) + frontend build smoke test |
-| `make models` | Generate Pydantic + Zod models from `backend/class-definitions/` |
+| `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
 | `make clean` | Same as `clean-models` (clean source tree of codegen output) |
 

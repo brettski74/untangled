@@ -134,7 +134,7 @@ Maps: `demo-item` ↔ `demo_item` ↔ `DemoItem`.
 3. Apply schema with **`make migrate`** (or the production CLI below). Migrate is
    **intentional** — it is not part of `make up` / Compose start.
 4. Use the generated Pydantic modules under `backend/src/untangled/generated/`
-   and Zod modules under `frontend/app/generated/`.
+   Zod modules, and class field metadata under `frontend/app/generated/`.
 
 Generated outputs are **not** committed; regenerate locally and in CI as needed.
 Tests invoke the same generate pipeline and assert behavioural accept/reject

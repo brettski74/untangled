@@ -1,7 +1,7 @@
 /**
  * Zod shapes for the M1 product-default nav-bar YAML (`class` sections only).
  * Predicate nodes mirror the search wire grammar in spirit (and/or/not + comparisons);
- * they are echoed by placeholders until #13/#14 execute search.
+ * they are echoed until list loaders execute search (#13 / #75).
  */
 import { z } from "zod";
 

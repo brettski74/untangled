@@ -25,7 +25,9 @@ def default_paths(repo_root: Path | None = None) -> tuple[Path, Path, Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Generate Pydantic and Zod models from YAML class definitions.",
+        description=(
+            "Generate Pydantic, Zod, and field-meta modules from YAML class definitions."
+        ),
     )
     definitions, pydantic_out, zod_out = default_paths()
     parser.add_argument(
@@ -56,8 +58,9 @@ def main(argv: list[str] | None = None) -> int:
         f"generated {len(result.definitions)} class(es): "
         f"{', '.join(d.name_kebab for d in result.definitions)}"
     )
-    print(f"  pydantic → {args.pydantic_out}")
-    print(f"  zod      → {args.zod_out}")
+    print(f"  pydantic   → {args.pydantic_out}")
+    print(f"  zod        → {args.zod_out}")
+    print(f"  field meta → {result.field_meta_path}")
     return 0
 
 

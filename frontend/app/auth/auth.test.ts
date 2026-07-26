@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { session_action_for_status } from "./api.server";
 import { safe_next_path } from "./next_path";
 import { token_pair_schema, user_profile_schema } from "./schemas";
-import { login_redirect_url } from "./gate.server";
+import { forbidden_response, login_redirect_url } from "./gate.server";
 
 describe("safe_next_path", () => {
   it("allows same-origin relative paths", () => {
@@ -41,6 +41,14 @@ describe("session_action_for_status", () => {
     expect(session_action_for_status(401)).toBe("clear_session");
     expect(session_action_for_status(403)).toBe("preserve_session");
     expect(session_action_for_status(200)).toBe("ok");
+  });
+});
+
+describe("forbidden_response", () => {
+  it("returns 403 with explicit statusText", () => {
+    const response = forbidden_response();
+    expect(response.status).toBe(403);
+    expect(response.statusText).toBe("Forbidden");
   });
 });
 
