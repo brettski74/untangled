@@ -7,9 +7,16 @@ import {
   ScrollRestoration,
 } from "react-router";
 
-// Root layout shell — extend in place for authenticated app chrome (nav, providers).
+// Root HTML shell. Authenticated chrome is #65; login gate is under routes/.
+import { assert_web_auth_config } from "./auth/config.server";
 import type { Route } from "./+types/root";
 import "./app.css";
+
+export async function loader(_: Route.LoaderArgs) {
+  // Every SSR request validates required auth env early (including healthchecks on `/`).
+  assert_web_auth_config();
+  return null;
+}
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },

@@ -56,7 +56,11 @@ backend-dev: backend-install ## Run the FastAPI dev server in the foreground (ho
 	$(BACKEND_VENV)/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
 
 frontend-dev: frontend-install ## Run the React Router dev server in the foreground (host hot-reload)
-	cd $(FRONTEND_DIR) && npm run dev -- --host 127.0.0.1 --port 5173
+	cd $(FRONTEND_DIR) && \
+		UNTANGLED_API_BASE_URL=$${UNTANGLED_API_BASE_URL:-http://127.0.0.1:8000} \
+		UNTANGLED_SESSION_SECRET=$${UNTANGLED_SESSION_SECRET:-local-dev-only-change-me-untangled-session-secret} \
+		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
+		npm run dev -- --host 127.0.0.1 --port 5173
 
 models: backend-install ## Generate Pydantic and Zod models from YAML class definitions
 	$(BACKEND_PYTHON) -m untangled.mapping
@@ -81,7 +85,8 @@ frontend-lint: frontend-install ## Typecheck the frontend (minimal lint until ES
 	# CI=1: react-router typegen ignores vite clearScreen and wipes TTY scrollback otherwise
 	cd $(FRONTEND_DIR) && CI=1 npm run typecheck
 
-frontend-test: frontend-install ## Smoke-test frontend SSR production build
+frontend-test: frontend-install ## Run frontend unit tests and SSR production build smoke
+	cd $(FRONTEND_DIR) && CI=1 npm test
 	cd $(FRONTEND_DIR) && CI=1 npm run build
 
 clean-models: ## Remove generated Pydantic/Zod artefacts

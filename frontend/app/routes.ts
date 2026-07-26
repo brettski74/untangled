@@ -1,3 +1,13 @@
-import { type RouteConfig, index } from "@react-router/dev/routes";
+import { type RouteConfig, index, layout, route } from "@react-router/dev/routes";
 
-export default [index("routes/home.tsx")] satisfies RouteConfig;
+/**
+ * Public routes: login, logout. Everything else must nest under the
+ * authenticated layout — default-deny by construction for new destinations.
+ */
+export const public_route_ids = ["routes/login", "routes/logout"] as const;
+
+export default [
+  route("login", "routes/login.tsx"),
+  route("logout", "routes/logout.tsx"),
+  layout("routes/authenticated.tsx", [index("routes/home.tsx")]),
+] satisfies RouteConfig;

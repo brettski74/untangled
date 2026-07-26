@@ -44,9 +44,13 @@ services:
     build:
       context: ./frontend
     environment:
-      # Server-side / in-network API base (Compose DNS). Browser-origin calls
-      # later use the host-published URL (http://127.0.0.1:8000).
-      API_BASE_URL: http://api:8000
+      # Server-side / in-network API base (Compose DNS). Authenticated browser
+      # traffic stays on the web tier (SSR loaders/actions); see ADR 002.
+      UNTANGLED_API_BASE_URL: http://api:8000
+      # Required — no in-code default. Local-dev only; replace in real envs.
+      UNTANGLED_SESSION_SECRET: local-dev-only-change-me-untangled-session-secret
+      # Plain HTTP on localhost — must opt out; unset defaults to Secure cookies.
+      UNTANGLED_COOKIE_SECURE: "false"
       PORT: "3000"
     ports:
       # Local familiarity: host 5173. Production should expose 3000 (container listen port).
