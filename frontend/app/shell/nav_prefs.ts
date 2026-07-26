@@ -1,7 +1,7 @@
 /** Nav rail layout prefs — client-local only (no server sync). */
 
 export const NAV_WIDTH_MIN_PX = 100;
-export const NAV_WIDTH_MAX_PX = 300;
+export const NAV_WIDTH_MAX_PX = 400;
 export const NAV_COLLAPSED_WIDTH_PX = 40;
 /** SSR / first-paint default when 20vw is unavailable (~20% of a common desktop). */
 export const NAV_DEFAULT_WIDTH_PX = 240;
