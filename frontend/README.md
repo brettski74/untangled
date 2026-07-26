@@ -2,7 +2,7 @@
 
 React Router v7 **framework mode** SSR application for Milestone 1.
 
-Login gate and authenticated stub live under `app/routes/` and `app/auth/`. Shell chrome, YAML nav, and token refresh extend this tree in place (#12 children / #14) rather than introducing a second frontend root.
+Login gate lives under `app/routes/` and `app/auth/`; operator chrome under `app/shell/`. YAML nav destinations (#66) and token refresh (#14) extend this tree in place.
 
 ## Commands
 

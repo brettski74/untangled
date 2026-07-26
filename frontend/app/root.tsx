@@ -7,7 +7,7 @@ import {
   ScrollRestoration,
 } from "react-router";
 
-// Root HTML shell. Authenticated chrome is #65; login gate is under routes/.
+// Root HTML shell. Authenticated chrome is under routes/authenticated (+ app/shell/).
 import { assert_web_auth_config } from "./auth/config.server";
 import type { Route } from "./+types/root";
 import "./app.css";

@@ -1,4 +1,4 @@
-import { Form, Outlet, data } from "react-router";
+import { Outlet, data } from "react-router";
 
 import { fetch_me } from "../auth/api.server";
 import type { UserProfile } from "../auth/schemas";
@@ -8,6 +8,7 @@ import {
   redirect_unauthorized,
 } from "../auth/gate.server";
 import { get_access_token } from "../auth/session.server";
+import { ShellLayout } from "../shell/shell_layout";
 import type { Route } from "./+types/authenticated";
 
 export type AuthenticatedOutletContext = {
@@ -45,27 +46,8 @@ export default function AuthenticatedLayout({
   const outlet_context: AuthenticatedOutletContext = { me };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold tracking-tight">Untangled</p>
-            <p className="text-xs text-slate-500">
-              Signed in as {me.display_name}{" "}
-              <span className="text-slate-400">({me.username})</span>
-            </p>
-          </div>
-          <Form method="post" action="/logout">
-            <button
-              type="submit"
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Sign out
-            </button>
-          </Form>
-        </div>
-      </header>
+    <ShellLayout display_name={me.display_name} username={me.username}>
       <Outlet context={outlet_context} />
-    </div>
+    </ShellLayout>
   );
 }
