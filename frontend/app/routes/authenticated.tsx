@@ -1,4 +1,4 @@
-import { Outlet, data, redirect } from "react-router";
+import { Outlet, data } from "react-router";
 
 import { fetch_me } from "../auth/api.server";
 import type { UserProfile } from "../auth/schemas";
@@ -10,7 +10,6 @@ import {
 import { get_access_token } from "../auth/session.server";
 import { load_default_nav } from "../shell/nav_config.server";
 import { filter_nav_by_permissions } from "../shell/nav_filter";
-import { default_landing_path } from "../shell/nav_landing";
 import type { NavBarView } from "../shell/nav_schema";
 import { ShellLayout } from "../shell/shell_layout";
 import type { Route } from "./+types/authenticated";
@@ -32,14 +31,6 @@ export async function loader({ request }: Route.LoaderArgs) {
       load_default_nav(),
       me.permissions,
     );
-
-    const url = new URL(request.url);
-    if (url.pathname === "/") {
-      const landing = default_landing_path(load_default_nav(), me.permissions);
-      if (landing != null) {
-        throw redirect(landing);
-      }
-    }
 
     return data(
       { me, nav },
