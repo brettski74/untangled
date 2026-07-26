@@ -94,11 +94,3 @@ def test_text_pattern_structural_and_null_value(incident_attrs: dict) -> None:
             {"op": "contains", "attribute": "summary", "value": None},
             incident_attrs,
         )
-
-
-def test_ordered_ops_still_deferred(incident_attrs: dict) -> None:
-    with pytest.raises(SearchSemanticError, match="not implemented yet"):
-        _compile_predicate_root(
-            {"op": "gt", "attribute": "summary", "value": "a"},
-            incident_attrs,
-        )

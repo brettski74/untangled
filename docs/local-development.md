@@ -152,6 +152,10 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 | ---- | ----- | ------- |
 | `eq` | `value` (required, non-null) | Equals |
 | `ne` | `value` (required, non-null) | Not equals |
+| `gt` | `value` (required, non-null) | Greater than |
+| `gte` | `value` (required, non-null) | Greater than or equal |
+| `lt` | `value` (required, non-null) | Less than |
+| `lte` | `value` (required, non-null) | Less than or equal |
 | `contains` | `value` (required, string) | Substring match (`LIKE`, case-sensitive) |
 | `starts-with` | `value` (required, string) | Prefix match (`LIKE`, case-sensitive) |
 | `ends-with` | `value` (required, string) | Suffix match (`LIKE`, case-sensitive) |
@@ -160,12 +164,17 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 | `not-empty` | *(none)* | `IS NOT NULL` |
 
 - `eq` / `ne` / `empty` / `not-empty` apply to **all** mapped attribute types (including system fields).
+- `gt` / `gte` / `lt` / `lte` apply to ordered types: **`string`**, **`integer`**, **`float`**, **`decimal`**, **`datetime`**, **`friendly-id`**. **Not** `boolean` or `uuid` (including FK uuid attributes) → **422**.
 - `contains` / `starts-with` / `ends-with` / `regexp` apply only to **`string`** and **`friendly-id`**. Other types → **422**.
 - Text comparisons are **case-sensitive**. No trim; no implicit casting across incompatible types.
+- **Ordered text filters** (`gt` / `gte` / `lt` / `lte` on `string` / `friendly-id`) use PostgreSQL `COLLATE "C"` (byte/codepoint order) so results are deterministic across database locales. Non-ASCII codepoints sort after all ASCII. This is not the same as Unicode locale ordering.
+- **Text `sort` collation** still uses the database default (may disagree with C-ordered filters in the same request). Aligning sort with filter collation and case-insensitive search is deferred ([#61](https://github.com/brettski74/untangled/issues/61)).
+- **NULL and ordered / equality ops:** rows with a NULL attribute do not match `eq` / `ne` / `gt` / `gte` / `lt` / `lte` (SQL three-valued logic). `lt X` and `gte X` therefore do **not** partition the table. Optional booleans are tri-state: unset (`NULL`) matches neither `eq true` nor `eq false` — use `empty` / `not-empty`, or prefer required booleans once schema defaults/backfill exist ([#62](https://github.com/brettski74/untangled/issues/62)). Use `empty` / `not-empty` for null checks — `value: null` on value-taking ops → **422**.
+- **`risk_score` (Change Request):** optional integer; M1 seed/docs convention is **0–100** (not yet range-validated by the API).
+- **Friendly-id ordered compares** are lexicographic on the stored text (prefix + digits). With consistent prefixes and pad width this usually tracks numeric order; pad-width differences dominate (e.g. `INC10` sorts before `INC9` if those were the literal stored values without zero-padding).
 - LIKE pattern ops treat `%`, `_`, and `\` in the search value as **literals** (escaped; SQL uses `ESCAPE '\'`).
-- Use `empty` / `not-empty` for null checks — `value: null` on value-taking ops → **422**.
 - Unknown `op`, unknown `attribute`, wrong value type, invalid typed values, or invalid `regexp` pattern → **422**.
-- Operators reserved for a later slice (`gt` / `gte` / `lt` / `lte`) are rejected as **not implemented yet** (**422**) until that child ships.
+- Existing envelope `limit` / `offset` caps still bound all search queries (including ordered predicates).
 - Pathological regex or leading-wildcard `LIKE` can be expensive at scale; M1 treats that as a client foot-gun (no dedicated timeout/length cap in this slice).
 
 #### Sort stability
@@ -301,7 +310,7 @@ The welcome page does not call the API in this milestone slice; the env and netw
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
 | Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI login; hardening #33 |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly-id locator | — |
-| Predicate search (`POST …/search`) | Slice A: envelope, `and`/`or`/`not`, `eq`/`ne`/`empty`/`not-empty`, sort/projection/pagination (#51 / epic #11) | Ordered ops (#52); text pattern ops (#53); configurable nesting limits |
+| Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not-empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); configurable nesting limits |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |
