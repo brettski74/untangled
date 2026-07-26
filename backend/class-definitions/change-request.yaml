@@ -3,8 +3,9 @@ name: change-request
 display-name: Change Request
 description: >
   Planned change record with a human-friendly CHG number. Status is a free
-  string in M1; documented seed vocabulary is draft, scheduled, implemented,
-  closed.
+  string in M1; documented status vocabulary (progression) is draft →
+  scheduled → in-progress → implemented → closed, plus terminal off-ramp
+  cancelled.
 attributes:
   number:
     type: friendly-id

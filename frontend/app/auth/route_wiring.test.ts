@@ -51,7 +51,7 @@ describe("route wiring", () => {
     );
 
     const result = await authenticated_loader({
-      request: new Request("http://web.test/", {
+      request: new Request("http://web.test/change-requests/lists/all", {
         headers: { Cookie: set_cookie.split(";")[0] ?? set_cookie },
       }),
       params: {},
@@ -67,9 +67,51 @@ describe("route wiring", () => {
         },
       },
     });
+    expect(result.data.nav?.map((s: { class_name: string }) => s.class_name)).toEqual(
+      ["change-request", "incident"],
+    );
     expect(result.init?.headers).toMatchObject({
       "Cache-Control": "private, no-store",
     });
+  });
+
+  it("authenticated loader redirects / to Change Requests → All for admin", async () => {
+    const token = fake_access_token();
+    const { commit_access_token } = await import("./session.server");
+    const set_cookie = await commit_access_token(
+      new Request("http://web.test/"),
+      token,
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          username: "admin",
+          display_name: "Admin",
+          roles: ["admin"],
+          permissions: ["admin"],
+        }),
+      ),
+    );
+
+    try {
+      await authenticated_loader({
+        request: new Request("http://web.test/", {
+          headers: { Cookie: set_cookie.split(";")[0] ?? set_cookie },
+        }),
+        params: {},
+        context: {},
+      } as never);
+      expect.unreachable("expected redirect");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      const response = error as Response;
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe(
+        "/change-requests/lists/all",
+      );
+    }
   });
 
   it("login action commits a session cookie on success", async () => {

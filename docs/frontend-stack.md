@@ -8,7 +8,7 @@ Untangled M1 uses **React Router v7 in framework mode** for the web application.
 - **Loaders and actions** — route modules colocate data loading and mutations, which fits authenticated CRUD list/detail screens without bolting on a separate data layer.
 - **Progressive enhancement** — forms and navigation can work with standard HTTP semantics before client hydration.
 - **Single React codebase** — same components and routes for dev SSR, production SSR, and optional SPA-style navigation.
-- **Login gate + shell chrome** — `/login` plus fail-closed authenticated layout with header / nav rail / context bar; YAML nav destinations are #66.
+- **Login gate + shell chrome** — `/login` plus fail-closed authenticated layout with header / nav rail / context bar, YAML-driven class nav, and thin destination placeholders for #13/#14.
 
 ## Auth delivery (SSR)
 
@@ -28,9 +28,10 @@ Cookie `maxAge` is derived from the access JWT `exp` claim (no separate web TTL 
 
 | Path | Role |
 | ---- | ---- |
-| `frontend/app/routes.ts` | Route table (login, logout, authenticated layout, home stub) |
+| `frontend/app/routes.ts` | Route table (login, logout, authenticated layout, destinations) |
 | `frontend/app/auth/` | Session cookie, API seam, Zod envelopes, gate helpers |
-| `frontend/app/shell/` | Operator chrome (header, nav rail prefs, layout) |
+| `frontend/app/shell/` | Operator chrome (header, nav rail, YAML nav filter/paths) |
+| `frontend/app/config/nav-bar.yaml` | M1 product-default nav (instance override later) |
 | `frontend/app/root.tsx` | HTML shell / root layout |
 | `frontend/app/routes/` | Route modules (loaders, actions, components) |
 | `frontend/react-router.config.ts` | Framework configuration |

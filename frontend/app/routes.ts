@@ -9,5 +9,9 @@ export const public_route_ids = ["routes/login", "routes/logout"] as const;
 export default [
   route("login", "routes/login.tsx"),
   route("logout", "routes/logout.tsx"),
-  layout("routes/authenticated.tsx", [index("routes/home.tsx")]),
+  layout("routes/authenticated.tsx", [
+    index("routes/home.tsx"),
+    route(":collection/new", "routes/destination_new.tsx"),
+    route(":collection/lists/:list_id", "routes/destination_list.tsx"),
+  ]),
 ] satisfies RouteConfig;
