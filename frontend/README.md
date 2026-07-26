@@ -2,7 +2,7 @@
 
 React Router v7 **framework mode** SSR application for Milestone 1.
 
-This directory is a minimal scaffold. The shell UI, authentication, and API integration tickets should **extend or replace route modules here in place** rather than introducing a second frontend tree.
+Login gate and authenticated stub live under `app/routes/` and `app/auth/`. Shell chrome, YAML nav, and token refresh extend this tree in place (#12 children / #14) rather than introducing a second frontend root.
 
 ## Commands
 
@@ -14,10 +14,11 @@ make frontend-lint
 make frontend-test
 ```
 
-Or from this directory after `npm ci`:
+Or from this directory after `npm ci` (export `UNTANGLED_API_BASE_URL` and `UNTANGLED_SESSION_SECRET` for `dev`/`start`):
 
 ```bash
 npm run dev
+npm test
 npm run typecheck
 npm run build
 ```

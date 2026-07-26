@@ -45,6 +45,9 @@ Inside the **api** container, Compose sets `DATABASE_URL` to use the `postgres` 
 | `UNTANGLED_JWT_SECRET` | `local-dev-only-change-me-untangled-jwt-secret` (dev only) |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
 | `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days) |
+| `UNTANGLED_SESSION_SECRET` | `local-dev-only-change-me-untangled-session-secret` (web cookie signing; **required**, no in-code default) |
+| `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
+| `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
 | `UNTANGLED_DEFINITIONS_DIR` | Optional. Absolute path to YAML class-definitions for unusual layouts only; Compose uses `/app/class-definitions` via the image WORKDIR (do not set this for normal local Compose). |
 
 Seed users (usernames are case-normalized to lowercase):
@@ -98,6 +101,17 @@ def delete_incident(
 ```
 
 Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
+
+### UI login (SSR gate)
+
+Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http://127.0.0.1:5173` and sign in with a seed user (`admin` / `readonly` / `readwrite` and their default passwords above).
+
+- Unauthenticated routes redirect to `/login` (fail-closed).
+- Login calls `POST /auth/login` from the web tier; only the **access** JWT is stored in an httpOnly session cookie (refresh discarded until #14).
+- The authenticated stub loads `GET /auth/me` once per navigation tree and shows display name + effective permissions (real RBAC — compare `admin` vs `readonly`).
+- Access expiry / API **401** clears the cookie and returns to login; **403** keeps the session. Token refresh is #14; shell chrome/nav are later #12 children; broader auth security review is #67.
+
+Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-origin authenticated SSR form actions), `secure` on by default with explicit local opt-out, cookie `maxAge` derived from the access JWT `exp` claim. The JWT is never exposed to browser JavaScript. Login-form CSRF and broader hardening are tracked in #67.
 
 ### `/docs` Authorize loop
 
@@ -280,7 +294,7 @@ After `make up` → `make migrate` → `make seed`:
 
 - API health: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`
 - API docs: open `http://127.0.0.1:8000/docs` and run the Authorize loop above
-- Web: open `http://127.0.0.1:5173` — SSR welcome page (does not call the API yet)
+- Web: open `http://127.0.0.1:5173` — unauthenticated users redirect to `/login`; after seed login, authenticated stub shows `/auth/me`
 - Postgres: `docker compose exec postgres pg_isready -U untangled -d untangled`
 - Web → API on the Compose network:
 
@@ -296,10 +310,10 @@ After `make db-up` only (postgres):
 
 | Caller | URL |
 | ------ | ---- |
-| Server-side / from web container | `http://api:8000` (`API_BASE_URL` in Compose) |
-| Browser on the host (later UI work) | `http://127.0.0.1:8000` |
+| Server-side / from web container | `http://api:8000` (`UNTANGLED_API_BASE_URL` in Compose) |
+| Host `make frontend-dev` | `http://127.0.0.1:8000` (Makefile default) |
 
-The welcome page does not call the API in this milestone slice; the env and network smoke above prove the path for later wiring.
+Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do not point the browser at the API with a JS-held Bearer token — see ADR 002 / #67.
 
 ## What is placeholder vs real
 
@@ -308,7 +322,7 @@ The welcome page does not call the API in this milestone slice; the env and netw
 | `make up` / `make down` | Full Compose runtime (postgres + api + web); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
-| Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI login; hardening #33 |
+| Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI refresh (#14); hardening #33 / security review #67 |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly-id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not-empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); configurable nesting limits |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
@@ -316,7 +330,7 @@ The welcome page does not call the API in this milestone slice; the env and netw
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |
 | Persistence (`untangled.persistence`) | Thin SQL create/fetch/update/delete + friendly-id assign | Domain routes stamp authenticated actor |
 | Actor stub (`STUB_ACTOR_ID`) | Matches seeded admin UUID for FK-safe tests | Prefer current-user dependency on HTTP writes |
-| Frontend welcome page | Real SSR scaffold | Shell UI, auth, API integration in `frontend/app/` |
+| Frontend SSR login gate | Real `/login`, httpOnly access JWT cookie, `/auth/me` stub | Shell chrome (#65), YAML nav (#66), refresh (#14) |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |
 | `frontend/package-lock.json` | Pinned deps | Regenerate when `package.json` changes |
 
