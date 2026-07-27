@@ -19,9 +19,14 @@ import type { AttributeFieldMeta } from "../generated/field_meta";
 import { attribute_display_label } from "./columns";
 import {
   and_predicates,
+  apply_datetime_date_change,
+  apply_datetime_time_change,
   build_quick_filter_predicates,
+  DATETIME_FROM_DEFAULT_TIME,
+  DATETIME_TO_DEFAULT_TIME,
   quick_filter_control_kind,
   quick_filterable_attributes,
+  split_datetime_local,
   type QuickFilterValues,
   type SearchPredicate,
 } from "./quick_filter";
@@ -99,6 +104,9 @@ export function ListContextBar({
   );
   /** Destination path that the in-flight / latest fetcher submit belongs to. */
   const fetcher_path_ref = useRef<string | null>(null);
+  /** Always-current quick-filter values (Enter must not read a stale render). */
+  const values_ref = useRef(values);
+  values_ref.current = values;
 
   useEffect(() => {
     effective_ref.current =
@@ -135,17 +143,18 @@ export function ListContextBar({
     submit_predicate(effective_ref.current);
   }
 
-  function on_quick_filter_enter() {
+  function on_quick_filter_enter(override_values?: QuickFilterValues) {
     if (selected == null) {
       return;
     }
-    const built = build_quick_filter_predicates(selected, values);
+    const filter_values = override_values ?? values_ref.current;
+    const built = build_quick_filter_predicates(selected, filter_values);
     if (!built.ok) {
       on_warning_change(built.warning);
       return;
     }
     if (built.predicates.length === 0) {
-      on_warning_change(null);
+      on_warning_change("Nothing to apply — enter a filter value.");
       return;
     }
     on_warning_change(null);
@@ -224,6 +233,7 @@ export function ListContextBar({
               kind={kind}
               values={values}
               set_values={on_values_change}
+              on_warning={on_warning_change}
               on_enter={on_quick_filter_enter}
             />
           </div>
@@ -336,12 +346,14 @@ function QuickFilterControls({
   kind,
   values,
   set_values,
+  on_warning,
   on_enter,
 }: {
   kind: NonNullable<ReturnType<typeof quick_filter_control_kind>>;
   values: QuickFilterValues;
   set_values: (next: QuickFilterValues) => void;
-  on_enter: () => void;
+  on_warning: (warning: string | null) => void;
+  on_enter: (override_values?: QuickFilterValues) => void;
 }) {
   function on_key_down(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
@@ -387,16 +399,24 @@ function QuickFilterControls({
     );
   }
 
-  const input_type = kind === "datetime" ? "datetime-local" : "text";
-  const input_mode = kind === "numeric" ? "decimal" : undefined;
+  if (kind === "datetime") {
+    return (
+      <DatetimeRangeControls
+        values={values}
+        set_values={set_values}
+        on_warning={on_warning}
+        on_enter={on_enter}
+      />
+    );
+  }
 
   return (
     <div className="flex items-center gap-1">
       <label className="flex items-center gap-1 text-[var(--color-shell-chrome-muted)]">
         From:
         <input
-          type={input_type}
-          inputMode={input_mode}
+          type="text"
+          inputMode="decimal"
           autoComplete="off"
           className="h-7 w-32 rounded border border-[var(--color-shell-separator)] bg-[var(--color-shell-chrome)] px-1 text-[var(--color-shell-chrome-fg)]"
           value={values.from ?? ""}
@@ -410,8 +430,8 @@ function QuickFilterControls({
       <label className="flex items-center gap-1 text-[var(--color-shell-chrome-muted)]">
         To:
         <input
-          type={input_type}
-          inputMode={input_mode}
+          type="text"
+          inputMode="decimal"
           autoComplete="off"
           className="h-7 w-32 rounded border border-[var(--color-shell-separator)] bg-[var(--color-shell-chrome)] px-1 text-[var(--color-shell-chrome-fg)]"
           value={values.to ?? ""}
@@ -423,6 +443,226 @@ function QuickFilterControls({
         />
       </label>
     </div>
+  );
+}
+
+function DatetimeRangeControls({
+  values,
+  set_values,
+  on_warning,
+  on_enter,
+}: {
+  values: QuickFilterValues;
+  set_values: (next: QuickFilterValues) => void;
+  on_warning: (warning: string | null) => void;
+  on_enter: (override_values?: QuickFilterValues) => void;
+}) {
+  const from_parts = split_datetime_local(values.from);
+  const to_parts = split_datetime_local(values.to);
+  const values_ref = useRef(values);
+  values_ref.current = values;
+  const field_class =
+    "h-7 rounded border border-[var(--color-shell-separator)] bg-[var(--color-shell-chrome)] px-1 text-[var(--color-shell-chrome-fg)]";
+
+  function apply_time(
+    side: "from" | "to",
+    raw_time: string,
+    base: QuickFilterValues = values_ref.current,
+  ): QuickFilterValues | null {
+    const current = side === "from" ? base.from : base.to;
+    const default_time =
+      side === "from" ? DATETIME_FROM_DEFAULT_TIME : DATETIME_TO_DEFAULT_TIME;
+    const next = apply_datetime_time_change(raw_time, current, default_time);
+    if (!next.ok) {
+      on_warning(next.warning);
+      return null;
+    }
+    on_warning(null);
+    const updated =
+      side === "from"
+        ? { ...base, from: next.combined }
+        : { ...base, to: next.combined };
+    set_values(updated);
+    values_ref.current = updated;
+    return updated;
+  }
+
+  function commit_date_and_enter(
+    side: "from" | "to",
+    date_value: string,
+  ): void {
+    const base = values_ref.current;
+    const combined = apply_datetime_date_change(
+      side,
+      date_value,
+      side === "from" ? base.from : base.to,
+    );
+    const updated =
+      side === "from" ? { ...base, from: combined } : { ...base, to: combined };
+    set_values(updated);
+    values_ref.current = updated;
+    on_warning(null);
+    on_enter(updated);
+  }
+
+  function on_date_enter(
+    side: "from" | "to",
+    event: KeyboardEvent<HTMLInputElement>,
+  ): void {
+    if (event.key !== "Enter") {
+      return;
+    }
+    // Stop native form submit; do not block the date input's own commit.
+    event.preventDefault();
+    const input = event.currentTarget;
+    const live = input.value.trim();
+    if (live !== "") {
+      commit_date_and_enter(side, live);
+      return;
+    }
+    // Some browsers commit the picker value after keydown; retry on next tick.
+    window.setTimeout(() => {
+      const delayed = input.value.trim();
+      if (delayed !== "") {
+        commit_date_and_enter(side, delayed);
+        return;
+      }
+      on_enter(values_ref.current);
+    }, 0);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <span className="text-[var(--color-shell-chrome-muted)]">From:</span>
+      <input
+        type="date"
+        lang="en-GB"
+        autoComplete="off"
+        className={`${field_class} w-[9.5rem]`}
+        value={from_parts.date}
+        onChange={(event) => {
+          on_warning(null);
+          const updated = {
+            ...values_ref.current,
+            from: apply_datetime_date_change(
+              "from",
+              event.target.value,
+              values_ref.current.from,
+            ),
+          };
+          values_ref.current = updated;
+          set_values(updated);
+        }}
+        onKeyDown={(event) => on_date_enter("from", event)}
+        aria-label="Quick filter from date"
+      />
+      <Time24Field
+        className={`${field_class} w-[6.5rem] font-mono tabular-nums`}
+        value={from_parts.time}
+        disabled={from_parts.date === ""}
+        placeholder={from_parts.date === "" ? "" : "HH:mm:ss"}
+        aria_label="Quick filter from time (24-hour)"
+        on_commit={(raw) => apply_time("from", raw)}
+        on_enter={(raw) => {
+          const updated = apply_time("from", raw);
+          if (updated != null) {
+            on_enter(updated);
+          }
+        }}
+      />
+      <span className="text-[var(--color-shell-chrome-muted)]">To:</span>
+      <input
+        type="date"
+        lang="en-GB"
+        autoComplete="off"
+        className={`${field_class} w-[9.5rem]`}
+        value={to_parts.date}
+        onChange={(event) => {
+          on_warning(null);
+          const updated = {
+            ...values_ref.current,
+            to: apply_datetime_date_change(
+              "to",
+              event.target.value,
+              values_ref.current.to,
+            ),
+          };
+          values_ref.current = updated;
+          set_values(updated);
+        }}
+        onKeyDown={(event) => on_date_enter("to", event)}
+        aria-label="Quick filter to date"
+      />
+      <Time24Field
+        className={`${field_class} w-[6.5rem] font-mono tabular-nums`}
+        value={to_parts.time}
+        disabled={to_parts.date === ""}
+        placeholder={to_parts.date === "" ? "" : "HH:mm:ss"}
+        aria_label="Quick filter to time (24-hour)"
+        on_commit={(raw) => apply_time("to", raw)}
+        on_enter={(raw) => {
+          const updated = apply_time("to", raw);
+          if (updated != null) {
+            on_enter(updated);
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Explicit 24-hour time text field. Browser time inputs follow OS locale
+ * (often 12h AM/PM); this always edits HH:mm:ss.
+ */
+function Time24Field({
+  className,
+  value,
+  disabled,
+  placeholder,
+  aria_label,
+  on_commit,
+  on_enter,
+}: {
+  className: string;
+  value: string;
+  disabled: boolean;
+  placeholder: string;
+  aria_label: string;
+  on_commit: (raw: string) => void;
+  on_enter: (raw: string) => void;
+}) {
+  const [draft, set_draft] = useState(value);
+
+  useEffect(() => {
+    set_draft(value);
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      spellCheck={false}
+      disabled={disabled}
+      placeholder={placeholder}
+      className={className}
+      value={draft}
+      onChange={(event) => set_draft(event.target.value)}
+      onBlur={() => {
+        if (draft !== value) {
+          on_commit(draft);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          on_enter(draft);
+        }
+      }}
+      aria-label={aria_label}
+      title="24-hour time (HH:mm:ss)"
+    />
   );
 }
 

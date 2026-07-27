@@ -14,4 +14,23 @@ describe("ListContextBar controlled chrome wiring", () => {
     expect(source).toMatch(/fetcher_path_ref\.current !== list_path/);
     expect(source).toMatch(/fetcher_path_ref\.current = list_path/);
   });
+
+  it("uses paired date and 24-hour text time inputs for datetime quick filters", async () => {
+    const source = await readFile(
+      new URL("./list_context_bar.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/type="date"/);
+    expect(source).toMatch(/Time24Field/);
+    expect(source).toMatch(/apply_datetime_date_change/);
+    expect(source).toMatch(/commit_date_and_enter/);
+    expect(source).toMatch(/values_ref\.current/);
+    expect(source).not.toMatch(/datetime-local/);
+    expect(source).not.toMatch(/type=\{?"time"\}?/);
+    expect(source).not.toMatch(/react-datetime-picker/);
+    // Disabled empty To must not look pre-filled with end-of-day.
+    expect(source).not.toMatch(
+      /placeholder=\{DATETIME_TO_DEFAULT_TIME\}/,
+    );
+  });
 });

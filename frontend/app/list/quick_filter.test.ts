@@ -3,12 +3,19 @@ import { describe, expect, it } from "vitest";
 import type { AttributeFieldMeta } from "../generated/field_meta";
 import {
   and_predicates,
+  apply_datetime_date_change,
+  apply_datetime_time_change,
   build_quick_filter_predicates,
+  combine_datetime_local,
+  DATETIME_FROM_DEFAULT_TIME,
+  DATETIME_TO_DEFAULT_TIME,
   parse_predicate_json,
+  parse_time_24h,
   quick_filter_control_kind,
   quick_filter_destination_reset,
   quick_filter_ui_defaults,
   quick_filterable_attributes,
+  split_datetime_local,
 } from "./quick_filter";
 
 function attr(
@@ -244,6 +251,46 @@ describe("build_quick_filter_predicates", () => {
       ok: false,
       warning: "From must be less than or equal to To.",
     });
+    expect(build_quick_filter_predicates(field, {})).toEqual({
+      ok: true,
+      predicates: [],
+    });
+  });
+
+  it("uses lte for datetime To and allows From-only or To-only", () => {
+    const field = attr({
+      name_snake: "scheduled_start",
+      type_name: "datetime",
+      order: 0,
+    });
+    expect(build_quick_filter_predicates(field, {})).toEqual({
+      ok: true,
+      predicates: [],
+    });
+
+    const from_only = build_quick_filter_predicates(field, {
+      from: "2026-07-27T00:00:00",
+    });
+    expect(from_only.ok).toBe(true);
+    if (from_only.ok) {
+      expect(from_only.predicates).toHaveLength(1);
+      expect(from_only.predicates[0]).toMatchObject({
+        op: "gte",
+        attribute: "scheduled_start",
+      });
+    }
+
+    const to_only = build_quick_filter_predicates(field, {
+      to: "2026-07-27T23:59:59",
+    });
+    expect(to_only.ok).toBe(true);
+    if (to_only.ok) {
+      expect(to_only.predicates).toHaveLength(1);
+      expect(to_only.predicates[0]).toMatchObject({
+        op: "lte",
+        attribute: "scheduled_start",
+      });
+    }
   });
 
   it("rejects uuid attributes", () => {
@@ -253,6 +300,80 @@ describe("build_quick_filter_predicates", () => {
         { text: "anything" },
       ),
     ).toMatchObject({ ok: false });
+  });
+});
+
+describe("datetime local split/combine", () => {
+  it("defaults From to 00:00:00 and To to 23:59:59 on date select", () => {
+    expect(apply_datetime_date_change("from", "2026-07-27", undefined)).toBe(
+      "2026-07-27T00:00:00",
+    );
+    expect(apply_datetime_date_change("to", "2026-07-27", undefined)).toBe(
+      "2026-07-27T23:59:59",
+    );
+    expect(
+      apply_datetime_date_change("from", "2026-07-28", "2026-07-27T15:30:00"),
+    ).toBe("2026-07-28T15:30:00");
+  });
+
+  it("rejects time changes without a date", () => {
+    expect(
+      apply_datetime_time_change(
+        "12:00:00",
+        undefined,
+        DATETIME_FROM_DEFAULT_TIME,
+      ),
+    ).toEqual({
+      ok: false,
+      warning: "Pick a date first (time defaults when you choose a date).",
+    });
+  });
+
+  it("round-trips split and combine with second resolution", () => {
+    expect(split_datetime_local("2026-07-27T14:30:45")).toEqual({
+      date: "2026-07-27",
+      time: "14:30:45",
+    });
+    expect(split_datetime_local("2026-07-27T14:30")).toEqual({
+      date: "2026-07-27",
+      time: "14:30:00",
+    });
+    expect(
+      combine_datetime_local("2026-07-27", "", DATETIME_TO_DEFAULT_TIME),
+    ).toBe("2026-07-27T23:59:59");
+  });
+});
+
+describe("24-hour time parsing", () => {
+  it("accepts HH:mm and HH:mm:ss in 0–23 hours", () => {
+    expect(parse_time_24h("14:30")).toEqual({ ok: true, time: "14:30:00" });
+    expect(parse_time_24h("14:30:45")).toEqual({ ok: true, time: "14:30:45" });
+    expect(parse_time_24h("0:00:00")).toEqual({ ok: true, time: "00:00:00" });
+    expect(parse_time_24h("23:59:59")).toEqual({ ok: true, time: "23:59:59" });
+  });
+
+  it("rejects invalid or 12-hour style values", () => {
+    expect(parse_time_24h("24:00:00").ok).toBe(false);
+    expect(parse_time_24h("12:60").ok).toBe(false);
+    expect(parse_time_24h("2pm").ok).toBe(false);
+    expect(parse_time_24h("").ok).toBe(false);
+  });
+
+  it("apply_datetime_time_change validates and normalizes", () => {
+    expect(
+      apply_datetime_time_change(
+        "9:05",
+        "2026-07-27T00:00:00",
+        DATETIME_FROM_DEFAULT_TIME,
+      ),
+    ).toEqual({ ok: true, combined: "2026-07-27T09:05:00" });
+    expect(
+      apply_datetime_time_change(
+        "25:00",
+        "2026-07-27T00:00:00",
+        DATETIME_FROM_DEFAULT_TIME,
+      ).ok,
+    ).toBe(false);
   });
 });
 
