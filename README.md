@@ -10,6 +10,7 @@ This repository is a monorepo with a Python/FastAPI backend and a React Router v
 make up         # postgres + api + web via Docker Compose (does not migrate or seed)
 make migrate    # apply YAML schema intent (intentional; use after up / db-up)
 make seed       # idempotent baseline users (intentional; after migrate)
+make reinstall  # wipe DB volume, then up → migrate → seed (see make help)
 make help       # list all commands
 ```
 
