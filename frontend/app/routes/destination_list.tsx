@@ -15,7 +15,7 @@ import { load_default_nav } from "../shell/nav_config.server";
 import { find_list_option } from "../shell/nav_paths";
 import type { Route } from "./+types/destination_list";
 
-export function meta({ data: loader_data }: Route.MetaArgs) {
+export function meta({ loaderData: loader_data }: Route.MetaArgs) {
   if (loader_data == null) {
     return [{ title: "Untangled" }];
   }
