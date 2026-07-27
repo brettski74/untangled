@@ -17,6 +17,7 @@ import {
   quick_filter_destination_reset,
   quick_filter_ui_defaults,
   quick_filterable_attributes,
+  should_clear_value_on_field_change,
   split_datetime_local,
 } from "./quick_filter";
 
@@ -49,6 +50,48 @@ describe("quick_filter_control_kind", () => {
   it("rejects uuid and unknown types", () => {
     expect(quick_filter_control_kind("uuid")).toBeNull();
     expect(quick_filter_control_kind("mystery")).toBeNull();
+  });
+});
+
+describe("should_clear_value_on_field_change", () => {
+  it("preserves value within the same control kind (both directions)", () => {
+    expect(
+      should_clear_value_on_field_change("text", "multiline-text"),
+    ).toBe(false);
+    expect(
+      should_clear_value_on_field_change("multiline-text", "text"),
+    ).toBe(false);
+    expect(should_clear_value_on_field_change("text", "status")).toBe(false);
+    expect(should_clear_value_on_field_change("status", "choice")).toBe(false);
+    expect(
+      should_clear_value_on_field_change("datetime", "datetime"),
+    ).toBe(false);
+    expect(should_clear_value_on_field_change("integer", "float")).toBe(false);
+    expect(should_clear_value_on_field_change("float", "decimal")).toBe(false);
+  });
+
+  it("clears value when control kind changes (both directions)", () => {
+    expect(should_clear_value_on_field_change("text", "integer")).toBe(true);
+    expect(should_clear_value_on_field_change("integer", "text")).toBe(true);
+    expect(
+      should_clear_value_on_field_change("text", "friendly-id"),
+    ).toBe(true);
+    expect(
+      should_clear_value_on_field_change("friendly-id", "text"),
+    ).toBe(true);
+    expect(
+      should_clear_value_on_field_change("datetime", "text"),
+    ).toBe(true);
+    expect(
+      should_clear_value_on_field_change("text", "datetime"),
+    ).toBe(true);
+  });
+
+  it("clears when either side has no control kind", () => {
+    expect(should_clear_value_on_field_change("text", "uuid")).toBe(true);
+    expect(should_clear_value_on_field_change("uuid", "text")).toBe(true);
+    expect(should_clear_value_on_field_change("text", null)).toBe(true);
+    expect(should_clear_value_on_field_change(null, "text")).toBe(true);
   });
 });
 

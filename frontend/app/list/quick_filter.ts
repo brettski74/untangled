@@ -67,6 +67,21 @@ export function quick_filter_control_kind(
 }
 
 /**
+ * Whether changing field should clear the row value (#77).
+ * Keys off control kind (text family, numeric, etc.), not raw schema type_name.
+ */
+export function should_clear_value_on_field_change(
+  prev_type: string | null,
+  next_type: string | null,
+): boolean {
+  const prev_kind =
+    prev_type == null ? null : quick_filter_control_kind(prev_type);
+  const next_kind =
+    next_type == null ? null : quick_filter_control_kind(next_type);
+  return prev_kind !== next_kind;
+}
+
+/**
  * Attributes eligible for the quick-filter picker, in declaration ordinal order.
  * Fails closed via {@link attributes_in_declaration_order} when ordinals are missing.
  */

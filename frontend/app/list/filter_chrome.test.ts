@@ -18,5 +18,6 @@ describe("ListFilterChrome source contracts", () => {
     expect(source).toMatch(/load_editor_from_predicate/);
     expect(source).toMatch(/datetime_side_for_op/);
     expect(source).toMatch(/datetime_default_time_for_op/);
+    expect(source).toMatch(/should_clear_value_on_field_change/);
   });
 });

@@ -35,6 +35,7 @@ import {
   datetime_default_time_for_op,
   datetime_side_for_op,
   quick_filter_control_kind,
+  should_clear_value_on_field_change,
   split_datetime_local,
   type SearchPredicate,
 } from "./quick_filter";
@@ -385,9 +386,11 @@ function LeafRow({
           const name = event.target.value;
           const next_attr =
             filterable.find((attr) => attr.name_snake === name) ?? null;
-          const prev_type = type_name;
           const next_type = next_attr?.type_name ?? null;
-          const clear_value = prev_type !== next_type;
+          const clear_value = should_clear_value_on_field_change(
+            type_name,
+            next_type,
+          );
           on_replace({
             ...node,
             attribute: name === "" ? null : name,
