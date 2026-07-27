@@ -13,5 +13,7 @@ export default [
     index("routes/home.tsx"),
     route(":collection/new", "routes/destination_new.tsx"),
     route(":collection/lists/:list_id", "routes/destination_list.tsx"),
+    // After static new/lists segments so those names are never locators.
+    route(":collection/:locator", "routes/destination_detail.tsx"),
   ]),
 ] satisfies RouteConfig;
