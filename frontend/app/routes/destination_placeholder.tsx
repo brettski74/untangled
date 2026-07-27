@@ -30,13 +30,27 @@ export function DestinationPlaceholder({
       </h1>
       <p className="text-sm text-slate-600 max-w-prose mb-4">
         Placeholder destination (<code className="text-xs">{path}</code>,{" "}
-        <code className="text-xs">{class_name}</code>, {option_type}). Real
-        detail/new UI lands in{" "}
+        <code className="text-xs">{class_name}</code>, {option_type}). New-record
+        UI lands in{" "}
+        <a
+          className="underline"
+          href="https://github.com/brettski74/untangled/issues/83"
+        >
+          #83
+        </a>{" "}
+        (epic{" "}
         <a
           className="underline"
           href="https://github.com/brettski74/untangled/issues/71"
         >
           #71
+        </a>
+        ); detail read layout is{" "}
+        <a
+          className="underline"
+          href="https://github.com/brettski74/untangled/issues/81"
+        >
+          #81
         </a>
         ; list view is{" "}
         <a
@@ -62,7 +76,7 @@ export function DestinationPlaceholder({
         </pre>
       ) : (
         <p className="text-sm text-slate-600">
-          New-object form placeholder — replaced in place by #71.
+          New-object form placeholder — replaced in place by #83 (epic #71).
         </p>
       )}
       <p className="mt-6 text-xs text-slate-500">

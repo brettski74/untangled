@@ -63,15 +63,22 @@ export default function Home() {
         No destinations available
       </h1>
       <p className="text-sm text-slate-600 max-w-prose">
-        Your account has no visible class navigation options. List/detail and
-        create content will plug into these routes in{" "}
+        Your account has no visible class navigation options. Schema-driven
+        lists live in{" "}
         <a
           className="underline"
           href="https://github.com/brettski74/untangled/issues/13"
         >
           #13
         </a>
-        ; richer session and API wiring in{" "}
+        ; detail/new in{" "}
+        <a
+          className="underline"
+          href="https://github.com/brettski74/untangled/issues/71"
+        >
+          #71
+        </a>
+        ; richer session wiring in{" "}
         <a
           className="underline"
           href="https://github.com/brettski74/untangled/issues/14"
