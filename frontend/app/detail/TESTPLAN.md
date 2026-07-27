@@ -102,8 +102,8 @@ Touched automated suites:
 
 | ID | Case | Expect | Mode |
 | -- | ---- | ------ | ---- |
-| C1 | Detail `handle.render_context_bar` | Shell renders toolbar (not `aria-hidden`) | Manual / smoke |
-| C2 | List/home (no handle) | Decorative empty bar | Manual |
+| C1 | Detail portals `DetailContextBar` via `ShellContextBar` | Shell host occupied as toolbar (not `aria-hidden`) | Manual / smoke |
+| C2 | Route with no `ShellContextBar` portal | Decorative empty host strip (`aria-hidden`) | Manual |
 | C3 | Title with friendly-id | `{display name} {number}` | D1 + Manual |
 | C4 | Title without friendly-id | UUID fallback | Unit via `detail_title_token` path in D2 when number missing — prefer Manual if no fixture |
 | C5 | Refresh / copy / menu / save-check | Revalidator; clipboard absolute URL; menu items disabled; save disabled | Manual |

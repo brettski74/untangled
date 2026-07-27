@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
 
 import { reset_session_storage_for_tests } from "../auth/session.server";
 import { fake_access_token } from "../auth/test_tokens";
@@ -237,5 +238,20 @@ describe("destination_detail loader", () => {
       "incidents",
       "INC00000001",
     ]);
+  });
+});
+
+describe("destination_detail context bar mount", () => {
+  it("portals DetailContextBar via ShellContextBar; no handle export", async () => {
+    const source = await readFile(
+      new URL("./destination_detail.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/from "\.\.\/shell\/shell_context_bar"/);
+    expect(source).toMatch(/<ShellContextBar>/);
+    expect(source).toMatch(/<DetailContextBar/);
+    expect(source).not.toMatch(/render_context_bar/);
+    expect(source).not.toMatch(/context_bar_handle/);
+    expect(source).not.toMatch(/export const handle/);
   });
 });
