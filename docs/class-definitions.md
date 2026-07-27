@@ -34,16 +34,28 @@ Each file declares at least:
 | `name` | Logical class name (kebab-case), e.g. `demo-item` |
 | `display-name` | Human-readable label (not a table/column identifier) |
 | `description` | Purpose and other details configurers/users should know |
-| `attributes` | Map of attribute name → `{ type, required }` |
+| `attributes` | Map of attribute name → `{ type, required, … }` |
 
 Attribute names in YAML are kebab-case. They map mechanically to snake_case in
 SQL, JSON, Python, and JavaScript.
+
+Attribute declaration order under `attributes` is **semantic** (default
+presentation order). See
+[`architecture/decisions/004-yaml-attribute-order-is-semantic.md`](../architecture/decisions/004-yaml-attribute-order-is-semantic.md).
+Order is preserved through load → generated field meta (explicit `order`
+ordinal). Consumers must order by that ordinal and **fail closed** if it is
+missing — do not invent a sort. Tooling must not alphabetize attribute maps.
 
 ### Type vocabulary (M1)
 
 | YAML `type` | Meaning | PostgreSQL |
 | ----------- | ------- | ---------- |
-| `string` | UTF-8 text | `text` |
+| `compact-text` | Free-form UTF-8 text (compact UI section) | `text` |
+| `choice` | Restricted value set later; M1 unconstrained text (compact UI) | `text` |
+| `status` | Special choice later; M1 unconstrained text (compact UI) | `text` |
+| `text` | UTF-8 text (full-width single-line UI section) | `text` |
+| `multiline-text` | UTF-8 text (full-width multiline UI section) | `text` |
+| `string` | **Deprecated** alias for `compact-text` (still accepted) | `text` |
 | `boolean` | True/false | `boolean` |
 | `integer` | Whole number | `integer` |
 | `float` | Floating-point number | `double precision` |
@@ -53,6 +65,41 @@ SQL, JSON, Python, and JavaScript.
 | `friendly-id` | Server-assigned operational id (`prefix` + zero-padded sequence) | `text` |
 
 Keep this vocabulary small.
+
+**Text storage family:** `compact-text`, `choice`, `status`, `text`,
+`multiline-text`, and deprecated `string` are storage-equivalent (all
+PostgreSQL `text`). Intra-family type renames must **not** emit migrate DDL.
+UI / search semantics follow the YAML type; migrate Schema IR stores only
+the PostgreSQL type.
+
+**`choice` / `status` in M1:** types reserve distinct future behaviour
+(pickers, permissions). Generated Pydantic/Zod treat them as unconstrained
+strings until value sets land — prefer documented vocabularies in class
+descriptions, not validator enums yet.
+
+**Deprecating `string`:** still accepted so external/custom trees do not
+hard-break. The loader emits a visible warning (`DeprecatedStringTypeWarning`)
+when `string` appears; behaviour matches `compact-text`. Prefer migrating
+definitions off `string`.
+
+### Create-time attribute defaults
+
+Optional YAML key **`create-default`** on an attribute declares a create-form
+prefill (and values the generic new-record path must include in create POST
+bodies for non-editable fields). It is **not** a PostgreSQL column DEFAULT
+and is not migrate / environment backfill ([#62](https://github.com/brettski74/untangled/issues/62)).
+
+- Omit the key when there is no default (do not write `create-default: null`).
+- Generated field meta exposes `create_default` only when declared.
+- Persistence create does not auto-apply these yet; callers (SSR new-record
+  action, API clients) must supply them until a later server-apply story.
+- `friendly-id` cannot have `create-default` (server-assigned).
+
+M1 Change Request `requested-by` uses the baseline seed-catalog admin UUID
+(`01900000-0000-7000-8000-000000000001`). That default is valid only when the
+intentional baseline seed has been applied; it is scoped debt pending
+`current-user` substitution / an FK picker — do not generalize seed-identity
+defaults to other actor-typed attributes.
 
 ### Friendly-id attributes
 

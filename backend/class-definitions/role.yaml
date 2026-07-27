@@ -6,9 +6,9 @@ description: >
   effective permissions are the union across assignments.
 attributes:
   name:
-    type: string
+    type: compact-text
     required: true
     unique: true
   display-name:
-    type: string
+    type: compact-text
     required: true

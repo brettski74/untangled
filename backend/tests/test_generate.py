@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from untangled.mapping.generate import generate_models
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
+from untangled.seed.users import SEED_ADMIN_ID
 
 
 def _load_module(path: Path, module_name: str):
@@ -84,6 +85,15 @@ def test_generate_demo_pydantic_accepts_and_rejects(
     assigned_pos = field_meta.index('name_snake: "assigned_user_id"')
     assert number_pos < summary_pos < assigned_pos
     assert 'references: "user"' in field_meta
+    assert 'type_name: "text"' in field_meta
+    assert 'type_name: "status"' in field_meta
+    assert "create_default: " in field_meta
+    assert 'create_default: "new"' in field_meta
+    assert 'create_default: "draft"' in field_meta
+    assert f'create_default: "{SEED_ADMIN_ID}"' in field_meta
+    # order indices match array position for Incident attributes.
+    assert "order: 0" in field_meta
+    assert "order: 1" in field_meta
 
     module = _load_module(pydantic_out / "demo_item.py", "generated_demo_item")
     demo_item = module.DemoItem
@@ -178,3 +188,33 @@ def test_generate_demo_zod_accepts_and_rejects(
     bad = run_case(invalid)
     assert bad.returncode != 0
     assert json.loads(bad.stdout)["ok"] is False
+
+
+def test_field_meta_order_and_create_defaults(
+    repo_definitions: Path, tmp_path: Path
+) -> None:
+    from untangled.mapping.definition import load_definitions
+    from untangled.mapping.emit_field_meta import emit_field_meta_module
+
+    definitions = load_definitions(repo_definitions)
+    source = emit_field_meta_module(definitions)
+    incident = next(d for d in definitions if d.name_kebab == "incident")
+    assert [a.name_snake for a in incident.attributes][:4] == [
+        "number",
+        "summary",
+        "description",
+        "status",
+    ]
+    assert incident.attributes[1].type_name == "text"
+    assert incident.attributes[3].create_default == "new"
+
+    change = next(d for d in definitions if d.name_kebab == "change-request")
+    requested = next(a for a in change.attributes if a.name_snake == "requested_by")
+    assert requested.create_default == str(SEED_ADMIN_ID)
+
+    assert 'name_snake: "summary"' in source
+    assert 'type_name: "text"' in source
+    assert "order: 1" in source
+    assert 'create_default: "new"' in source
+    assert f'create_default: "{SEED_ADMIN_ID}"' in source
+    assert "create_default: null" not in source

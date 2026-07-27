@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ClassFieldMeta } from "../generated/field_meta";
 import {
   attribute_display_label,
+  attributes_in_declaration_order,
   list_display_columns,
 } from "./columns";
 
@@ -27,16 +28,18 @@ describe("list_display_columns", () => {
           {
             name_kebab: "summary",
             name_snake: "summary",
-            type_name: "string",
+            type_name: "text",
             required: true,
             references: null,
+            order: 0,
           },
           {
             name_kebab: "status",
             name_snake: "status",
-            type_name: "string",
+            type_name: "status",
             required: true,
             references: null,
+            order: 1,
           },
         ],
         null,
@@ -52,9 +55,10 @@ describe("list_display_columns", () => {
           {
             name_kebab: "summary",
             name_snake: "summary",
-            type_name: "string",
+            type_name: "text",
             required: true,
             references: null,
+            order: 0,
           },
           {
             name_kebab: "number",
@@ -62,13 +66,15 @@ describe("list_display_columns", () => {
             type_name: "friendly-id",
             required: true,
             references: null,
+            order: 1,
           },
           {
             name_kebab: "status",
             name_snake: "status",
-            type_name: "string",
+            type_name: "status",
             required: true,
             references: null,
+            order: 2,
           },
         ],
         "number",
@@ -92,19 +98,60 @@ describe("list_display_columns", () => {
             type_name: "friendly-id",
             required: true,
             references: null,
+            order: 0,
           },
           {
             name_kebab: "summary",
             name_snake: "summary",
-            type_name: "string",
+            type_name: "text",
             required: true,
             references: null,
+            order: 1,
           },
         ],
         "number",
       ),
     );
     expect(columns.map((c) => c.name_snake)).toEqual(["number", "summary"]);
+  });
+});
+
+describe("attributes_in_declaration_order", () => {
+  it("sorts by order ordinal even when array is shuffled", () => {
+    const sorted = attributes_in_declaration_order([
+      {
+        name_kebab: "status",
+        name_snake: "status",
+        type_name: "status",
+        required: true,
+        references: null,
+        order: 1,
+      },
+      {
+        name_kebab: "summary",
+        name_snake: "summary",
+        type_name: "text",
+        required: true,
+        references: null,
+        order: 0,
+      },
+    ]);
+    expect(sorted.map((a) => a.name_snake)).toEqual(["summary", "status"]);
+  });
+
+  it("fails closed when order is missing", () => {
+    expect(() =>
+      attributes_in_declaration_order([
+        {
+          name_kebab: "summary",
+          name_snake: "summary",
+          type_name: "text",
+          required: true,
+          references: null,
+          order: undefined as unknown as number,
+        },
+      ]),
+    ).toThrow(/missing a valid declaration order ordinal/);
   });
 });
 

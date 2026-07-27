@@ -46,10 +46,30 @@ IMPLEMENTED_OPS: frozenset[str] = frozenset(
 
 _VALUE_OPS = frozenset({"eq", "ne"})
 _ORDERED_OPS = frozenset({"gt", "gte", "lt", "lte"})
-_ORDERED_TYPES = frozenset(
-    {"string", "integer", "float", "decimal", "datetime", "friendly-id"}
+# Text-family YAML types share string operator eligibility (incl. deprecated
+# ``string``). ``multiline-text`` keeps parity for M1; pattern/ordered filters
+# on long text may scan heavily — tracked as follow-on performance debt.
+_TEXT_FAMILY_SEARCH_TYPES = frozenset(
+    {
+        "string",
+        "compact-text",
+        "choice",
+        "status",
+        "text",
+        "multiline-text",
+    }
 )
-_TEXT_ORDERED_TYPES = frozenset({"string", "friendly-id"})
+_ORDERED_TYPES = frozenset(
+    {
+        *_TEXT_FAMILY_SEARCH_TYPES,
+        "integer",
+        "float",
+        "decimal",
+        "datetime",
+        "friendly-id",
+    }
+)
+_TEXT_ORDERED_TYPES = frozenset({*_TEXT_FAMILY_SEARCH_TYPES, "friendly-id"})
 _ORDERED_SQL = {
     "gt": sql.SQL(">"),
     "gte": sql.SQL(">="),
@@ -57,11 +77,16 @@ _ORDERED_SQL = {
     "lte": sql.SQL("<="),
 }
 _TEXT_PATTERN_OPS = frozenset({"contains", "starts-with", "ends-with", "regexp"})
-_TEXT_PATTERN_TYPES = frozenset({"string", "friendly-id"})
+_TEXT_PATTERN_TYPES = frozenset({*_TEXT_FAMILY_SEARCH_TYPES, "friendly-id"})
 _LIKE_ESCAPE_CHAR = "\\"
 
 _TYPE_ADAPTERS: dict[str, TypeAdapter[Any]] = {
     "string": TypeAdapter(str),
+    "compact-text": TypeAdapter(str),
+    "choice": TypeAdapter(str),
+    "status": TypeAdapter(str),
+    "text": TypeAdapter(str),
+    "multiline-text": TypeAdapter(str),
     "friendly-id": TypeAdapter(str),
     "boolean": TypeAdapter(bool),
     "integer": TypeAdapter(int),
@@ -431,7 +456,7 @@ def _compile_text_pattern(
     if attr.type_name not in _TEXT_PATTERN_TYPES:
         raise SearchSemanticError(
             f"operator {op!r} is not applicable to attribute {attr.name!r} "
-            f"(type {attr.type_name!r}; requires string or friendly-id)"
+            f"(type {attr.type_name!r}; requires a text-family type or friendly-id)"
         )
     if "value" not in node:
         raise SearchStructuralError(f"{op!r} requires 'value'")

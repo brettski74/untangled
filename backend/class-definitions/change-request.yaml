@@ -12,14 +12,15 @@ attributes:
     required: true
     prefix: CHG
   summary:
-    type: string
+    type: text
     required: true
   description:
-    type: string
+    type: multiline-text
     required: false
   status:
-    type: string
+    type: status
     required: true
+    create-default: draft
   risk-score:
     # Integer 0–100 inclusive (M1 convention; not range-enforced in the compiler yet).
     type: integer
@@ -44,3 +45,8 @@ attributes:
     type: uuid
     required: true
     references: user
+    # M1 scoped debt: baseline seed-catalog admin UUID (SEED_ADMIN_ID /
+    # STUB_ACTOR_ID). Valid only when the intentional baseline seed is applied.
+    # Prefer current-user substitution / FK picker when that follow-on lands —
+    # do not copy this pattern to other actor-typed attributes.
+    create-default: "01900000-0000-7000-8000-000000000001"

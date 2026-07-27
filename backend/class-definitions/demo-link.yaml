@@ -10,5 +10,5 @@ attributes:
     required: true
     references: demo-item
   label:
-    type: string
+    type: compact-text
     required: true

@@ -1,10 +1,17 @@
 """Tests for YAML class definition loading and validation."""
 
 from pathlib import Path
+import warnings
 
 import pytest
 
-from untangled.mapping.definition import DefinitionError, load_definition, load_definitions
+from untangled.mapping.definition import (
+    DefinitionError,
+    DeprecatedStringTypeWarning,
+    load_definition,
+    load_definitions,
+)
+from untangled.seed.users import SEED_ADMIN_ID
 
 
 def test_load_demo_item(repo_definitions: Path) -> None:
@@ -27,8 +34,8 @@ def test_load_demo_item(repo_definitions: Path) -> None:
     assert demo.display_name == "Demo Item"
     assert "fixture class" in demo.description.lower()
     by_name = {attr.name_snake: attr for attr in demo.attributes}
-    assert by_name["title"].type_name == "string" and by_name["title"].required
-    assert by_name["summary"].type_name == "string" and not by_name["summary"].required
+    assert by_name["title"].type_name == "compact-text" and by_name["title"].required
+    assert by_name["summary"].type_name == "compact-text" and not by_name["summary"].required
     assert by_name["is_active"].type_name == "boolean"
     assert by_name["quantity"].type_name == "integer"
     assert by_name["unit_price"].type_name == "float"
@@ -59,7 +66,7 @@ def test_load_demo_link_fk(repo_definitions: Path) -> None:
     assert by_name["demo_item_id"].type_name == "uuid"
     assert by_name["demo_item_id"].required
     assert by_name["demo_item_id"].references == "demo-item"
-    assert by_name["label"].type_name == "string"
+    assert by_name["label"].type_name == "compact-text"
 
 
 @pytest.mark.parametrize(
@@ -76,7 +83,7 @@ def test_rejects_redefined_system_fields(tmp_path: Path, field_kebab: str) -> No
                 "description: Clash test.",
                 "attributes:",
                 f"  {field_kebab}:",
-                "    type: string",
+                "    type: compact-text",
                 "    required: true",
             ]
         )
@@ -160,7 +167,7 @@ def test_rejects_references_on_non_uuid(tmp_path: Path) -> None:
                 "description: Non-uuid reference.",
                 "attributes:",
                 "  parent-id:",
-                "    type: string",
+                "    type: compact-text",
                 "    required: true",
                 "    references: bad-ref",
             ]
@@ -176,3 +183,125 @@ def test_load_definitions_requires_directory(tmp_path: Path) -> None:
     missing = tmp_path / "nope"
     with pytest.raises(DefinitionError, match="does not exist"):
         load_definitions(missing)
+
+
+def test_incident_and_change_create_defaults(repo_definitions: Path) -> None:
+    definitions = load_definitions(repo_definitions)
+    by_kebab = {d.name_kebab: d for d in definitions}
+    incident = {a.name_snake: a for a in by_kebab["incident"].attributes}
+    assert incident["summary"].type_name == "text"
+    assert incident["description"].type_name == "multiline-text"
+    assert incident["status"].type_name == "status"
+    assert incident["status"].create_default == "new"
+    assert incident["severity"].type_name == "choice"
+    assert incident["resolution"].type_name == "multiline-text"
+    assert incident["resolution_type"].type_name == "choice"
+    assert incident["summary"].create_default is None
+
+    change = {a.name_snake: a for a in by_kebab["change-request"].attributes}
+    assert change["summary"].type_name == "text"
+    assert change["description"].type_name == "multiline-text"
+    assert change["status"].type_name == "status"
+    assert change["status"].create_default == "draft"
+    assert change["requested_by"].create_default == str(SEED_ADMIN_ID)
+
+
+def test_first_party_definitions_have_no_deprecated_string(
+    repo_definitions: Path,
+) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecatedStringTypeWarning)
+        definitions = load_definitions(repo_definitions)
+    assert not any(isinstance(w.message, DeprecatedStringTypeWarning) for w in caught)
+    for defn in definitions:
+        for attr in defn.attributes:
+            assert attr.type_name != "string", (
+                f"{defn.name_kebab}.{attr.name_kebab} still uses deprecated string"
+            )
+
+
+def test_deprecated_string_emits_warning(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: legacy-item",
+                "display-name: Legacy",
+                "description: Still on string.",
+                "attributes:",
+                "  label:",
+                "    type: string",
+                "    required: true",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.warns(DeprecatedStringTypeWarning, match="deprecated type 'string'"):
+        defn = load_definition(path)
+    assert defn.attributes[0].type_name == "string"
+
+
+def test_create_default_rejects_null_and_bad_uuid(tmp_path: Path) -> None:
+    null_path = tmp_path / "null-default.yaml"
+    null_path.write_text(
+        "\n".join(
+            [
+                "name: null-default",
+                "display-name: \"Null default\"",
+                "description: Null create-default.",
+                "attributes:",
+                "  status:",
+                "    type: status",
+                "    required: true",
+                "    create-default: null",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="must not be null"):
+        load_definition(null_path)
+
+    bad_uuid = tmp_path / "bad-uuid.yaml"
+    bad_uuid.write_text(
+        "\n".join(
+            [
+                "name: bad-uuid",
+                "display-name: Bad",
+                "description: Bad UUID default.",
+                "attributes:",
+                "  owner-id:",
+                "    type: uuid",
+                "    required: true",
+                "    create-default: not-a-uuid",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="not a valid UUID"):
+        load_definition(bad_uuid)
+
+
+def test_create_default_forbidden_on_friendly_id(tmp_path: Path) -> None:
+    path = tmp_path / "bad-fid.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: bad-fid",
+                "display-name: Bad",
+                "description: Friendly-id create-default.",
+                "attributes:",
+                "  number:",
+                "    type: friendly-id",
+                "    required: true",
+                "    prefix: BAD",
+                "    create-default: BAD00000001",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="create-default"):
+        load_definition(path)

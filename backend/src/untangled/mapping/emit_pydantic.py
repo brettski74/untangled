@@ -7,6 +7,7 @@ from pathlib import Path
 from untangled.mapping.definition import AttributeDefinition, ClassDefinition
 from untangled.mapping.naming import snake_to_pascal
 from untangled.mapping.system_fields import SYSTEM_FIELDS
+from untangled.mapping.types import SUPPORTED_TYPES
 
 _HEADER = '''\
 """Generated Pydantic models. Do not edit by hand; run `make models`."""
@@ -38,6 +39,11 @@ def _require_utc(value: datetime) -> datetime:
 
 _PYDANTIC_TYPE: dict[str, str] = {
     "string": "str",
+    "compact-text": "str",
+    "choice": "str",
+    "status": "str",
+    "text": "str",
+    "multiline-text": "str",
     "boolean": "bool",
     "integer": "int",
     "float": "float",
@@ -46,6 +52,8 @@ _PYDANTIC_TYPE: dict[str, str] = {
     "datetime": "UtcDatetime",
     "friendly-id": "str",
 }
+
+assert set(_PYDANTIC_TYPE) == SUPPORTED_TYPES
 
 
 def emit_pydantic_module(definition: ClassDefinition) -> str:

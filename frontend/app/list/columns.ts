@@ -14,10 +14,12 @@ export type ListColumn = {
 
 /**
  * Build list display columns from generated field meta.
- * Meta order stays YAML/IR order; friendly-id is moved left-most for display only.
+ * Meta attributes are sorted by declaration ``order``; friendly-id is then
+ * moved left-most for list display only.
  */
 export function list_display_columns(meta: ClassFieldMeta): ListColumn[] {
-  const columns = meta.attributes.map((attr) => attribute_to_column(attr));
+  const ordered = attributes_in_declaration_order(meta.attributes);
+  const columns = ordered.map((attr) => attribute_to_column(attr));
   const friendly = meta.friendly_id_attr;
   if (friendly == null) {
     return columns;
@@ -31,6 +33,28 @@ export function list_display_columns(meta: ClassFieldMeta): ListColumn[] {
     return columns;
   }
   return [friendly_column, ...columns];
+}
+
+/**
+ * Sort field-meta attributes by declaration ``order``.
+ * Fail closed if any attribute is missing a finite ordinal.
+ */
+export function attributes_in_declaration_order(
+  attributes: readonly AttributeFieldMeta[],
+): AttributeFieldMeta[] {
+  for (const attr of attributes) {
+    if (
+      typeof attr.order !== "number" ||
+      !Number.isFinite(attr.order) ||
+      !Number.isInteger(attr.order)
+    ) {
+      throw new Error(
+        `field meta for attribute '${attr.name_kebab}' is missing a valid ` +
+          `declaration order ordinal`,
+      );
+    }
+  }
+  return [...attributes].sort((left, right) => left.order - right.order);
 }
 
 export function attribute_display_label(name_kebab: string): string {
@@ -67,6 +91,13 @@ export function column_width_px(type_name: string): number {
       return 180;
     case "uuid":
       return 280;
+    case "string":
+    case "compact-text":
+    case "choice":
+    case "status":
+    case "text":
+    case "multiline-text":
+      return 200;
     default:
       return 200;
   }

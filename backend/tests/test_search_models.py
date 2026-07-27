@@ -46,6 +46,6 @@ def test_sort_spec_direction_is_case_sensitive() -> None:
 
 def test_resolve_sort_rejects_bad_direction_as_programming_error() -> None:
     """HTTP edge validates direction; a bad tuple into persistence is a bug."""
-    attrs = {"status": SearchableAttribute("status", "string")}
+    attrs = {"status": SearchableAttribute("status", "status")}
     with pytest.raises(RuntimeError, match="invalid sort direction"):
         _resolve_sort([("status", "ASC")], attrs)  # type: ignore[list-item]

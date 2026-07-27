@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from untangled.mapping.types import SUPPORTED_TYPES
+from untangled.mapping.types import SUPPORTED_TYPES, TEXT_STORAGE_FAMILY
 
 # Keep in lockstep with docs/class-definitions.md type vocabulary.
 YAML_TO_POSTGRES: dict[str, str] = {
     "string": "text",
+    "compact-text": "text",
+    "choice": "text",
+    "status": "text",
+    "text": "text",
+    "multiline-text": "text",
     "boolean": "boolean",
     "integer": "integer",
     "float": "double precision",
@@ -17,6 +22,7 @@ YAML_TO_POSTGRES: dict[str, str] = {
 }
 
 assert set(YAML_TO_POSTGRES) == SUPPORTED_TYPES
+assert all(YAML_TO_POSTGRES[t] == "text" for t in TEXT_STORAGE_FAMILY)
 
 
 def postgres_type(type_name: str) -> str:

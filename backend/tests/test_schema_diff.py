@@ -7,11 +7,14 @@ from untangled.schema.ir import ColumnIR, ForeignKeyIR, SchemaIR, TableIR
 from untangled.schema.plan import (
     AddColumn,
     AddForeignKey,
+    AlterColumnType,
     CreateTable,
     DropColumn,
     DropForeignKey,
     DropTable,
 )
+from untangled.mapping.types import TEXT_STORAGE_FAMILY
+from untangled.persistence.sql_types import postgres_type
 
 
 def _table(
@@ -120,3 +123,64 @@ def test_diff_drop_table_drops_fk_first() -> None:
     assert isinstance(plan.ops[0], DropForeignKey)
     assert isinstance(plan.ops[1], DropTable)
     assert plan.ops[1].table_name == "demo_link"
+
+
+def test_text_storage_family_maps_to_text() -> None:
+    assert all(postgres_type(t) == "text" for t in TEXT_STORAGE_FAMILY)
+
+
+def test_intra_family_text_type_rename_emits_no_alter() -> None:
+    """YAML semantic renames within the text family must not emit DDL."""
+    current = _table(
+        "incident",
+        (
+            ColumnIR("id", "uuid", False),
+            ColumnIR("summary", "text", False),
+            ColumnIR("status", "text", False),
+        ),
+    )
+    desired = _table(
+        "incident",
+        (
+            ColumnIR("id", "uuid", False),
+            ColumnIR("summary", "text", False),  # was string / compact-text
+            ColumnIR("status", "text", False),  # was string → status
+        ),
+    )
+    plan = diff_schemas(SchemaIR(tables=(desired,)), SchemaIR(tables=(current,)))
+    assert plan.ops == ()
+    assert not any(isinstance(op, AlterColumnType) for op in plan.ops)
+
+
+def test_string_to_text_family_retarget_preserves_schema_hash(
+    repo_definitions: Path,
+) -> None:
+    """Whole-tree retarget from deprecated ``string`` keeps migrate Schema IR identical."""
+    from dataclasses import replace
+
+    from untangled.mapping.definition import load_definitions
+    from untangled.mapping.types import TEXT_STORAGE_FAMILY
+    from untangled.schema.from_yaml import desired_schema_from_classes
+    from untangled.schema.hash import schema_hash
+
+    definitions = load_definitions(repo_definitions)
+    as_string = [
+        replace(
+            defn,
+            attributes=tuple(
+                replace(attr, type_name="string")
+                if attr.type_name in TEXT_STORAGE_FAMILY
+                else attr
+                for attr in defn.attributes
+            ),
+        )
+        for defn in definitions
+    ]
+    assert schema_hash(desired_schema_from_classes(as_string)) == schema_hash(
+        desired_schema_from_classes(definitions)
+    )
+    plan = diff_schemas(
+        desired_schema_from_classes(definitions),
+        desired_schema_from_classes(as_string),
+    )
+    assert plan.ops == ()

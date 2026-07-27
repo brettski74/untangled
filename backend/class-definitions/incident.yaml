@@ -13,16 +13,17 @@ attributes:
     required: true
     prefix: INC
   summary:
-    type: string
+    type: text
     required: true
   description:
-    type: string
+    type: multiline-text
     required: false
   status:
-    type: string
+    type: status
     required: true
+    create-default: new
   severity:
-    type: string
+    type: choice
     required: true
   major-incident:
     # Optional boolean is tri-state (NULL ≠ false). Prefer required+default when
@@ -40,8 +41,8 @@ attributes:
     required: false
     references: user
   resolution:
-    type: string
+    type: multiline-text
     required: false
   resolution-type:
-    type: string
+    type: choice
     required: false
