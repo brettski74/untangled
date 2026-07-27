@@ -7,11 +7,12 @@ An enterprise grade ITSM platform, including ITSM, Event Management, Discovery a
 This repository is a monorepo with a Python/FastAPI backend and a React Router v7 SSR frontend.
 
 ```bash
-make up         # postgres + api + web via Docker Compose (does not migrate or seed)
-make migrate    # apply YAML schema intent (intentional; use after up / db-up)
-make seed       # idempotent baseline users (intentional; after migrate)
-make reinstall  # wipe DB volume, then up → migrate → seed (see make help)
-make help       # list all commands
+make up                   # postgres + api + web via Docker Compose (does not migrate or seed)
+make migrate              # apply YAML schema intent (intentional; use after up / db-up)
+make seed                 # idempotent baseline users (intentional; after migrate)
+make reinstall            # wipe DB volume, then up → migrate → seed
+make reinstall-keep-data  # same as reinstall but keep the Postgres volume
+make help                 # list all commands
 ```
 
 See [docs/local-development.md](docs/local-development.md) for setup, ports, auth/`/docs` Authorize, smoke tests, and host hot-reload (`make backend-dev` / `make frontend-dev`).
