@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { filter_nav_by_permissions } from "./nav_filter";
+import { filter_nav_by_permissions, can_create_class } from "./nav_filter";
 import { default_landing_path } from "./nav_landing";
 import {
   display_name_to_slug,
@@ -144,6 +144,17 @@ describe("filter_nav_by_permissions", () => {
     expect(visible.map((s) => s.class_name)).toEqual(["incident"]);
     expect(visible[0]?.options.every((o) => o.option_type === "list")).toBe(
       true,
+    );
+  });
+});
+
+describe("can_create_class", () => {
+  it("allows admin and class:create", () => {
+    expect(can_create_class(["admin"], "incident")).toBe(true);
+    expect(can_create_class(["incident:create"], "incident")).toBe(true);
+    expect(can_create_class(["incident:read"], "incident")).toBe(false);
+    expect(can_create_class(["change-request:create"], "incident")).toBe(
+      false,
     );
   });
 });

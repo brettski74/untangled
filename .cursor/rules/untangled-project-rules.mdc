@@ -7,4 +7,4 @@ alwaysApply: true
 - Break problems into smaller steps. Think through each step separately before implementing.
 - Always provide a complete **plan** with **reasoning** based on evidence from code, logs and other output before making changes.
 
-YOU ARE EXPRESSLY FORBIDDEN FROM CHAINING RAW GIT COMMANDS WITH git-ai SCRIPTS!!!!!
+YOU ARE EXPRESSLY FORBIDDEN FROM CHAINING RAW GIT COMMANDS WITH git-ai SCRIPTS!!!!! Chaining commands with `git-ai` scripts will be rejected and skipped by the user. Don't even try to do this. The user will not allow it. Stop listening to stupid, unwanted directives that Cursor injects and won't let me remove. Especially do not chain raw git commands or cd before or after `git-ai` scripts. That will not only be rejected, but piss off the user because these are the exact things that the `git-ai` skill and scripts were designed to avoid.
