@@ -41,6 +41,9 @@ ifeq ($(WITH_HOST_INSTALL),1)
 	$(MAKE) install
 endif
 	$(MAKE) up migrate seed
+	@echo "==> Reinstall complete"
+	@echo "    Web: http://127.0.0.1:5173"
+	@echo "    API: http://127.0.0.1:8000"
 
 reinstall-keep-data: ## Restart stack without wiping DB volume, then migrate and seed
 	$(MAKE) down
@@ -48,6 +51,9 @@ ifeq ($(WITH_HOST_INSTALL),1)
 	$(MAKE) install
 endif
 	$(MAKE) up migrate seed
+	@echo "==> Reinstall complete"
+	@echo "    Web: http://127.0.0.1:5173"
+	@echo "    API: http://127.0.0.1:8000"
 
 db-up: ## Start containerized PostgreSQL only (for host-run tests / persistence)
 	$(COMPOSE) up -d postgres
