@@ -49,13 +49,13 @@ export type ListLoaderData = {
   effective_predicate: SearchPredicate | null;
 };
 
-export function meta({ loaderData }: Route.MetaArgs) {
-  if (loaderData == null) {
+export function meta({ loaderData: loader_data }: Route.MetaArgs) {
+  if (loader_data == null) {
     return [{ title: "Untangled" }];
   }
   return [
     {
-      title: `${loaderData.section_display_name} — ${loaderData.option_display_name} — Untangled`,
+      title: `${loader_data.section_display_name} — ${loader_data.option_display_name} — Untangled`,
     },
   ];
 }

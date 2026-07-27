@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 
+import { ShellContextBar as RouteHandleContextBar } from "./context_bar";
 import type { NavBarView } from "./nav_schema";
 import { ShellHeader } from "./header";
 import { ShellNavRail } from "./nav_rail";
@@ -16,6 +17,9 @@ export type ShellLayoutProps = {
  * Authenticated operator chrome: header, nav rail, context bar, content pane.
  * Narrow viewports (&lt;1024px) start with the nav collapsed when no localStorage
  * preference exists — see `NAV_NARROW_BREAKPOINT_PX` in `nav_prefs.ts`.
+ *
+ * Context bar: list routes portal interactive chrome (#76); other routes use
+ * route ``handle.render_context_bar`` (#81) when the portal slot is free.
  */
 export function ShellLayout({
   display_name,
@@ -44,11 +48,16 @@ export function ShellLayout({
           <div className="flex min-w-0 flex-1 flex-col">
             <div
               ref={slot_ref}
-              className="flex h-10 shrink-0 items-center border-b border-[var(--color-shell-separator)] bg-[var(--color-shell-context)] px-2 text-[var(--color-shell-chrome-fg)]"
+              className={
+                occupied
+                  ? "flex h-10 shrink-0 items-center border-b border-[var(--color-shell-separator)] bg-[var(--color-shell-context)] px-2 text-[var(--color-shell-chrome-fg)]"
+                  : "hidden"
+              }
               aria-hidden={occupied ? undefined : true}
               role={occupied ? "toolbar" : undefined}
               aria-label={occupied ? "List context" : undefined}
             />
+            {occupied ? null : <RouteHandleContextBar />}
             <main
               id="main-content"
               tabIndex={-1}

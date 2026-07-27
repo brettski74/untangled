@@ -8,7 +8,7 @@ Untangled M1 uses **React Router v7 in framework mode** for the web application.
 - **Loaders and actions** — route modules colocate data loading and mutations, which fits authenticated CRUD list/detail screens without bolting on a separate data layer.
 - **Progressive enhancement** — forms and navigation can work with standard HTTP semantics before client hydration.
 - **Single React codebase** — same components and routes for dev SSR, production SSR, and optional SPA-style navigation.
-- **Login gate + shell chrome** — `/login` plus fail-closed authenticated layout with header / nav rail / context bar, YAML-driven class nav, and thin destination placeholders for #13/#14.
+- **Login gate + shell chrome** — `/login` plus fail-closed authenticated layout with header / nav rail / context bar, YAML-driven class nav. Schema-driven list destinations (#13); detail read layout (#81 / epic #71); new-record placeholder until #83; token refresh #14.
 
 ## Auth delivery (SSR)
 
@@ -30,7 +30,10 @@ Cookie `maxAge` is derived from the access JWT `exp` claim (no separate web TTL 
 | ---- | ---- |
 | `frontend/app/routes.ts` | Route table (login, logout, authenticated layout, destinations) |
 | `frontend/app/auth/` | Session cookie, API seam, Zod envelopes, gate helpers |
-| `frontend/app/shell/` | Operator chrome (header, nav rail, YAML nav filter/paths) |
+| `frontend/app/shell/` | Operator chrome (header, nav rail, context bar slot, YAML nav) |
+| `frontend/app/list/` | Schema-driven list chrome (#13) |
+| `frontend/app/detail/` | Schema-driven detail read layout (#81) + TESTPLAN |
+| `frontend/app/records/` | SSR search/fetch seams (Bearer via session) |
 | `frontend/app/config/nav-bar.yaml` | M1 product-default nav (instance override later) |
 | `frontend/app/root.tsx` | HTML shell / root layout |
 | `frontend/app/routes/` | Route modules (loaders, actions, components) |
