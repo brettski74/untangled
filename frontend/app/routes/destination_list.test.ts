@@ -6,9 +6,13 @@ import { reset_default_nav_cache_for_tests } from "../shell/nav_config.server";
 
 const search_collection = vi.fn();
 
-vi.mock("../records/search.server", () => ({
-  search_collection: (...args: unknown[]) => search_collection(...args),
-}));
+vi.mock("../records/search.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../records/search.server")>();
+  return {
+    ...actual,
+    search_collection: (...args: unknown[]) => search_collection(...args),
+  };
+});
 
 async function session_cookie(token = fake_access_token()): Promise<string> {
   const { commit_access_token } = await import("../auth/session.server");
@@ -179,6 +183,7 @@ describe("destination_list action", () => {
     } as never);
 
     expect(result.data).toMatchObject({
+      ok: true,
       total: 1,
       rows: [{ id: "1", summary: "Filtered" }],
       effective_predicate: predicate,
@@ -210,6 +215,44 @@ describe("destination_list action", () => {
       } as never),
     ).rejects.toMatchObject({ status: 400 });
     expect(search_collection).not.toHaveBeenCalled();
+  });
+
+  it("returns search API detail on 422 without throwing", async () => {
+    const { SearchApiError } = await import("../records/search.server");
+    search_collection.mockRejectedValue(
+      new SearchApiError(
+        422,
+        "predicate nesting depth exceeds maximum of 3",
+      ),
+    );
+
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie();
+    const form = new FormData();
+    form.set(
+      "predicate",
+      JSON.stringify({
+        op: "and",
+        predicates: [{ op: "eq", attribute: "status", value: "new" }],
+      }),
+    );
+
+    const result = await action({
+      request: new Request("http://web.test/incidents/lists/all", {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: form,
+      }),
+      params: { collection: "incidents", list_id: "all" },
+      context: {},
+    } as never);
+
+    expect(result.init?.status).toBe(422);
+    expect(result.data).toEqual({
+      ok: false,
+      status: 422,
+      detail: "predicate nesting depth exceeds maximum of 3",
+    });
   });
 
   it("throws 403 when search is denied", async () => {

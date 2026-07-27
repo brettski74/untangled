@@ -1,5 +1,6 @@
 import { data, useOutletContext } from "react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useFetcher } from "react-router";
 
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
@@ -14,6 +15,7 @@ import {
 } from "../generated/field_meta";
 import { BasicList } from "../list/basic_list";
 import { list_display_columns, type ListColumn } from "../list/columns";
+import { ListFilterChrome } from "../list/filter_chrome";
 import {
   ListContextBar,
   type ListSearchPayload,
@@ -24,7 +26,10 @@ import {
   type QuickFilterValues,
   type SearchPredicate,
 } from "../list/quick_filter";
-import { search_collection } from "../records/search.server";
+import {
+  SearchApiError,
+  search_collection,
+} from "../records/search.server";
 import type { AuthenticatedOutletContext } from "./authenticated";
 import { can_create_class } from "../shell/nav_filter";
 import { load_default_nav } from "../shell/nav_config.server";
@@ -48,6 +53,10 @@ export type ListLoaderData = {
   offset: number;
   effective_predicate: SearchPredicate | null;
 };
+
+export type ListSearchActionResult =
+  | ({ ok: true } & ListSearchPayload)
+  | { ok: false; status: number; detail: string };
 
 export function meta({ loaderData: loader_data }: Route.MetaArgs) {
   if (loader_data == null) {
@@ -104,7 +113,8 @@ async function run_list_search(
       collection,
       columns,
       attributes: [...meta.attributes],
-      baseline_predicate: (match.option.predicate as SearchPredicate | undefined) ?? null,
+      baseline_predicate:
+        (match.option.predicate as SearchPredicate | undefined) ?? null,
       rows: result.items,
       total: result.total,
       limit: result.limit,
@@ -112,6 +122,9 @@ async function run_list_search(
       effective_predicate: predicate,
     };
   } catch (error) {
+    if (error instanceof SearchApiError) {
+      throw error;
+    }
     if (error instanceof Response) {
       throw error;
     }
@@ -139,25 +152,51 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   const baseline =
     (match.option.predicate as SearchPredicate | undefined) ?? null;
-  const payload = await run_list_search(request, params, baseline);
-  return data(payload);
+  try {
+    const payload = await run_list_search(request, params, baseline);
+    return data(payload);
+  } catch (error) {
+    if (error instanceof SearchApiError) {
+      // Nav baseline should always be valid; surface as opaque failure.
+      throw new Response(error.detail, { status: error.status });
+    }
+    throw error;
+  }
 }
 
-export async function action({ request, params }: Route.ActionArgs) {
+export async function action({
+  request,
+  params,
+}: Route.ActionArgs): Promise<ReturnType<typeof data<ListSearchActionResult>>> {
   const form = await request.formData();
   const parsed = parse_predicate_json(form.get("predicate"));
   if (!parsed.ok) {
     throw new Response("Invalid predicate", { status: 400 });
   }
 
-  const payload = await run_list_search(request, params, parsed.predicate);
-  return data({
-    rows: payload.rows,
-    total: payload.total,
-    limit: payload.limit,
-    offset: payload.offset,
-    effective_predicate: payload.effective_predicate,
-  } satisfies ListSearchPayload);
+  try {
+    const payload = await run_list_search(request, params, parsed.predicate);
+    return data({
+      ok: true,
+      rows: payload.rows,
+      total: payload.total,
+      limit: payload.limit,
+      offset: payload.offset,
+      effective_predicate: payload.effective_predicate,
+    } satisfies ListSearchActionResult);
+  } catch (error) {
+    if (error instanceof SearchApiError) {
+      return data(
+        {
+          ok: false,
+          status: error.status,
+          detail: error.detail,
+        } satisfies ListSearchActionResult,
+        { status: error.status },
+      );
+    }
+    throw error;
+  }
 }
 
 /**
@@ -195,25 +234,72 @@ export default function DestinationListPage({
     initial.quick_filter.warning,
   );
 
+  const fetcher = useFetcher<ListSearchActionResult>();
+  const fetcher_path_ref = useRef<string | null>(null);
+  const effective_ref = useRef<SearchPredicate | null>(
+    search.effective_predicate ?? loaderData.baseline_predicate,
+  );
+
   useEffect(() => {
     const synced = list_destination_ui_sync(loaderData);
     set_search(synced.search);
     set_selected_name(synced.quick_filter.selected_name);
     set_values(synced.quick_filter.values);
     set_warning(synced.quick_filter.warning);
+    effective_ref.current =
+      synced.search.effective_predicate ?? loaderData.baseline_predicate;
+    fetcher_path_ref.current = null;
     // Same destination identity for search rows and quick-filter chrome.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- path is the list identity
   }, [loaderData.path]);
 
-  const on_search_result = useCallback((result: ListSearchPayload) => {
-    set_search(result);
-  }, []);
+  useEffect(() => {
+    effective_ref.current =
+      search.effective_predicate ?? loaderData.baseline_predicate;
+  }, [search.effective_predicate, loaderData.baseline_predicate]);
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || fetcher.data == null) {
+      return;
+    }
+    if (fetcher_path_ref.current !== loaderData.path) {
+      return;
+    }
+    const result = fetcher.data;
+    if (!result.ok) {
+      set_warning(result.detail);
+      return;
+    }
+    effective_ref.current = result.effective_predicate;
+    set_search({
+      rows: result.rows,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+      effective_predicate: result.effective_predicate,
+    });
+  }, [fetcher.state, fetcher.data, loaderData.path]);
+
+  const submit_predicate = useCallback(
+    (predicate: SearchPredicate | null) => {
+      const form = new FormData();
+      form.set(
+        "predicate",
+        predicate == null ? "null" : JSON.stringify(predicate),
+      );
+      fetcher_path_ref.current = loaderData.path;
+      void fetcher.submit(form, { method: "post" });
+    },
+    [fetcher, loaderData.path],
+  );
 
   const on_selected_name_change = useCallback((name: string) => {
     set_selected_name(name);
     set_values({});
     set_warning(null);
   }, []);
+
+  const busy = fetcher.state !== "idle";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -224,9 +310,9 @@ export default function DestinationListPage({
           list_path={loaderData.path}
           can_create={can_create}
           attributes={loaderData.attributes}
-          baseline_predicate={loaderData.baseline_predicate}
-          search={search}
-          on_search_result={on_search_result}
+          effective_ref={effective_ref}
+          busy={busy}
+          submit_predicate={submit_predicate}
           selected_name={selected_name}
           values={values}
           warning={warning}
@@ -235,6 +321,14 @@ export default function DestinationListPage({
           on_warning_change={set_warning}
         />
       </ShellContextBar>
+
+      <ListFilterChrome
+        attributes={loaderData.attributes}
+        effective_predicate={search.effective_predicate}
+        busy={busy}
+        on_execute={submit_predicate}
+        on_warning={set_warning}
+      />
 
       <div className="shrink-0 border-b border-slate-200 px-4 py-2">
         <h1 className="text-sm font-semibold tracking-tight text-slate-900">

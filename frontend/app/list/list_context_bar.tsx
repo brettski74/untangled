@@ -11,9 +11,9 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type MutableRefObject,
   type ReactNode,
 } from "react";
-import { useFetcher } from "react-router";
 
 import type { AttributeFieldMeta } from "../generated/field_meta";
 import { attribute_display_label } from "./columns";
@@ -46,10 +46,10 @@ export type ListContextBarProps = {
   list_path: string;
   can_create: boolean;
   attributes: readonly AttributeFieldMeta[];
-  baseline_predicate: SearchPredicate | null;
-  /** Latest search result from loader or prior action. */
-  search: ListSearchPayload;
-  on_search_result: (result: ListSearchPayload) => void;
+  /** Shared with list route / filter editor — always-current effective predicate. */
+  effective_ref: MutableRefObject<SearchPredicate | null>;
+  busy: boolean;
+  submit_predicate: (predicate: SearchPredicate | null) => void;
   /** Controlled quick-filter chrome — owned by DestinationListPage. */
   selected_name: string;
   values: QuickFilterValues;
@@ -70,6 +70,7 @@ const MENU_STUBS = [
 /**
  * Interactive list chrome for the shell context bar (#76).
  * Quick-filter field/values/warning are controlled by the list route.
+ * Predicate submit / fetcher ownership lives on DestinationListPage (#77).
  */
 export function ListContextBar({
   class_display_name,
@@ -77,9 +78,9 @@ export function ListContextBar({
   list_path,
   can_create,
   attributes,
-  baseline_predicate,
-  search,
-  on_search_result,
+  effective_ref,
+  busy,
+  submit_predicate,
   selected_name,
   values,
   warning,
@@ -87,7 +88,6 @@ export function ListContextBar({
   on_values_change,
   on_warning_change,
 }: ListContextBarProps) {
-  const fetcher = useFetcher<ListSearchPayload>();
   const filterable = useMemo(
     () => quick_filterable_attributes(attributes),
     [attributes],
@@ -99,44 +99,9 @@ export function ListContextBar({
   const [menu_open, set_menu_open] = useState(false);
   const [copied, set_copied] = useState(false);
   const menu_id = useId();
-  const effective_ref = useRef<SearchPredicate | null>(
-    search.effective_predicate ?? baseline_predicate,
-  );
-  /** Destination path that the in-flight / latest fetcher submit belongs to. */
-  const fetcher_path_ref = useRef<string | null>(null);
   /** Always-current quick-filter values (Enter must not read a stale render). */
   const values_ref = useRef(values);
   values_ref.current = values;
-
-  useEffect(() => {
-    effective_ref.current =
-      search.effective_predicate ?? baseline_predicate;
-  }, [search.effective_predicate, baseline_predicate]);
-
-  useEffect(() => {
-    fetcher_path_ref.current = null;
-  }, [list_path]);
-
-  useEffect(() => {
-    if (fetcher.state !== "idle" || fetcher.data == null) {
-      return;
-    }
-    if (fetcher_path_ref.current !== list_path) {
-      return;
-    }
-    effective_ref.current = fetcher.data.effective_predicate;
-    on_search_result(fetcher.data);
-  }, [fetcher.state, fetcher.data, on_search_result, list_path]);
-
-  function submit_predicate(predicate: SearchPredicate | null) {
-    const form = new FormData();
-    form.set(
-      "predicate",
-      predicate == null ? "null" : JSON.stringify(predicate),
-    );
-    fetcher_path_ref.current = list_path;
-    void fetcher.submit(form, { method: "post" });
-  }
 
   function on_refresh() {
     on_warning_change(null);
@@ -175,7 +140,6 @@ export function ListContextBar({
 
   const kind =
     selected == null ? null : quick_filter_control_kind(selected.type_name);
-  const busy = fetcher.state !== "idle";
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2 text-xs">
