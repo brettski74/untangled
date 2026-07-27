@@ -19,5 +19,7 @@ describe("ListFilterChrome source contracts", () => {
     expect(source).toMatch(/datetime_side_for_op/);
     expect(source).toMatch(/datetime_default_time_for_op/);
     expect(source).toMatch(/should_clear_value_on_field_change/);
+    expect(source).toMatch(/Time24Field/);
+    expect(source).toMatch(/from "\.\/time_24_field"/);
   });
 });

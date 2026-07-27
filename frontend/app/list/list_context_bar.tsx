@@ -30,6 +30,7 @@ import {
   type QuickFilterValues,
   type SearchPredicate,
 } from "./quick_filter";
+import { Time24Field } from "./time_24_field";
 
 export type ListSearchPayload = {
   rows: Record<string, unknown>[];
@@ -526,12 +527,14 @@ function DatetimeRangeControls({
         disabled={from_parts.date === ""}
         placeholder={from_parts.date === "" ? "" : "HH:mm:ss"}
         aria_label="Quick filter from time (24-hour)"
-        on_commit={(raw) => apply_time("from", raw)}
+        on_commit={(raw) => apply_time("from", raw) != null}
         on_enter={(raw) => {
           const updated = apply_time("from", raw);
           if (updated != null) {
             on_enter(updated);
+            return true;
           }
+          return false;
         }}
       />
       <span className="text-[var(--color-shell-chrome-muted)]">To:</span>
@@ -563,70 +566,17 @@ function DatetimeRangeControls({
         disabled={to_parts.date === ""}
         placeholder={to_parts.date === "" ? "" : "HH:mm:ss"}
         aria_label="Quick filter to time (24-hour)"
-        on_commit={(raw) => apply_time("to", raw)}
+        on_commit={(raw) => apply_time("to", raw) != null}
         on_enter={(raw) => {
           const updated = apply_time("to", raw);
           if (updated != null) {
             on_enter(updated);
+            return true;
           }
+          return false;
         }}
       />
     </div>
-  );
-}
-
-/**
- * Explicit 24-hour time text field. Browser time inputs follow OS locale
- * (often 12h AM/PM); this always edits HH:mm:ss.
- */
-function Time24Field({
-  className,
-  value,
-  disabled,
-  placeholder,
-  aria_label,
-  on_commit,
-  on_enter,
-}: {
-  className: string;
-  value: string;
-  disabled: boolean;
-  placeholder: string;
-  aria_label: string;
-  on_commit: (raw: string) => void;
-  on_enter: (raw: string) => void;
-}) {
-  const [draft, set_draft] = useState(value);
-
-  useEffect(() => {
-    set_draft(value);
-  }, [value]);
-
-  return (
-    <input
-      type="text"
-      inputMode="numeric"
-      autoComplete="off"
-      spellCheck={false}
-      disabled={disabled}
-      placeholder={placeholder}
-      className={className}
-      value={draft}
-      onChange={(event) => set_draft(event.target.value)}
-      onBlur={() => {
-        if (draft !== value) {
-          on_commit(draft);
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          on_enter(draft);
-        }
-      }}
-      aria-label={aria_label}
-      title="24-hour time (HH:mm:ss)"
-    />
   );
 }
 

@@ -39,6 +39,7 @@ import {
   split_datetime_local,
   type SearchPredicate,
 } from "./quick_filter";
+import { Time24Field } from "./time_24_field";
 
 export type ListFilterChromeProps = {
   attributes: readonly AttributeFieldMeta[];
@@ -182,6 +183,7 @@ export function ListFilterChrome({
                   root={draft}
                   filterable={filterable}
                   on_change={set_draft}
+                  on_editor_warning={set_editor_warning}
                 />
               ) : (
                 <p className="mb-2 text-slate-500">No filter (match all).</p>
@@ -255,10 +257,12 @@ function EditorTree({
   root,
   filterable,
   on_change,
+  on_editor_warning,
 }: {
   root: EditorNode;
   filterable: AttributeFieldMeta[];
   on_change: (next: EditorNode | null) => void;
+  on_editor_warning: (warning: string | null) => void;
 }) {
   return (
     <div className="mb-2 space-y-1">
@@ -269,6 +273,7 @@ function EditorTree({
         filterable={filterable}
         root={root}
         on_root_change={on_change}
+        on_editor_warning={on_editor_warning}
       />
     </div>
   );
@@ -281,6 +286,7 @@ function EditorNodeRow({
   filterable,
   root,
   on_root_change,
+  on_editor_warning,
 }: {
   node: EditorNode;
   depth: number;
@@ -288,6 +294,7 @@ function EditorNodeRow({
   filterable: AttributeFieldMeta[];
   root: EditorNode;
   on_root_change: (next: EditorNode | null) => void;
+  on_editor_warning: (warning: string | null) => void;
 }) {
   const indent = depth * 2; // rem via padding — remove control width ~2rem
 
@@ -332,6 +339,7 @@ function EditorNodeRow({
             filterable={filterable}
             root={root}
             on_root_change={on_root_change}
+            on_editor_warning={on_editor_warning}
           />
         ))}
       </div>
@@ -346,6 +354,7 @@ function EditorNodeRow({
       filterable={filterable}
       on_replace={replace}
       on_remove={remove}
+      on_editor_warning={on_editor_warning}
     />
   );
 }
@@ -357,6 +366,7 @@ function LeafRow({
   filterable,
   on_replace,
   on_remove,
+  on_editor_warning,
 }: {
   node: EditorLeaf;
   depth: number;
@@ -364,6 +374,7 @@ function LeafRow({
   filterable: AttributeFieldMeta[];
   on_replace: (next: EditorNode) => void;
   on_remove: () => void;
+  on_editor_warning: (warning: string | null) => void;
 }) {
   const selected =
     filterable.find((attr) => attr.name_snake === node.attribute) ?? null;
@@ -427,6 +438,7 @@ function LeafRow({
           op={node.op}
           value={node.value}
           on_change={(value) => on_replace({ ...node, value })}
+          on_editor_warning={on_editor_warning}
         />
       ) : null}
     </div>
@@ -495,11 +507,13 @@ function ValueControl({
   op,
   value,
   on_change,
+  on_editor_warning,
 }: {
   type_name: string;
   op: string;
   value: unknown;
   on_change: (value: unknown) => void;
+  on_editor_warning: (warning: string | null) => void;
 }) {
   const kind = quick_filter_control_kind(type_name);
   const field_class =
@@ -549,6 +563,22 @@ function ValueControl({
     // Store local combined in the control; commit path converts via Date → ISO.
     const local = iso_to_local_combined(as_string);
     const parts = split_datetime_local(local);
+
+    function commit_datetime_time(raw: string): boolean {
+      const next = apply_datetime_time_change(
+        raw,
+        local,
+        datetime_default_time_for_op(op),
+      );
+      if (!next.ok) {
+        on_editor_warning(next.warning);
+        return false;
+      }
+      on_editor_warning(null);
+      on_change(local_combined_to_iso(next.combined));
+      return true;
+    }
+
     return (
       <div className="flex flex-wrap items-center gap-1">
         <input
@@ -567,24 +597,14 @@ function ValueControl({
             on_change(local_combined_to_iso(combined));
           }}
         />
-        <input
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder="HH:mm:ss"
+        <Time24Field
           className={`${field_class} w-24 font-mono`}
-          aria-label="Time"
           value={parts.time}
-          onChange={(event) => {
-            const next = apply_datetime_time_change(
-              event.target.value,
-              local,
-              datetime_default_time_for_op(op),
-            );
-            if (next.ok) {
-              on_change(local_combined_to_iso(next.combined));
-            }
-          }}
+          disabled={parts.date === ""}
+          placeholder={parts.date === "" ? "" : "HH:mm:ss"}
+          aria_label="Time"
+          on_commit={(raw) => commit_datetime_time(raw)}
+          on_enter={(raw) => commit_datetime_time(raw)}
         />
       </div>
     );
