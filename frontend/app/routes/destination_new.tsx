@@ -5,13 +5,13 @@ import { find_new_option } from "../shell/nav_paths";
 import { DestinationPlaceholder } from "./destination_placeholder";
 import type { Route } from "./+types/destination_new";
 
-export function meta({ data: loader_data }: Route.MetaArgs) {
-  if (loader_data == null) {
+export function meta({ loaderData }: Route.MetaArgs) {
+  if (loaderData == null) {
     return [{ title: "Untangled" }];
   }
   return [
     {
-      title: `${loader_data.section_display_name} — ${loader_data.option_display_name} — Untangled`,
+      title: `${loaderData.section_display_name} — ${loaderData.option_display_name} — Untangled`,
     },
   ];
 }

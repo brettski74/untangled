@@ -28,7 +28,7 @@ function can_read_class(
   );
 }
 
-function can_create_class(
+export function can_create_class(
   permissions: readonly string[],
   class_name: string,
 ): boolean {

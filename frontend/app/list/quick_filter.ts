@@ -1,0 +1,293 @@
+/**
+ * Quick-filter predicate builders for list context bar (#76).
+ * Wire vocabulary only — no new ops or relative-date semantics.
+ */
+import type { AttributeFieldMeta } from "../generated/field_meta";
+import { attributes_in_declaration_order } from "./columns";
+
+export type SearchPredicate = {
+  op: string;
+  attribute?: string;
+  value?: unknown;
+  predicates?: SearchPredicate[];
+  predicate?: SearchPredicate;
+};
+
+export type QuickFilterControlKind =
+  | "text"
+  | "numeric"
+  | "datetime"
+  | "boolean"
+  | "friendly-id";
+
+export type QuickFilterValues = {
+  text?: string;
+  from?: string;
+  to?: string;
+  not?: boolean;
+};
+
+export type QuickFilterBuildResult =
+  | { ok: true; predicates: SearchPredicate[] }
+  | { ok: false; warning: string };
+
+const TEXT_FAMILY = new Set([
+  "string",
+  "compact-text",
+  "choice",
+  "status",
+  "text",
+  "multiline-text",
+]);
+
+/**
+ * Map attribute type to quick-filter control kind.
+ * UUID attributes are unsupported (return null) — human ruling for #76.
+ */
+export function quick_filter_control_kind(
+  type_name: string,
+): QuickFilterControlKind | null {
+  if (TEXT_FAMILY.has(type_name)) {
+    return "text";
+  }
+  switch (type_name) {
+    case "integer":
+    case "float":
+    case "decimal":
+      return "numeric";
+    case "datetime":
+      return "datetime";
+    case "boolean":
+      return "boolean";
+    case "friendly-id":
+      return "friendly-id";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Attributes eligible for the quick-filter picker, in declaration ordinal order.
+ * Fails closed via {@link attributes_in_declaration_order} when ordinals are missing.
+ */
+export function quick_filterable_attributes(
+  attributes: readonly AttributeFieldMeta[],
+): AttributeFieldMeta[] {
+  return attributes_in_declaration_order(attributes).filter(
+    (attr) => quick_filter_control_kind(attr.type_name) != null,
+  );
+}
+
+/**
+ * AND comparison predicates onto an existing effective filter.
+ * Flattens a top-level `and` on the left; otherwise wraps.
+ */
+export function and_predicates(
+  left: SearchPredicate | null | undefined,
+  ...additions: SearchPredicate[]
+): SearchPredicate | null {
+  const parts: SearchPredicate[] = [];
+  if (left != null) {
+    if (left.op === "and" && Array.isArray(left.predicates)) {
+      parts.push(...left.predicates);
+    } else {
+      parts.push(left);
+    }
+  }
+  for (const addition of additions) {
+    parts.push(addition);
+  }
+  if (parts.length === 0) {
+    return null;
+  }
+  if (parts.length === 1) {
+    return parts[0] ?? null;
+  }
+  return { op: "and", predicates: parts };
+}
+
+/**
+ * Build comparison predicate(s) for a quick-filter Enter submit.
+ * Empty text/friendly-id/numeric/datetime values → empty predicates (no-op).
+ * Boolean always emits `eq`.
+ */
+export function build_quick_filter_predicates(
+  attr: AttributeFieldMeta,
+  values: QuickFilterValues,
+): QuickFilterBuildResult {
+  const kind = quick_filter_control_kind(attr.type_name);
+  if (kind == null) {
+    return { ok: false, warning: "This attribute does not support quick filters." };
+  }
+
+  switch (kind) {
+    case "text": {
+      const text = values.text?.trim() ?? "";
+      if (text === "") {
+        return { ok: true, predicates: [] };
+      }
+      return {
+        ok: true,
+        predicates: [
+          { op: "contains", attribute: attr.name_snake, value: text },
+        ],
+      };
+    }
+    case "friendly-id": {
+      const text = values.text?.trim() ?? "";
+      if (text === "") {
+        return { ok: true, predicates: [] };
+      }
+      return {
+        ok: true,
+        predicates: [
+          { op: "ends-with", attribute: attr.name_snake, value: text },
+        ],
+      };
+    }
+    case "boolean":
+      return {
+        ok: true,
+        predicates: [
+          {
+            op: "eq",
+            attribute: attr.name_snake,
+            value: values.not === true ? false : true,
+          },
+        ],
+      };
+    case "numeric":
+      return build_range_predicates(attr, values, parse_numeric);
+    case "datetime":
+      return build_range_predicates(attr, values, parse_datetime);
+  }
+}
+
+function build_range_predicates(
+  attr: AttributeFieldMeta,
+  values: QuickFilterValues,
+  parse: (raw: string) => { ok: true; value: unknown } | { ok: false; warning: string },
+): QuickFilterBuildResult {
+  const from_raw = values.from?.trim() ?? "";
+  const to_raw = values.to?.trim() ?? "";
+  if (from_raw === "" && to_raw === "") {
+    return { ok: true, predicates: [] };
+  }
+
+  let from_value: unknown | undefined;
+  let to_value: unknown | undefined;
+
+  if (from_raw !== "") {
+    const parsed = parse(from_raw);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    from_value = parsed.value;
+  }
+  if (to_raw !== "") {
+    const parsed = parse(to_raw);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    to_value = parsed.value;
+  }
+
+  if (from_value !== undefined && to_value !== undefined) {
+    if (compare_ordered(from_value, to_value) === 0) {
+      return {
+        ok: true,
+        predicates: [
+          { op: "eq", attribute: attr.name_snake, value: from_value },
+        ],
+      };
+    }
+    if (compare_ordered(from_value, to_value) > 0) {
+      return {
+        ok: false,
+        warning: "From must be less than or equal to To.",
+      };
+    }
+  }
+
+  const predicates: SearchPredicate[] = [];
+  if (from_value !== undefined) {
+    predicates.push({
+      op: "gte",
+      attribute: attr.name_snake,
+      value: from_value,
+    });
+  }
+  if (to_value !== undefined) {
+    predicates.push({
+      op: "lt",
+      attribute: attr.name_snake,
+      value: to_value,
+    });
+  }
+  return { ok: true, predicates };
+}
+
+function parse_numeric(
+  raw: string,
+): { ok: true; value: number } | { ok: false; warning: string } {
+  if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+    return { ok: false, warning: "Enter a valid number." };
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    return { ok: false, warning: "Enter a valid number." };
+  }
+  return { ok: true, value };
+}
+
+function parse_datetime(
+  raw: string,
+): { ok: true; value: string } | { ok: false; warning: string } {
+  // datetime-local yields `YYYY-MM-DDTHH:mm` — send as ISO-ish string;
+  // domain adapter accepts datetime strings.
+  if (raw === "") {
+    return { ok: false, warning: "Enter a valid date/time." };
+  }
+  const ms = Date.parse(raw);
+  if (Number.isNaN(ms)) {
+    return { ok: false, warning: "Enter a valid date/time." };
+  }
+  return { ok: true, value: new Date(ms).toISOString() };
+}
+
+function compare_ordered(left: unknown, right: unknown): number {
+  if (typeof left === "number" && typeof right === "number") {
+    return left < right ? -1 : left > right ? 1 : 0;
+  }
+  if (typeof left === "string" && typeof right === "string") {
+    return left < right ? -1 : left > right ? 1 : 0;
+  }
+  return 0;
+}
+
+/**
+ * Parse a predicate JSON form field. Invalid JSON → null (caller treats as match-all
+ * only when explicitly empty; otherwise action should 400).
+ */
+export function parse_predicate_json(
+  raw: FormDataEntryValue | null,
+): { ok: true; predicate: SearchPredicate | null } | { ok: false } {
+  if (raw == null || raw === "") {
+    return { ok: true, predicate: null };
+  }
+  if (typeof raw !== "string") {
+    return { ok: false };
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed === null) {
+      return { ok: true, predicate: null };
+    }
+    if (typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { ok: false };
+    }
+    return { ok: true, predicate: parsed as SearchPredicate };
+  } catch {
+    return { ok: false };
+  }
+}
