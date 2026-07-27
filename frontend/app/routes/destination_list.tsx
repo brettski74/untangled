@@ -18,8 +18,10 @@ import {
   ListContextBar,
   type ListSearchPayload,
 } from "../list/list_context_bar";
+import { list_destination_ui_sync } from "../list/list_destination_sync";
 import {
   parse_predicate_json,
+  type QuickFilterValues,
   type SearchPredicate,
 } from "../list/quick_filter";
 import { search_collection } from "../records/search.server";
@@ -181,28 +183,36 @@ export default function DestinationListPage({
   const { me } = useOutletContext<AuthenticatedOutletContext>();
   const can_create = can_create_class(me.permissions, loaderData.class_name);
 
-  const [search, set_search] = useState<ListSearchPayload>({
-    rows: loaderData.rows,
-    total: loaderData.total,
-    limit: loaderData.limit,
-    offset: loaderData.offset,
-    effective_predicate: loaderData.effective_predicate,
-  });
+  const initial = list_destination_ui_sync(loaderData);
+  const [search, set_search] = useState<ListSearchPayload>(initial.search);
+  const [selected_name, set_selected_name] = useState(
+    initial.quick_filter.selected_name,
+  );
+  const [values, set_values] = useState<QuickFilterValues>(
+    initial.quick_filter.values,
+  );
+  const [warning, set_warning] = useState<string | null>(
+    initial.quick_filter.warning,
+  );
 
   useEffect(() => {
-    set_search({
-      rows: loaderData.rows,
-      total: loaderData.total,
-      limit: loaderData.limit,
-      offset: loaderData.offset,
-      effective_predicate: loaderData.effective_predicate,
-    });
-    // Only re-sync when the list destination changes (not after action posts).
+    const synced = list_destination_ui_sync(loaderData);
+    set_search(synced.search);
+    set_selected_name(synced.quick_filter.selected_name);
+    set_values(synced.quick_filter.values);
+    set_warning(synced.quick_filter.warning);
+    // Same destination identity for search rows and quick-filter chrome.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- path is the list identity
   }, [loaderData.path]);
 
   const on_search_result = useCallback((result: ListSearchPayload) => {
     set_search(result);
+  }, []);
+
+  const on_selected_name_change = useCallback((name: string) => {
+    set_selected_name(name);
+    set_values({});
+    set_warning(null);
   }, []);
 
   return (
@@ -217,6 +227,12 @@ export default function DestinationListPage({
           baseline_predicate={loaderData.baseline_predicate}
           search={search}
           on_search_result={on_search_result}
+          selected_name={selected_name}
+          values={values}
+          warning={warning}
+          on_selected_name_change={on_selected_name_change}
+          on_values_change={set_values}
+          on_warning_change={set_warning}
         />
       </ShellContextBar>
 

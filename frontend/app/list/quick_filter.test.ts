@@ -6,6 +6,8 @@ import {
   build_quick_filter_predicates,
   parse_predicate_json,
   quick_filter_control_kind,
+  quick_filter_destination_reset,
+  quick_filter_ui_defaults,
   quick_filterable_attributes,
 } from "./quick_filter";
 
@@ -64,6 +66,66 @@ describe("quick_filterable_attributes", () => {
         },
       ]),
     ).toThrow(/missing a valid declaration order ordinal/);
+  });
+});
+
+describe("quick_filter_ui_defaults", () => {
+  const incidentish = [
+    attr({ name_snake: "number", type_name: "friendly-id", order: 0 }),
+    attr({ name_snake: "summary", type_name: "text", order: 1 }),
+    attr({ name_snake: "status", type_name: "status", order: 2 }),
+  ];
+
+  it("selects the first filterable attribute with empty values", () => {
+    expect(quick_filter_ui_defaults(incidentish)).toEqual({
+      selected_name: "number",
+      values: {},
+    });
+  });
+
+  it("clears values even when the default attribute name is unchanged", () => {
+    // Same-class nav options share the same first filterable field; remount /
+    // defaults must still wipe typed values, not only change selected_name.
+    const dirty = { selected_name: "summary", values: { text: "outage" } };
+    const reset = quick_filter_ui_defaults(incidentish);
+    expect(reset.selected_name).toBe("number");
+    expect(reset.values).toEqual({});
+    expect(reset).not.toMatchObject(dirty);
+  });
+});
+
+describe("quick_filter_destination_reset", () => {
+  const change_requestish = [
+    attr({ name_snake: "number", type_name: "friendly-id", order: 0 }),
+    attr({ name_snake: "risk_score", type_name: "integer", order: 1 }),
+    attr({ name_snake: "summary", type_name: "text", order: 2 }),
+  ];
+
+  it("resets field, values, and ephemeral chrome for a new destination", () => {
+    expect(quick_filter_destination_reset(change_requestish)).toEqual({
+      selected_name: "number",
+      values: {},
+      warning: null,
+      menu_open: false,
+      copied: false,
+    });
+  });
+
+  it("clears dirty values when the default attribute name is unchanged", () => {
+    const dirty = {
+      selected_name: "risk_score",
+      values: { from: "55" },
+      warning: "From must be ≤ To",
+      menu_open: true,
+      copied: true,
+    };
+    const reset = quick_filter_destination_reset(change_requestish);
+    expect(reset.selected_name).toBe("number");
+    expect(reset.values).toEqual({});
+    expect(reset.warning).toBeNull();
+    expect(reset.menu_open).toBe(false);
+    expect(reset.copied).toBe(false);
+    expect(reset).not.toMatchObject(dirty);
   });
 });
 

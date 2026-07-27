@@ -37,6 +37,7 @@ export type ListSearchPayload = {
 export type ListContextBarProps = {
   class_display_name: string;
   collection: string;
+  /** Same destination identity as DestinationListPage path sync (`loaderData.path`). */
   list_path: string;
   can_create: boolean;
   attributes: readonly AttributeFieldMeta[];
@@ -44,6 +45,13 @@ export type ListContextBarProps = {
   /** Latest search result from loader or prior action. */
   search: ListSearchPayload;
   on_search_result: (result: ListSearchPayload) => void;
+  /** Controlled quick-filter chrome — owned by DestinationListPage. */
+  selected_name: string;
+  values: QuickFilterValues;
+  warning: string | null;
+  on_selected_name_change: (name: string) => void;
+  on_values_change: (values: QuickFilterValues) => void;
+  on_warning_change: (warning: string | null) => void;
 };
 
 const MENU_STUBS = [
@@ -56,6 +64,7 @@ const MENU_STUBS = [
 
 /**
  * Interactive list chrome for the shell context bar (#76).
+ * Quick-filter field/values/warning are controlled by the list route.
  */
 export function ListContextBar({
   class_display_name,
@@ -66,27 +75,30 @@ export function ListContextBar({
   baseline_predicate,
   search,
   on_search_result,
+  selected_name,
+  values,
+  warning,
+  on_selected_name_change,
+  on_values_change,
+  on_warning_change,
 }: ListContextBarProps) {
   const fetcher = useFetcher<ListSearchPayload>();
   const filterable = useMemo(
     () => quick_filterable_attributes(attributes),
     [attributes],
   );
-  const [selected_name, set_selected_name] = useState(
-    () => filterable[0]?.name_snake ?? "",
-  );
   const selected =
     filterable.find((attr) => attr.name_snake === selected_name) ??
     filterable[0] ??
     null;
-  const [values, set_values] = useState<QuickFilterValues>({});
-  const [warning, set_warning] = useState<string | null>(null);
   const [menu_open, set_menu_open] = useState(false);
   const [copied, set_copied] = useState(false);
   const menu_id = useId();
   const effective_ref = useRef<SearchPredicate | null>(
     search.effective_predicate ?? baseline_predicate,
   );
+  /** Destination path that the in-flight / latest fetcher submit belongs to. */
+  const fetcher_path_ref = useRef<string | null>(null);
 
   useEffect(() => {
     effective_ref.current =
@@ -94,16 +106,19 @@ export function ListContextBar({
   }, [search.effective_predicate, baseline_predicate]);
 
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data != null) {
-      effective_ref.current = fetcher.data.effective_predicate;
-      on_search_result(fetcher.data);
-    }
-  }, [fetcher.state, fetcher.data, on_search_result]);
+    fetcher_path_ref.current = null;
+  }, [list_path]);
 
   useEffect(() => {
-    set_values({});
-    set_warning(null);
-  }, [selected_name]);
+    if (fetcher.state !== "idle" || fetcher.data == null) {
+      return;
+    }
+    if (fetcher_path_ref.current !== list_path) {
+      return;
+    }
+    effective_ref.current = fetcher.data.effective_predicate;
+    on_search_result(fetcher.data);
+  }, [fetcher.state, fetcher.data, on_search_result, list_path]);
 
   function submit_predicate(predicate: SearchPredicate | null) {
     const form = new FormData();
@@ -111,11 +126,12 @@ export function ListContextBar({
       "predicate",
       predicate == null ? "null" : JSON.stringify(predicate),
     );
+    fetcher_path_ref.current = list_path;
     void fetcher.submit(form, { method: "post" });
   }
 
   function on_refresh() {
-    set_warning(null);
+    on_warning_change(null);
     submit_predicate(effective_ref.current);
   }
 
@@ -125,14 +141,14 @@ export function ListContextBar({
     }
     const built = build_quick_filter_predicates(selected, values);
     if (!built.ok) {
-      set_warning(built.warning);
+      on_warning_change(built.warning);
       return;
     }
     if (built.predicates.length === 0) {
-      set_warning(null);
+      on_warning_change(null);
       return;
     }
-    set_warning(null);
+    on_warning_change(null);
     const next = and_predicates(effective_ref.current, ...built.predicates);
     submit_predicate(next);
   }
@@ -144,7 +160,7 @@ export function ListContextBar({
       set_copied(true);
       window.setTimeout(() => set_copied(false), 1500);
     } catch {
-      set_warning("Could not copy link.");
+      on_warning_change("Could not copy link.");
     }
   }
 
@@ -195,7 +211,8 @@ export function ListContextBar({
               id={`${menu_id}-field`}
               className="h-7 max-w-40 rounded border border-[var(--color-shell-separator)] bg-[var(--color-shell-chrome)] px-1 text-[var(--color-shell-chrome-fg)]"
               value={selected.name_snake}
-              onChange={(event) => set_selected_name(event.target.value)}
+              autoComplete="off"
+              onChange={(event) => on_selected_name_change(event.target.value)}
             >
               {filterable.map((attr) => (
                 <option key={attr.name_snake} value={attr.name_snake}>
@@ -206,7 +223,7 @@ export function ListContextBar({
             <QuickFilterControls
               kind={kind}
               values={values}
-              set_values={set_values}
+              set_values={on_values_change}
               on_enter={on_quick_filter_enter}
             />
           </div>
@@ -337,6 +354,7 @@ function QuickFilterControls({
     return (
       <input
         type="text"
+        autoComplete="off"
         className="h-7 w-36 rounded border border-[var(--color-shell-separator)] bg-[var(--color-shell-chrome)] px-2 text-[var(--color-shell-chrome-fg)]"
         value={values.text ?? ""}
         onChange={(event) =>
@@ -379,6 +397,7 @@ function QuickFilterControls({
         <input
           type={input_type}
           inputMode={input_mode}
+          autoComplete="off"
           className="h-7 w-32 rounded border border-[var(--color-shell-separator)] bg-[var(--color-shell-chrome)] px-1 text-[var(--color-shell-chrome-fg)]"
           value={values.from ?? ""}
           onChange={(event) =>
@@ -393,6 +412,7 @@ function QuickFilterControls({
         <input
           type={input_type}
           inputMode={input_mode}
+          autoComplete="off"
           className="h-7 w-32 rounded border border-[var(--color-shell-separator)] bg-[var(--color-shell-chrome)] px-1 text-[var(--color-shell-chrome-fg)]"
           value={values.to ?? ""}
           onChange={(event) =>

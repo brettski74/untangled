@@ -79,6 +79,45 @@ export function quick_filterable_attributes(
 }
 
 /**
+ * Default quick-filter chrome after mounting a list destination (or remount on nav).
+ * First filterable attribute + empty values — independent of prior session edits.
+ */
+export function quick_filter_ui_defaults(
+  attributes: readonly AttributeFieldMeta[],
+): { selected_name: string; values: QuickFilterValues } {
+  const filterable = quick_filterable_attributes(attributes);
+  return {
+    selected_name: filterable[0]?.name_snake ?? "",
+    values: {},
+  };
+}
+
+export type QuickFilterDestinationReset = {
+  selected_name: string;
+  values: QuickFilterValues;
+  warning: string | null;
+  menu_open: boolean;
+  copied: boolean;
+};
+
+/**
+ * Full chrome reset when the list destination identity changes (nav list switch).
+ * Clears values even when the default attribute name is unchanged.
+ */
+export function quick_filter_destination_reset(
+  attributes: readonly AttributeFieldMeta[],
+): QuickFilterDestinationReset {
+  const defaults = quick_filter_ui_defaults(attributes);
+  return {
+    selected_name: defaults.selected_name,
+    values: defaults.values,
+    warning: null,
+    menu_open: false,
+    copied: false,
+  };
+}
+
+/**
  * AND comparison predicates onto an existing effective filter.
  * Flattens a top-level `and` on the left; otherwise wraps.
  */

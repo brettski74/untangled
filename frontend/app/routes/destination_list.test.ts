@@ -252,3 +252,21 @@ describe("destination_list shouldRevalidate", () => {
     ).toBe(true);
   });
 });
+
+describe("destination_list context bar destination identity", () => {
+  it("resyncs search and quick-filter together on loaderData.path", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./destination_list.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/list_destination_ui_sync\(loaderData\)/);
+    expect(source).toMatch(
+      /set_selected_name\(synced\.quick_filter\.selected_name\)/,
+    );
+    expect(source).toMatch(/set_values\(synced\.quick_filter\.values\)/);
+    expect(source).toMatch(
+      /\/\/ Same destination identity[\s\S]*\[loaderData\.path\]/,
+    );
+  });
+});
