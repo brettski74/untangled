@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AttributeFieldMeta } from "../generated/field_meta";
-import { render_predicate_text } from "./predicate_text";
+import { format_datetime_text, render_predicate_text } from "./predicate_text";
 
 function attr(
   overrides: Partial<AttributeFieldMeta> &
@@ -26,6 +26,12 @@ const attrs = [
   attr({ name_snake: "description", type_name: "multiline-text", order: 5 }),
   attr({ name_snake: "active", type_name: "boolean", order: 6 }),
 ];
+
+function local_datetime_text(iso: string): string {
+  const value = new Date(Date.parse(iso));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+}
 
 describe("render_predicate_text", () => {
   it("returns empty for match-all", () => {
@@ -90,7 +96,7 @@ describe("render_predicate_text", () => {
         },
         attrs,
       ),
-    ).toBe("Scheduled Start = 2026-07-14 01:02:03");
+    ).toBe(`Scheduled Start = ${local_datetime_text("2026-07-14T01:02:03.000Z")}`);
   });
 
   it("renders text-pattern and null-check ops", () => {
@@ -181,5 +187,36 @@ describe("render_predicate_text", () => {
         attrs,
       ),
     ).toBe('Status = "resolved"');
+  });
+
+  it("renders timezone-bearing datetime instants in local wall time", () => {
+    expect(format_datetime_text("2026-07-14T05:02:34.000Z")).toBe(
+      local_datetime_text("2026-07-14T05:02:34.000Z"),
+    );
+    expect(format_datetime_text("2026-07-14T06:02:34+01:00")).toBe(
+      local_datetime_text("2026-07-14T06:02:34+01:00"),
+    );
+  });
+
+  it("preserves timezone-free local datetime strings", () => {
+    expect(format_datetime_text("2026-07-14T01:02:34")).toBe(
+      "2026-07-14 01:02:34",
+    );
+    expect(format_datetime_text("2026-07-14 01:02")).toBe(
+      "2026-07-14 01:02:00",
+    );
+  });
+
+  it("fails closed for invalid timezone-bearing datetime strings", () => {
+    expect(
+      render_predicate_text(
+        {
+          op: "eq",
+          attribute: "scheduled_start",
+          value: "2026-07-14T05:02:34Z-nope",
+        },
+        attrs,
+      ),
+    ).toBe('Scheduled Start = "2026-07-14T05:02:34Z-nope"');
   });
 });

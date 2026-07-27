@@ -212,10 +212,18 @@ function looks_like_datetime(raw: string): boolean {
  * Stable human form `YYYY-MM-DD HH:MM:SS` from ISO or already-spaced local strings.
  */
 export function format_datetime_text(raw: string): string | null {
-  const spaced = raw.includes("T") ? raw.replace("T", " ") : raw;
+  const trimmed = raw.trim();
+  if (has_timezone_suffix(trimmed)) {
+    const ms = Date.parse(trimmed);
+    if (Number.isNaN(ms)) {
+      return null;
+    }
+    return format_local_datetime_parts(new Date(ms));
+  }
+  const spaced = trimmed.includes("T") ? trimmed.replace("T", " ") : trimmed;
   const match =
-    /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(
-      spaced.trim(),
+    /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?(?:\.\d+)?$/.exec(
+      spaced,
     );
   if (match == null) {
     return null;
@@ -224,4 +232,13 @@ export function format_datetime_text(raw: string): string | null {
   const hm = match[2];
   const seconds = match[3] ?? "00";
   return `${date} ${hm}:${seconds}`;
+}
+
+function has_timezone_suffix(raw: string): boolean {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+}
+
+function format_local_datetime_parts(value: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
 }
