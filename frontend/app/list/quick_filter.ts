@@ -67,6 +67,21 @@ export function quick_filter_control_kind(
 }
 
 /**
+ * Whether changing field should clear the row value (#77).
+ * Keys off control kind (text family, numeric, etc.), not raw schema type_name.
+ */
+export function should_clear_value_on_field_change(
+  prev_type: string | null,
+  next_type: string | null,
+): boolean {
+  const prev_kind =
+    prev_type == null ? null : quick_filter_control_kind(prev_type);
+  const next_kind =
+    next_type == null ? null : quick_filter_control_kind(next_type);
+  return prev_kind !== next_kind;
+}
+
+/**
  * Attributes eligible for the quick-filter picker, in declaration ordinal order.
  * Fails closed via {@link attributes_in_declaration_order} when ordinals are missing.
  */
@@ -208,6 +223,22 @@ export const DATETIME_FROM_DEFAULT_TIME = "00:00:00";
 
 /** Default time when a To date is chosen (end of day, second resolution). */
 export const DATETIME_TO_DEFAULT_TIME = "23:59:59";
+
+/**
+ * Quick-filter From/To side for a comparison op. Upper-bound ops default to
+ * end-of-day; all other value-taking ops default to start-of-day. Also used by
+ * the filter editor datetime value control.
+ */
+export function datetime_side_for_op(op: string): "from" | "to" {
+  return op === "lt" || op === "lte" ? "to" : "from";
+}
+
+/** Default missing time for a comparison op in datetime value controls. */
+export function datetime_default_time_for_op(op: string): string {
+  return datetime_side_for_op(op) === "to"
+    ? DATETIME_TO_DEFAULT_TIME
+    : DATETIME_FROM_DEFAULT_TIME;
+}
 
 /**
  * Split a stored local datetime (`YYYY-MM-DDTHH:mm[:ss]`) for date/time inputs.

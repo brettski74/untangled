@@ -9,12 +9,15 @@ import {
   combine_datetime_local,
   DATETIME_FROM_DEFAULT_TIME,
   DATETIME_TO_DEFAULT_TIME,
+  datetime_default_time_for_op,
+  datetime_side_for_op,
   parse_predicate_json,
   parse_time_24h,
   quick_filter_control_kind,
   quick_filter_destination_reset,
   quick_filter_ui_defaults,
   quick_filterable_attributes,
+  should_clear_value_on_field_change,
   split_datetime_local,
 } from "./quick_filter";
 
@@ -47,6 +50,48 @@ describe("quick_filter_control_kind", () => {
   it("rejects uuid and unknown types", () => {
     expect(quick_filter_control_kind("uuid")).toBeNull();
     expect(quick_filter_control_kind("mystery")).toBeNull();
+  });
+});
+
+describe("should_clear_value_on_field_change", () => {
+  it("preserves value within the same control kind (both directions)", () => {
+    expect(
+      should_clear_value_on_field_change("text", "multiline-text"),
+    ).toBe(false);
+    expect(
+      should_clear_value_on_field_change("multiline-text", "text"),
+    ).toBe(false);
+    expect(should_clear_value_on_field_change("text", "status")).toBe(false);
+    expect(should_clear_value_on_field_change("status", "choice")).toBe(false);
+    expect(
+      should_clear_value_on_field_change("datetime", "datetime"),
+    ).toBe(false);
+    expect(should_clear_value_on_field_change("integer", "float")).toBe(false);
+    expect(should_clear_value_on_field_change("float", "decimal")).toBe(false);
+  });
+
+  it("clears value when control kind changes (both directions)", () => {
+    expect(should_clear_value_on_field_change("text", "integer")).toBe(true);
+    expect(should_clear_value_on_field_change("integer", "text")).toBe(true);
+    expect(
+      should_clear_value_on_field_change("text", "friendly-id"),
+    ).toBe(true);
+    expect(
+      should_clear_value_on_field_change("friendly-id", "text"),
+    ).toBe(true);
+    expect(
+      should_clear_value_on_field_change("datetime", "text"),
+    ).toBe(true);
+    expect(
+      should_clear_value_on_field_change("text", "datetime"),
+    ).toBe(true);
+  });
+
+  it("clears when either side has no control kind", () => {
+    expect(should_clear_value_on_field_change("text", "uuid")).toBe(true);
+    expect(should_clear_value_on_field_change("uuid", "text")).toBe(true);
+    expect(should_clear_value_on_field_change("text", null)).toBe(true);
+    expect(should_clear_value_on_field_change(null, "text")).toBe(true);
   });
 });
 
@@ -300,6 +345,49 @@ describe("build_quick_filter_predicates", () => {
         { text: "anything" },
       ),
     ).toMatchObject({ ok: false });
+  });
+});
+
+describe("datetime defaults by comparison op", () => {
+  it("maps lt/lte to end-of-day and other ops to start-of-day", () => {
+    expect(datetime_side_for_op("lt")).toBe("to");
+    expect(datetime_side_for_op("lte")).toBe("to");
+    expect(datetime_side_for_op("eq")).toBe("from");
+    expect(datetime_side_for_op("gt")).toBe("from");
+    expect(datetime_side_for_op("gte")).toBe("from");
+    expect(datetime_side_for_op("ne")).toBe("from");
+
+    expect(datetime_default_time_for_op("lt")).toBe(DATETIME_TO_DEFAULT_TIME);
+    expect(datetime_default_time_for_op("lte")).toBe(DATETIME_TO_DEFAULT_TIME);
+    expect(datetime_default_time_for_op("eq")).toBe(DATETIME_FROM_DEFAULT_TIME);
+    expect(datetime_default_time_for_op("gt")).toBe(DATETIME_FROM_DEFAULT_TIME);
+  });
+
+  it("apply_datetime_date_change uses op-derived side for filter editor defaults", () => {
+    expect(
+      apply_datetime_date_change(
+        datetime_side_for_op("lte"),
+        "2026-09-30",
+        undefined,
+      ),
+    ).toBe("2026-09-30T23:59:59");
+    expect(
+      apply_datetime_date_change(
+        datetime_side_for_op("gt"),
+        "2026-07-14",
+        undefined,
+      ),
+    ).toBe("2026-07-14T00:00:00");
+  });
+
+  it("apply_datetime_time_change uses op-derived default when time is cleared", () => {
+    expect(
+      apply_datetime_time_change(
+        "",
+        "2026-09-30T14:00:00",
+        datetime_default_time_for_op("lte"),
+      ),
+    ).toEqual({ ok: true, combined: "2026-09-30T23:59:59" });
   });
 });
 
