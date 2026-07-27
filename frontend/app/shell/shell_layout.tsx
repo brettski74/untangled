@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { ShellContextBar } from "./context_bar";
 import type { NavBarView } from "./nav_schema";
 import { ShellHeader } from "./header";
 import { ShellNavRail } from "./nav_rail";
@@ -34,10 +35,7 @@ export function ShellLayout({
         <ShellNavRail nav={nav} />
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div
-            className="h-10 shrink-0 border-b border-[var(--color-shell-separator)] bg-[var(--color-shell-context)]"
-            aria-hidden="true"
-          />
+          <ShellContextBar />
           <main
             id="main-content"
             tabIndex={-1}
