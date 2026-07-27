@@ -5,7 +5,7 @@ import { find_new_option } from "../shell/nav_paths";
 import { DestinationPlaceholder } from "./destination_placeholder";
 import type { Route } from "./+types/destination_new";
 
-export function meta({ data: loader_data }: Route.MetaArgs) {
+export function meta({ loaderData: loader_data }: Route.MetaArgs) {
   if (loader_data == null) {
     return [{ title: "Untangled" }];
   }
