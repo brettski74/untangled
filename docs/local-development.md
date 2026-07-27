@@ -274,6 +274,8 @@ Six incident rows and fourteen change-request rows are seeded; full stable UUID 
 | `make` or `make help` | List targets with one-line descriptions |
 | `make up` | Build and start postgres + api + web via Compose (does **not** migrate or seed) |
 | `make down` | Stop the Compose stack (keeps the named DB volume) |
+| `make reinstall` | Wipe named DB volume, then `up` → `migrate` → `seed` (add `WITH_HOST_INSTALL=1` to also run `make install`) |
+| `make reinstall-keep-data` | Same as `reinstall` but keeps the Postgres volume (`make down` only) |
 | `make db-up` | Start PostgreSQL only (for host-run tests / persistence) |
 | `make db-down` | Stop the Compose PostgreSQL service |
 | `make db-wait` | Wait until PostgreSQL accepts connections |
