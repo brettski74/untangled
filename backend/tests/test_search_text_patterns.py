@@ -52,10 +52,18 @@ def test_regexp_binds_raw_pattern(incident_attrs: dict) -> None:
 
 
 def test_text_pattern_type_matrix(incident_attrs: dict) -> None:
-    # string + friendly-id accepted
+    # text-family + friendly-id accepted (summary is ``text`` after #80)
     for op in ("contains", "starts-with", "ends-with", "regexp"):
         _compile_predicate_root(
             {"op": op, "attribute": "summary", "value": "x"},
+            incident_attrs,
+        )
+        _compile_predicate_root(
+            {"op": op, "attribute": "description", "value": "x"},
+            incident_attrs,
+        )
+        _compile_predicate_root(
+            {"op": op, "attribute": "status", "value": "new"},
             incident_attrs,
         )
         _compile_predicate_root(

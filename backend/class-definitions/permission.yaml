@@ -8,12 +8,12 @@ description: >
   with the key when present.
 attributes:
   key:
-    type: string
+    type: compact-text
     required: true
     unique: true
   class-name:
-    type: string
+    type: compact-text
     required: false
   operation:
-    type: string
+    type: compact-text
     required: false

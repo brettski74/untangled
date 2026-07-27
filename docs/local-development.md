@@ -182,10 +182,21 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 | `not-empty` | *(none)* | `IS NOT NULL` |
 
 - `eq` / `ne` / `empty` / `not-empty` apply to **all** mapped attribute types (including system fields).
-- `gt` / `gte` / `lt` / `lte` apply to ordered types: **`string`**, **`integer`**, **`float`**, **`decimal`**, **`datetime`**, **`friendly-id`**. **Not** `boolean` or `uuid` (including FK uuid attributes) → **422**.
-- `contains` / `starts-with` / `ends-with` / `regexp` apply only to **`string`** and **`friendly-id`**. Other types → **422**.
+- `gt` / `gte` / `lt` / `lte` apply to ordered types: **text-family** types
+  (`compact-text`, `choice`, `status`, `text`, `multiline-text`, and deprecated
+  `string`), plus **`integer`**, **`float`**, **`decimal`**, **`datetime`**,
+  **`friendly-id`**. **Not** `boolean` or `uuid` (including FK uuid attributes)
+  → **422**.
+- `contains` / `starts-with` / `ends-with` / `regexp` apply to the **text
+  family** and **`friendly-id`**. Other types → **422**.
+  **Note:** `multiline-text` keeps the same operator eligibility as short text
+  for M1 consistency; pattern/ordered filters on long bodies may scan heavily
+  and are tracked as follow-on performance debt (predicate model / U8).
 - Text comparisons are **case-sensitive**. No trim; no implicit casting across incompatible types.
-- **Ordered text filters** (`gt` / `gte` / `lt` / `lte` on `string` / `friendly-id`) use PostgreSQL `COLLATE "C"` (byte/codepoint order) so results are deterministic across database locales. Non-ASCII codepoints sort after all ASCII. This is not the same as Unicode locale ordering.
+- **Ordered text filters** (`gt` / `gte` / `lt` / `lte` on text-family /
+  `friendly-id`) use PostgreSQL `COLLATE "C"` (byte/codepoint order) so results
+  are deterministic across database locales. Non-ASCII codepoints sort after all
+  ASCII. This is not the same as Unicode locale ordering.
 - **Text `sort` collation** still uses the database default (may disagree with C-ordered filters in the same request). Aligning sort with filter collation and case-insensitive search is deferred ([#61](https://github.com/brettski74/untangled/issues/61)).
 - **NULL and ordered / equality ops:** rows with a NULL attribute do not match `eq` / `ne` / `gt` / `gte` / `lt` / `lte` (SQL three-valued logic). `lt X` and `gte X` therefore do **not** partition the table. Optional booleans are tri-state: unset (`NULL`) matches neither `eq true` nor `eq false` — use `empty` / `not-empty`, or prefer required booleans once schema defaults/backfill exist ([#62](https://github.com/brettski74/untangled/issues/62)). Use `empty` / `not-empty` for null checks — `value: null` on value-taking ops → **422**.
 - **`risk_score` (Change Request):** optional integer; M1 seed/docs convention is **0–100** (not yet range-validated by the API).

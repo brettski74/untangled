@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from uuid import UUID
 
 import yaml
 
@@ -13,11 +16,29 @@ from untangled.mapping.types import (
     DEFAULT_FRIENDLY_ID_PAD_WIDTH,
     MIN_FRIENDLY_ID_PAD_WIDTH,
     SUPPORTED_TYPES,
+    TEXT_STORAGE_FAMILY,
 )
 
 
 class DefinitionError(ValueError):
     """Raised when a class definition file is invalid."""
+
+
+class DeprecatedStringTypeWarning(DeprecationWarning):
+    """Emitted when a class definition still uses deprecated type ``string``.
+
+    Prefer ``compact-text`` (or a more specific text-family type). Behaviour is
+    identical to ``compact-text``. Shown by default for this module via the
+    filter below (``DeprecationWarning`` is otherwise filtered for imports).
+    """
+
+
+# Make ``string`` deprecations visible for imported loaders (pytest, API, migrate).
+warnings.filterwarnings(
+    "default",
+    category=DeprecatedStringTypeWarning,
+    module=r"untangled\.mapping\.definition",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +52,8 @@ class AttributeDefinition:
     # Kebab-case class name this attribute references (FK to that table's ``id``).
     references: str | None = None
     unique: bool = False
+    # Create-form UX default (JSON-serializable scalar); not a DB column DEFAULT.
+    create_default: str | int | float | bool | None = None
     # friendly-id only:
     prefix: str | None = None
     pad_width: int = DEFAULT_FRIENDLY_ID_PAD_WIDTH
@@ -139,6 +162,13 @@ def load_definition(path: Path) -> ClassDefinition:
                 f"{path}: attribute '{attr_kebab}' has unsupported type "
                 f"{type_name!r}; expected one of {sorted(SUPPORTED_TYPES)}"
             )
+        if type_name == "string":
+            warnings.warn(
+                f"{path}: attribute '{attr_kebab}' uses deprecated type "
+                f"'string'; prefer 'compact-text' (behaviour is identical)",
+                DeprecatedStringTypeWarning,
+                stacklevel=2,
+            )
 
         required = spec.get("required", False)
         if not isinstance(required, bool):
@@ -162,6 +192,12 @@ def load_definition(path: Path) -> ClassDefinition:
         if not isinstance(unique, bool):
             raise DefinitionError(f"{path}: attribute '{attr_kebab}'.unique must be a boolean")
 
+        create_default: str | int | float | bool | None = None
+        if "create-default" in spec:
+            create_default = _parse_create_default(
+                path, attr_kebab, type_name, spec.get("create-default")
+            )
+
         prefix: str | None = None
         pad_width = DEFAULT_FRIENDLY_ID_PAD_WIDTH
         start_at: int | None = None
@@ -175,6 +211,10 @@ def load_definition(path: Path) -> ClassDefinition:
             if references is not None:
                 raise DefinitionError(
                     f"{path}: attribute '{attr_kebab}' friendly-id cannot have references"
+                )
+            if create_default is not None:
+                raise DefinitionError(
+                    f"{path}: attribute '{attr_kebab}' friendly-id cannot have create-default"
                 )
             prefix_raw = spec.get("prefix")
             if not isinstance(prefix_raw, str) or not prefix_raw.strip():
@@ -223,7 +263,7 @@ def load_definition(path: Path) -> ClassDefinition:
                     f"{path}: attribute '{attr_kebab}' has friendly-id-only keys "
                     f"(prefix/pad-width/start-at) but type is {type_name!r}"
                 )
-            allowed = {"type", "required", "references", "unique"}
+            allowed = {"type", "required", "references", "unique", "create-default"}
 
         unknown = set(spec) - allowed
         if unknown:
@@ -239,6 +279,7 @@ def load_definition(path: Path) -> ClassDefinition:
                 required=required,
                 references=references,
                 unique=unique,
+                create_default=create_default,
                 prefix=prefix,
                 pad_width=pad_width,
                 start_at=start_at,
@@ -288,6 +329,55 @@ def _validate_friendly_id_prefixes(definitions: list[ClassDefinition]) -> None:
                     f"case-insensitive)"
                 )
             seen[key] = (defn.source_path, attr.prefix)
+
+
+def _parse_create_default(
+    path: Path,
+    attr_kebab: str,
+    type_name: str,
+    raw: object,
+) -> str | int | float | bool:
+    """Validate and normalize a YAML ``create-default`` value."""
+    label = f"{path}: attribute '{attr_kebab}'.create-default"
+    if raw is None:
+        raise DefinitionError(
+            f"{label} must not be null; omit the key when there is no default"
+        )
+    if type_name in TEXT_STORAGE_FAMILY:
+        if not isinstance(raw, str):
+            raise DefinitionError(f"{label} must be a string for type {type_name!r}")
+        return raw
+    if type_name == "boolean":
+        if not isinstance(raw, bool):
+            raise DefinitionError(f"{label} must be a boolean")
+        return raw
+    if type_name == "integer":
+        if not isinstance(raw, int) or isinstance(raw, bool):
+            raise DefinitionError(f"{label} must be an integer")
+        return raw
+    if type_name == "float":
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise DefinitionError(f"{label} must be a number")
+        return float(raw)
+    if type_name == "decimal":
+        if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+            raise DefinitionError(f"{label} must be a decimal string or number")
+        try:
+            return format(Decimal(str(raw)), "f")
+        except (InvalidOperation, ValueError) as exc:
+            raise DefinitionError(f"{label} is not a valid decimal") from exc
+    if type_name == "uuid":
+        if not isinstance(raw, str):
+            raise DefinitionError(f"{label} must be a UUID string")
+        try:
+            return str(UUID(raw))
+        except ValueError as exc:
+            raise DefinitionError(f"{label} is not a valid UUID") from exc
+    if type_name == "datetime":
+        if not isinstance(raw, str) or not raw.strip():
+            raise DefinitionError(f"{label} must be a non-empty ISO-8601 datetime string")
+        return raw.strip()
+    raise DefinitionError(f"{label} is not supported for type {type_name!r}")
 
 
 def _require_kebab(value: str, path: Path, label: str) -> None:

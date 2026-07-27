@@ -6,6 +6,11 @@ from __future__ import annotations
 SUPPORTED_TYPES: frozenset[str] = frozenset(
     {
         "string",
+        "compact-text",
+        "choice",
+        "status",
+        "text",
+        "multiline-text",
         "boolean",
         "integer",
         "float",
@@ -16,9 +21,33 @@ SUPPORTED_TYPES: frozenset[str] = frozenset(
     }
 )
 
+# YAML types that map to the same PostgreSQL ``text`` column type. Intra-family
+# renames must not emit migrate DDL (see ``YAML_TO_POSTGRES`` / schema diff).
+TEXT_STORAGE_FAMILY: frozenset[str] = frozenset(
+    {
+        "string",
+        "compact-text",
+        "choice",
+        "status",
+        "text",
+        "multiline-text",
+    }
+)
+
 # Human-oriented notes for docs and errors.
 TYPE_DESCRIPTIONS: dict[str, str] = {
-    "string": "UTF-8 text",
+    "string": (
+        "Deprecated alias for compact-text (UTF-8 text); prefer compact-text"
+    ),
+    "compact-text": "Free-form UTF-8 text (compact UI section)",
+    "choice": (
+        "Restricted value set later; M1 unconstrained UTF-8 text (compact UI)"
+    ),
+    "status": (
+        "Special choice later; M1 unconstrained UTF-8 text (compact UI)"
+    ),
+    "text": "UTF-8 text (full-width single-line UI section)",
+    "multiline-text": "UTF-8 text (full-width multiline UI section)",
     "boolean": "True/false",
     "integer": "Whole number",
     "float": "Floating-point number",
@@ -30,6 +59,9 @@ TYPE_DESCRIPTIONS: dict[str, str] = {
         "PostgreSQL text; environment-local"
     ),
 }
+
+assert TEXT_STORAGE_FAMILY <= SUPPORTED_TYPES
+assert set(TYPE_DESCRIPTIONS) == SUPPORTED_TYPES
 
 DEFAULT_FRIENDLY_ID_PAD_WIDTH = 8
 MIN_FRIENDLY_ID_PAD_WIDTH = 4

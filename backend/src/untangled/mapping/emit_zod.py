@@ -7,6 +7,7 @@ from pathlib import Path
 from untangled.mapping.definition import AttributeDefinition, ClassDefinition
 from untangled.mapping.naming import snake_to_pascal
 from untangled.mapping.system_fields import SYSTEM_FIELDS
+from untangled.mapping.types import SUPPORTED_TYPES
 
 _HEADER = """\
 /**
@@ -26,6 +27,11 @@ const decimalString = z
 
 _ZOD_TYPE: dict[str, str] = {
     "string": "z.string()",
+    "compact-text": "z.string()",
+    "choice": "z.string()",
+    "status": "z.string()",
+    "text": "z.string()",
+    "multiline-text": "z.string()",
     "boolean": "z.boolean()",
     "integer": "z.number().int()",
     "float": "z.number()",
@@ -34,6 +40,8 @@ _ZOD_TYPE: dict[str, str] = {
     "datetime": "utcDateTime",
     "friendly-id": "z.string()",
 }
+
+assert set(_ZOD_TYPE) == SUPPORTED_TYPES
 
 
 def emit_zod_module(definition: ClassDefinition) -> str:

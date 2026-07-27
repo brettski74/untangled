@@ -9,7 +9,7 @@ attributes:
     required: true
     references: user
   token-hash:
-    type: string
+    type: compact-text
     required: true
     unique: true
   expires-at:

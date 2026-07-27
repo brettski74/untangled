@@ -8,10 +8,10 @@ description: >
   generation and PostgreSQL persistence. Not a product ticket type.
 attributes:
   title:
-    type: string
+    type: compact-text
     required: true
   summary:
-    type: string
+    type: compact-text
     required: false
   is-active:
     type: boolean
