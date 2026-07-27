@@ -13,7 +13,7 @@ import { partition_detail_layout } from "../detail/default_layout";
 import { class_field_meta } from "../generated/field_meta";
 import { fetch_record } from "../records/fetch.server";
 import { record_detail_path } from "../records/record_paths";
-import type { ShellContextBarHandle } from "../shell/context_bar_handle";
+import { ShellContextBar } from "../shell/shell_context_bar";
 import { class_for_collection } from "../shell/nav_paths";
 import type { Route } from "./+types/destination_detail";
 
@@ -38,22 +38,6 @@ export function meta({ loaderData: loader_data }: Route.MetaArgs) {
     },
   ];
 }
-
-export const handle: ShellContextBarHandle = {
-  render_context_bar: (loader_data) => {
-    const detail = loader_data as DetailLoaderData | undefined;
-    if (detail == null) {
-      return null;
-    }
-    return (
-      <DetailContextBar
-        class_display_name={detail.class_display_name}
-        title_token={detail.title_token}
-        copy_url={detail.copy_path}
-      />
-    );
-  },
-};
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const collection = params.collection;
@@ -126,7 +110,16 @@ export default function DestinationDetailPage({
   loaderData,
 }: Route.ComponentProps) {
   return (
-    <DetailForm layout={loaderData.layout} record={loaderData.record} />
+    <>
+      <ShellContextBar>
+        <DetailContextBar
+          class_display_name={loaderData.class_display_name}
+          title_token={loaderData.title_token}
+          copy_url={loaderData.copy_path}
+        />
+      </ShellContextBar>
+      <DetailForm layout={loaderData.layout} record={loaderData.record} />
+    </>
   );
 }
 

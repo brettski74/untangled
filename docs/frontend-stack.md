@@ -30,7 +30,7 @@ Cookie `maxAge` is derived from the access JWT `exp` claim (no separate web TTL 
 | ---- | ---- |
 | `frontend/app/routes.ts` | Route table (login, logout, authenticated layout, destinations) |
 | `frontend/app/auth/` | Session cookie, API seam, Zod envelopes, gate helpers |
-| `frontend/app/shell/` | Operator chrome (header, nav rail, context bar slot, YAML nav) |
+| `frontend/app/shell/` | Operator chrome (header, nav rail, context bar host, YAML nav). Context bar mount: routes portal chrome via `ShellContextBar` into one always-present layout host (inert when empty). Binding contract: ADR `architecture/decisions/005-portal-shell-context-bars.md`. |
 | `frontend/app/list/` | Schema-driven list chrome (#13) |
 | `frontend/app/detail/` | Schema-driven detail read layout (#81) + TESTPLAN |
 | `frontend/app/records/` | SSR search/fetch seams (Bearer via session) |
