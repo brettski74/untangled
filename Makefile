@@ -10,7 +10,7 @@ BACKEND_PIP := $(BACKEND_VENV)/bin/pip
 
 COMPOSE ?= docker compose
 
-.PHONY: help install up down db-up db-down db-wait backend-dev frontend-dev backend-install frontend-install lint test backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
+.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait backend-dev frontend-dev backend-install frontend-install lint test backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -32,6 +32,28 @@ up: ## Build and start postgres + api + web via Compose
 
 down: ## Stop Compose runtime (keeps named DB volume)
 	$(COMPOSE) down
+
+# Full local reset: wipe named volumes (Postgres), bring stack back, migrate, seed.
+# Optional: WITH_HOST_INSTALL=1 also runs `make install` after teardown.
+reinstall: ## Wipe DB volume, restart stack, migrate, and seed
+	$(COMPOSE) down -v --remove-orphans
+ifeq ($(WITH_HOST_INSTALL),1)
+	$(MAKE) install
+endif
+	$(MAKE) up migrate seed
+	@echo "==> Reinstall complete"
+	@echo "    Web: http://127.0.0.1:5173"
+	@echo "    API: http://127.0.0.1:8000"
+
+reinstall-keep-data: ## Restart stack without wiping DB volume, then migrate and seed
+	$(MAKE) down
+ifeq ($(WITH_HOST_INSTALL),1)
+	$(MAKE) install
+endif
+	$(MAKE) up migrate seed
+	@echo "==> Reinstall complete"
+	@echo "    Web: http://127.0.0.1:5173"
+	@echo "    API: http://127.0.0.1:8000"
 
 db-up: ## Start containerized PostgreSQL only (for host-run tests / persistence)
 	$(COMPOSE) up -d postgres
