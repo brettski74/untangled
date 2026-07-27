@@ -323,6 +323,7 @@ export default function DestinationListPage({
       </ShellContextBar>
 
       <ListFilterChrome
+        key={loaderData.path}
         attributes={loaderData.attributes}
         effective_predicate={search.effective_predicate}
         busy={busy}

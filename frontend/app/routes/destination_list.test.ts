@@ -296,6 +296,17 @@ describe("destination_list shouldRevalidate", () => {
   });
 });
 
+describe("destination_list filter editor destination identity", () => {
+  it("remounts ListFilterChrome when loaderData.path changes", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./destination_list.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/<ListFilterChrome[\s\S]*key=\{loaderData\.path\}/);
+  });
+});
+
 describe("destination_list context bar destination identity", () => {
   it("resyncs search and quick-filter together on loaderData.path", async () => {
     const { readFile } = await import("node:fs/promises");
