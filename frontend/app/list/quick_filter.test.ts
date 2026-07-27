@@ -9,6 +9,8 @@ import {
   combine_datetime_local,
   DATETIME_FROM_DEFAULT_TIME,
   DATETIME_TO_DEFAULT_TIME,
+  datetime_default_time_for_op,
+  datetime_side_for_op,
   parse_predicate_json,
   parse_time_24h,
   quick_filter_control_kind,
@@ -300,6 +302,49 @@ describe("build_quick_filter_predicates", () => {
         { text: "anything" },
       ),
     ).toMatchObject({ ok: false });
+  });
+});
+
+describe("datetime defaults by comparison op", () => {
+  it("maps lt/lte to end-of-day and other ops to start-of-day", () => {
+    expect(datetime_side_for_op("lt")).toBe("to");
+    expect(datetime_side_for_op("lte")).toBe("to");
+    expect(datetime_side_for_op("eq")).toBe("from");
+    expect(datetime_side_for_op("gt")).toBe("from");
+    expect(datetime_side_for_op("gte")).toBe("from");
+    expect(datetime_side_for_op("ne")).toBe("from");
+
+    expect(datetime_default_time_for_op("lt")).toBe(DATETIME_TO_DEFAULT_TIME);
+    expect(datetime_default_time_for_op("lte")).toBe(DATETIME_TO_DEFAULT_TIME);
+    expect(datetime_default_time_for_op("eq")).toBe(DATETIME_FROM_DEFAULT_TIME);
+    expect(datetime_default_time_for_op("gt")).toBe(DATETIME_FROM_DEFAULT_TIME);
+  });
+
+  it("apply_datetime_date_change uses op-derived side for filter editor defaults", () => {
+    expect(
+      apply_datetime_date_change(
+        datetime_side_for_op("lte"),
+        "2026-09-30",
+        undefined,
+      ),
+    ).toBe("2026-09-30T23:59:59");
+    expect(
+      apply_datetime_date_change(
+        datetime_side_for_op("gt"),
+        "2026-07-14",
+        undefined,
+      ),
+    ).toBe("2026-07-14T00:00:00");
+  });
+
+  it("apply_datetime_time_change uses op-derived default when time is cleared", () => {
+    expect(
+      apply_datetime_time_change(
+        "",
+        "2026-09-30T14:00:00",
+        datetime_default_time_for_op("lte"),
+      ),
+    ).toEqual({ ok: true, combined: "2026-09-30T23:59:59" });
   });
 });
 

@@ -32,7 +32,8 @@ import { render_predicate_text } from "./predicate_text";
 import {
   apply_datetime_date_change,
   apply_datetime_time_change,
-  DATETIME_FROM_DEFAULT_TIME,
+  datetime_default_time_for_op,
+  datetime_side_for_op,
   quick_filter_control_kind,
   split_datetime_local,
   type SearchPredicate,
@@ -420,6 +421,7 @@ function LeafRow({
       {node.op != null && op_requires_value(node.op) && type_name != null ? (
         <ValueControl
           type_name={type_name}
+          op={node.op}
           value={node.value}
           on_change={(value) => on_replace({ ...node, value })}
         />
@@ -487,10 +489,12 @@ function RemoveButton({ on_click }: { on_click: () => void }) {
 
 function ValueControl({
   type_name,
+  op,
   value,
   on_change,
 }: {
   type_name: string;
+  op: string;
   value: unknown;
   on_change: (value: unknown) => void;
 }) {
@@ -553,7 +557,7 @@ function ValueControl({
           value={parts.date}
           onChange={(event) => {
             const combined = apply_datetime_date_change(
-              "from",
+              datetime_side_for_op(op),
               event.target.value,
               local,
             );
@@ -572,7 +576,7 @@ function ValueControl({
             const next = apply_datetime_time_change(
               event.target.value,
               local,
-              DATETIME_FROM_DEFAULT_TIME,
+              datetime_default_time_for_op(op),
             );
             if (next.ok) {
               on_change(local_combined_to_iso(next.combined));
