@@ -1,5 +1,5 @@
 import { data, useOutletContext } from "react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
@@ -14,8 +14,22 @@ import {
   type AttributeFieldMeta,
 } from "../generated/field_meta";
 import { BasicList } from "../list/basic_list";
+import {
+  apply_column_order,
+  clamp_column_width,
+  column_set_signature,
+  move_column_order,
+  reconcile_column_layout,
+  seed_column_layout,
+  type ColumnLayoutSession,
+} from "../list/column_layout";
 import { list_display_columns, type ListColumn } from "../list/columns";
 import { ListFilterChrome } from "../list/filter_chrome";
+import {
+  apply_sort_click,
+  parse_sort_form_value,
+  type ListSortSpec,
+} from "../list/header_sort";
 import {
   ListContextBar,
   type ListSearchPayload,
@@ -73,6 +87,7 @@ async function run_list_search(
   request: Request,
   params: Route.LoaderArgs["params"],
   predicate: SearchPredicate | null,
+  sort: ListSortSpec[] | null,
 ): Promise<ListLoaderData> {
   const collection = params.collection;
   const list_id = params.list_id;
@@ -102,6 +117,7 @@ async function run_list_search(
     const result = await search_collection(access_token, collection, {
       predicate,
       attributes,
+      ...(sort != null && sort.length > 0 ? { sort } : {}),
     });
 
     return {
@@ -153,7 +169,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const baseline =
     (match.option.predicate as SearchPredicate | undefined) ?? null;
   try {
-    const payload = await run_list_search(request, params, baseline);
+    const payload = await run_list_search(request, params, baseline, null);
     return data(payload);
   } catch (error) {
     if (error instanceof SearchApiError) {
@@ -173,9 +189,18 @@ export async function action({
   if (!parsed.ok) {
     throw new Response("Invalid predicate", { status: 400 });
   }
+  const sort_parsed = parse_sort_form_value(form.get("sort"));
+  if (!sort_parsed.ok) {
+    throw new Response("Invalid sort", { status: 400 });
+  }
 
   try {
-    const payload = await run_list_search(request, params, parsed.predicate);
+    const payload = await run_list_search(
+      request,
+      params,
+      parsed.predicate,
+      sort_parsed.sort,
+    );
     return data({
       ok: true,
       rows: payload.rows,
@@ -233,12 +258,28 @@ export default function DestinationListPage({
   const [warning, set_warning] = useState<string | null>(
     initial.quick_filter.warning,
   );
+  const [layout_notice, set_layout_notice] = useState<string | null>(null);
+  const [sort, set_sort] = useState<ListSortSpec[]>([]);
+  const [column_layout, set_column_layout] = useState<ColumnLayoutSession>(
+    () => seed_column_layout(loaderData.columns),
+  );
+  const [column_signature, set_column_signature] = useState(() =>
+    column_set_signature(loaderData.columns),
+  );
+  const loader_column_signature = column_set_signature(loaderData.columns);
 
   const fetcher = useFetcher<ListSearchActionResult>();
   const fetcher_path_ref = useRef<string | null>(null);
+  const seeded_signature_ref = useRef(column_set_signature(loaderData.columns));
+  const seeded_path_ref = useRef(loaderData.path);
   const effective_ref = useRef<SearchPredicate | null>(
     search.effective_predicate ?? loaderData.baseline_predicate,
   );
+  const sort_ref = useRef<ListSortSpec[]>(sort);
+
+  useEffect(() => {
+    sort_ref.current = sort;
+  }, [sort]);
 
   useEffect(() => {
     const synced = list_destination_ui_sync(loaderData);
@@ -246,12 +287,48 @@ export default function DestinationListPage({
     set_selected_name(synced.quick_filter.selected_name);
     set_values(synced.quick_filter.values);
     set_warning(synced.quick_filter.warning);
+    set_layout_notice(null);
+    set_sort([]);
+    const seeded = seed_column_layout(loaderData.columns);
+    const signature = column_set_signature(loaderData.columns);
+    set_column_layout(seeded);
+    set_column_signature(signature);
+    seeded_signature_ref.current = signature;
+    seeded_path_ref.current = loaderData.path;
     effective_ref.current =
       synced.search.effective_predicate ?? loaderData.baseline_predicate;
     fetcher_path_ref.current = null;
-    // Same destination identity for search rows and quick-filter chrome.
+    // Same destination identity for search rows and list chrome.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- path is the list identity
   }, [loaderData.path]);
+
+  useEffect(() => {
+    // Destination identity changed — path effect owns the reset (order-independent).
+    if (seeded_path_ref.current !== loaderData.path) {
+      return;
+    }
+    if (loader_column_signature === seeded_signature_ref.current) {
+      return;
+    }
+    const reconciled = reconcile_column_layout(
+      loaderData.columns,
+      column_layout,
+      column_signature,
+    );
+    seeded_signature_ref.current = reconciled.signature;
+    set_sort([]);
+    if (reconciled.reset) {
+      set_column_layout(reconciled.layout);
+      set_column_signature(reconciled.signature);
+      set_layout_notice(
+        "List columns changed — layout reset to schema defaults. Reload if this persists.",
+      );
+    } else {
+      set_column_signature(reconciled.signature);
+    }
+    // Mid-session column-set identity only (hot reload / regenerated meta).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- signature/layout owned elsewhere
+  }, [loader_column_signature, loaderData.path]);
 
   useEffect(() => {
     effective_ref.current =
@@ -280,13 +357,21 @@ export default function DestinationListPage({
     });
   }, [fetcher.state, fetcher.data, loaderData.path]);
 
-  const submit_predicate = useCallback(
-    (predicate: SearchPredicate | null) => {
+  const submit_search = useCallback(
+    (args: {
+      predicate: SearchPredicate | null;
+      /** Omit to keep the current user sort list. */
+      sort?: ListSortSpec[];
+    }) => {
+      const sort = args.sort ?? sort_ref.current;
       const form = new FormData();
       form.set(
         "predicate",
-        predicate == null ? "null" : JSON.stringify(predicate),
+        args.predicate == null ? "null" : JSON.stringify(args.predicate),
       );
+      if (sort.length > 0) {
+        form.set("sort", JSON.stringify(sort));
+      }
       fetcher_path_ref.current = loaderData.path;
       void fetcher.submit(form, { method: "post" });
     },
@@ -298,6 +383,52 @@ export default function DestinationListPage({
     set_values({});
     set_warning(null);
   }, []);
+
+  const on_sort_click = useCallback(
+    (attribute: string) => {
+      const next = apply_sort_click(sort_ref.current, attribute);
+      sort_ref.current = next;
+      set_sort(next);
+      set_layout_notice(null);
+      submit_search({
+        predicate: effective_ref.current,
+        sort: next,
+      });
+    },
+    [submit_search],
+  );
+
+  const on_reorder = useCallback((from_index: number, to_index: number) => {
+    set_column_layout((current) => ({
+      ...current,
+      order: move_column_order(current.order, from_index, to_index),
+    }));
+  }, []);
+
+  const on_resize_commit = useCallback(
+    (attribute: string, width_px: number) => {
+      set_column_layout((current) => ({
+        ...current,
+        widths: {
+          ...current.widths,
+          [attribute]: clamp_column_width(width_px),
+        },
+      }));
+    },
+    [],
+  );
+
+  const display_columns = useMemo(() => {
+    try {
+      return apply_column_order(loaderData.columns, column_layout.order);
+    } catch (error) {
+      console.warn(
+        "list column session order invalid; falling back to schema defaults",
+        error,
+      );
+      return loaderData.columns;
+    }
+  }, [loaderData.columns, column_layout.order]);
 
   const busy = fetcher.state !== "idle";
 
@@ -312,7 +443,7 @@ export default function DestinationListPage({
           attributes={loaderData.attributes}
           effective_ref={effective_ref}
           busy={busy}
-          submit_predicate={submit_predicate}
+          submit_search={submit_search}
           selected_name={selected_name}
           values={values}
           warning={warning}
@@ -327,7 +458,7 @@ export default function DestinationListPage({
         attributes={loaderData.attributes}
         effective_predicate={search.effective_predicate}
         busy={busy}
-        on_execute={submit_predicate}
+        submit_search={submit_search}
         on_warning={set_warning}
       />
 
@@ -338,11 +469,19 @@ export default function DestinationListPage({
         <p className="text-xs text-slate-500">
           {search.total === 1 ? "1 record" : `${search.total} records`}
         </p>
+        <p className="mt-1 min-h-[1rem] text-xs text-amber-800" role="status">
+          {layout_notice ?? ""}
+        </p>
       </div>
       <BasicList
         collection={loaderData.collection}
-        columns={loaderData.columns}
+        columns={display_columns}
+        widths={column_layout.widths}
+        sort={sort}
         rows={search.rows}
+        on_sort_click={on_sort_click}
+        on_reorder={on_reorder}
+        on_resize_commit={on_resize_commit}
       />
     </div>
   );

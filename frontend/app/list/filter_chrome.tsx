@@ -45,7 +45,11 @@ export type ListFilterChromeProps = {
   attributes: readonly AttributeFieldMeta[];
   effective_predicate: SearchPredicate | null;
   busy: boolean;
-  on_execute: (predicate: SearchPredicate | null) => void;
+  /**
+   * List search seam — same object shape as the route poster.
+   * Omit ``sort``; the route keeps the current user sort list.
+   */
+  submit_search: (args: { predicate: SearchPredicate | null }) => void;
   on_warning: (warning: string | null) => void;
 };
 
@@ -56,7 +60,7 @@ export function ListFilterChrome({
   attributes,
   effective_predicate,
   busy,
-  on_execute,
+  submit_search,
   on_warning,
 }: ListFilterChromeProps) {
   const [open, set_open] = useState(false);
@@ -141,7 +145,7 @@ export function ListFilterChrome({
     }
     set_editor_warning(null);
     on_warning(null);
-    on_execute(committed.predicate);
+    submit_search({ predicate: committed.predicate });
     set_open(false);
   }
 

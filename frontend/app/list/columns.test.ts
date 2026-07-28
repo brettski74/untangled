@@ -86,6 +86,7 @@ describe("list_display_columns", () => {
       "status",
     ]);
     expect(columns[0]?.is_friendly_id).toBe(true);
+    expect(columns.map((c) => c.order)).toEqual([1, 0, 2]);
   });
 
   it("leaves friendly-id in place when already first", () => {

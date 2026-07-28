@@ -14,9 +14,17 @@ export const search_response_schema = z.object({
 
 export type SearchResponse = z.infer<typeof search_response_schema>;
 
+/** Wire sort entry for POST /{collection}/search (user-selected only). */
+export type SearchSortSpec = {
+  attribute: string;
+  direction: "asc" | "desc";
+};
+
 export type SearchCollectionBody = {
   predicate?: unknown | null;
   attributes: string[];
+  /** Omitted from the wire body when empty/undefined — never invent a default. */
+  sort?: SearchSortSpec[];
   limit?: number;
   offset?: number;
 };
@@ -39,7 +47,8 @@ const DEFAULT_OFFSET = 0;
 
 /**
  * POST /{collection}/search via the web-tier Bearer seam.
- * Omits ``sort`` so the UI does not invent an API default sort.
+ * Includes ``sort`` only when the caller supplies a non-empty list so the UI
+ * does not invent an API default sort.
  * 400/422 raise {@link SearchApiError} with API ``detail`` when present.
  */
 export async function search_collection(
@@ -47,18 +56,23 @@ export async function search_collection(
   collection: string,
   body: SearchCollectionBody,
 ): Promise<SearchResponse> {
+  const payload: Record<string, unknown> = {
+    predicate: body.predicate ?? null,
+    attributes: body.attributes,
+    limit: body.limit ?? DEFAULT_LIMIT,
+    offset: body.offset ?? DEFAULT_OFFSET,
+  };
+  if (body.sort != null && body.sort.length > 0) {
+    payload.sort = body.sort;
+  }
+
   const response = await api_fetch_with_token(
     access_token,
     `/${collection}/search`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        predicate: body.predicate ?? null,
-        attributes: body.attributes,
-        limit: body.limit ?? DEFAULT_LIMIT,
-        offset: body.offset ?? DEFAULT_OFFSET,
-      }),
+      body: JSON.stringify(payload),
     },
   );
 
@@ -73,8 +87,8 @@ export async function search_collection(
     });
   }
 
-  const payload: unknown = await response.json();
-  return search_response_schema.parse(payload);
+  const response_payload: unknown = await response.json();
+  return search_response_schema.parse(response_payload);
 }
 
 async function read_error_detail(response: Response): Promise<string> {

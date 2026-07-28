@@ -197,6 +197,59 @@ describe("destination_list action", () => {
     expect(search_body).not.toHaveProperty("sort");
   });
 
+  it("forwards non-empty user sort and omits empty", async () => {
+    search_collection.mockResolvedValue({
+      items: [],
+      limit: 20,
+      offset: 0,
+      total: 0,
+    });
+
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie();
+    const sort = [{ attribute: "summary", direction: "desc" as const }];
+    const form = new FormData();
+    form.set("predicate", "null");
+    form.set("sort", JSON.stringify(sort));
+
+    const result = await action({
+      request: new Request("http://web.test/incidents/lists/all", {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: form,
+      }),
+      params: { collection: "incidents", list_id: "all" },
+      context: {},
+    } as never);
+
+    expect(result.data).toMatchObject({ ok: true });
+    const search_body = search_collection.mock.calls[0]?.[2] as {
+      sort?: unknown;
+    };
+    expect(search_body.sort).toEqual(sort);
+  });
+
+  it("400s on malformed sort JSON", async () => {
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie();
+    const form = new FormData();
+    form.set("predicate", "null");
+    form.set("sort", "{");
+
+    await expect(
+      action({
+        request: new Request("http://web.test/incidents/lists/all", {
+          method: "POST",
+          headers: { Cookie: cookie },
+          body: form,
+        }),
+        params: { collection: "incidents", list_id: "all" },
+        context: {},
+      } as never),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(search_collection).not.toHaveBeenCalled();
+  });
+
   it("400s on invalid predicate JSON", async () => {
     const { action } = await import("../routes/destination_list");
     const cookie = await session_cookie();
@@ -319,8 +372,35 @@ describe("destination_list context bar destination identity", () => {
       /set_selected_name\(synced\.quick_filter\.selected_name\)/,
     );
     expect(source).toMatch(/set_values\(synced\.quick_filter\.values\)/);
+    expect(source).toMatch(/set_sort\(\[\]\)/);
     expect(source).toMatch(
       /\/\/ Same destination identity[\s\S]*\[loaderData\.path\]/,
     );
+  });
+
+  it("uses a single submit_search seam for predicate and sort", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./destination_list.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/const submit_search = useCallback/);
+    expect(source).toMatch(/submit_search=\{submit_search\}/);
+    expect(source).not.toMatch(/submit_predicate/);
+    expect(source).toMatch(/args\.sort \?\? sort_ref\.current/);
+    expect(source).toMatch(/form\.set\("sort", JSON\.stringify\(sort\)\)/);
+  });
+});
+
+describe("destination_list header interactions", () => {
+  it("wires BasicList sort, reorder, and resize callbacks", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./destination_list.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/on_sort_click=\{on_sort_click\}/);
+    expect(source).toMatch(/on_reorder=\{on_reorder\}/);
+    expect(source).toMatch(/on_resize_commit=\{on_resize_commit\}/);
   });
 });

@@ -50,7 +50,11 @@ export type ListContextBarProps = {
   /** Shared with list route / filter editor — always-current effective predicate. */
   effective_ref: MutableRefObject<SearchPredicate | null>;
   busy: boolean;
-  submit_predicate: (predicate: SearchPredicate | null) => void;
+  /**
+   * List search seam — same object shape as the route poster.
+   * Omit ``sort``; the route keeps the current user sort list.
+   */
+  submit_search: (args: { predicate: SearchPredicate | null }) => void;
   /** Controlled quick-filter chrome — owned by DestinationListPage. */
   selected_name: string;
   values: QuickFilterValues;
@@ -81,7 +85,7 @@ export function ListContextBar({
   attributes,
   effective_ref,
   busy,
-  submit_predicate,
+  submit_search,
   selected_name,
   values,
   warning,
@@ -106,7 +110,7 @@ export function ListContextBar({
 
   function on_refresh() {
     on_warning_change(null);
-    submit_predicate(effective_ref.current);
+    submit_search({ predicate: effective_ref.current });
   }
 
   function on_quick_filter_enter(override_values?: QuickFilterValues) {
@@ -125,7 +129,7 @@ export function ListContextBar({
     }
     on_warning_change(null);
     const next = and_predicates(effective_ref.current, ...built.predicates);
-    submit_predicate(next);
+    submit_search({ predicate: next });
   }
 
   async function on_copy_link() {
