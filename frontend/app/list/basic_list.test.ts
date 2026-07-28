@@ -30,4 +30,14 @@ describe("basic_list header interactions", () => {
     expect(source).not.toMatch(/ring-inset ring-1 ring-sky-500/);
     expect(source).not.toMatch(/paint_drop_marker/);
   });
+
+  it("locks table width to the sum of column pixels when applying widths", async () => {
+    const source = await readFile(
+      new URL("./basic_list.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/total_column_widths_px/);
+    expect(source).toMatch(/table\.style\.width = `\$\{sum\}px`/);
+    expect(source).toMatch(/style=\{\{ width: `\$\{table_width_px\}px` \}\}/);
+  });
 });

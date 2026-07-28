@@ -178,6 +178,26 @@ export function width_for_attribute(
 }
 
 /**
+ * Sum of clamped pixel widths for the display column set.
+ * Lock ``table`` width to this sum so ``table-layout: fixed`` honours col
+ * pixels (no redistribute / stretch-to-fill when sum &lt; viewport).
+ */
+export function total_column_widths_px(
+  columns: readonly ListColumn[],
+  widths: Readonly<Record<string, number>>,
+): number {
+  let sum = 0;
+  for (const column of columns) {
+    sum += width_for_attribute(
+      widths,
+      column.name_snake,
+      column.type_name,
+    );
+  }
+  return sum;
+}
+
+/**
  * Map pointer X to an insert-before index against header rects (pre-drag).
  * Left half of column i → i; at/after the midpoint → keep scanning;
  * past the last midpoint → ``header_rects.length`` (append).

@@ -11,6 +11,7 @@ import {
   move_column_order,
   reconcile_column_layout,
   seed_column_layout,
+  total_column_widths_px,
 } from "./column_layout";
 
 function col(
@@ -193,5 +194,31 @@ describe("drop_separator_x_for_insert_before", () => {
 
   it("returns null for an empty rect list", () => {
     expect(drop_separator_x_for_insert_before([], 0)).toBeNull();
+  });
+});
+
+describe("total_column_widths_px", () => {
+  it("sums clamped widths for the column set", () => {
+    const columns = [col("a", 0, "text"), col("b", 1, "friendly-id")];
+    expect(
+      total_column_widths_px(columns, { a: 100, b: 140 }),
+    ).toBe(240);
+  });
+
+  it("falls back to type defaults when a width is missing", () => {
+    const columns = [col("a", 0, "text"), col("b", 1, "friendly-id")];
+    // text default 200 + friendly-id default 140
+    expect(total_column_widths_px(columns, {})).toBe(340);
+  });
+
+  it("clamps below-minimum widths before summing", () => {
+    const columns = [col("a", 0, "text")];
+    expect(total_column_widths_px(columns, { a: 10 })).toBe(
+      MIN_COLUMN_WIDTH_PX,
+    );
+  });
+
+  it("returns 0 for an empty column list", () => {
+    expect(total_column_widths_px([], {})).toBe(0);
   });
 });

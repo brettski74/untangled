@@ -15,6 +15,7 @@ import {
   clamp_column_width,
   drop_separator_x_for_insert_before,
   insert_before_index_for_client_x,
+  total_column_widths_px,
   width_for_attribute,
 } from "./column_layout";
 import type { ListColumn } from "./columns";
@@ -228,6 +229,7 @@ export function BasicList({
   }
 
   const primary = sort[0] ?? null;
+  const table_width_px = total_column_widths_px(columns, widths);
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
@@ -235,6 +237,7 @@ export function BasicList({
         <table
           ref={table_ref}
           className="table-fixed border-collapse text-left text-sm text-slate-900"
+          style={{ width: `${table_width_px}px` }}
         >
           <colgroup>
             {columns.map((column) => {
@@ -465,11 +468,16 @@ function apply_colgroup_widths(
   if (table == null) {
     return;
   }
+  // Atomic invariant: every width application sets each clamped <col> width
+  // and table.style.width = sum together (never cols alone).
+  let sum = 0;
   for (const column of columns) {
-    const width = live_widths[column.name_snake];
-    if (typeof width !== "number") {
+    const raw = live_widths[column.name_snake];
+    if (typeof raw !== "number") {
       continue;
     }
+    const width = clamp_column_width(raw);
+    sum += width;
     const col = table.querySelector(
       `colgroup col[data-attribute="${CSS.escape(column.name_snake)}"]`,
     ) as HTMLTableColElement | null;
@@ -477,6 +485,7 @@ function apply_colgroup_widths(
       col.style.width = `${width}px`;
     }
   }
+  table.style.width = `${sum}px`;
 }
 
 function ListCell({
