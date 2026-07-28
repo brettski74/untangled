@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { filter_nav_by_permissions, can_create_class } from "./nav_filter";
+import {
+  filter_nav_by_permissions,
+  can_create_class,
+  can_update_class,
+} from "./nav_filter";
 import { default_landing_path } from "./nav_landing";
 import {
   display_name_to_slug,
@@ -156,6 +160,25 @@ describe("can_create_class", () => {
     expect(can_create_class(["change-request:create"], "incident")).toBe(
       false,
     );
+  });
+});
+
+describe("can_update_class", () => {
+  it("P1: admin may update any class", () => {
+    expect(can_update_class(["admin"], "incident")).toBe(true);
+    expect(can_update_class(["admin"], "change-request")).toBe(true);
+  });
+
+  it("P2: class:update permits that class only", () => {
+    expect(can_update_class(["incident:update"], "incident")).toBe(true);
+    expect(can_update_class(["incident:update"], "change-request")).toBe(
+      false,
+    );
+  });
+
+  it("P3: read-only without update is denied", () => {
+    expect(can_update_class(["incident:read"], "incident")).toBe(false);
+    expect(can_update_class([], "incident")).toBe(false);
   });
 });
 

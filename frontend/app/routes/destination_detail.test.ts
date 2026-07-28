@@ -5,10 +5,21 @@ import { reset_session_storage_for_tests } from "../auth/session.server";
 import { fake_access_token } from "../auth/test_tokens";
 
 const fetch_record = vi.fn();
+const update_record = vi.fn();
 
 vi.mock("../records/fetch.server", () => ({
   fetch_record: (...args: unknown[]) => fetch_record(...args),
 }));
+
+vi.mock("../records/update.server", async () => {
+  const actual = await vi.importActual<
+    typeof import("../records/update.server")
+  >("../records/update.server");
+  return {
+    ...actual,
+    update_record: (...args: unknown[]) => update_record(...args),
+  };
+});
 
 async function session_cookie(token = fake_access_token()): Promise<string> {
   const { commit_access_token } = await import("../auth/session.server");
@@ -65,6 +76,7 @@ describe("destination_detail loader", () => {
     process.env.UNTANGLED_COOKIE_SECURE = "false";
     reset_session_storage_for_tests();
     fetch_record.mockReset();
+    update_record.mockReset();
   });
 
   it("D1: loads INC by friendly-id", async () => {
@@ -253,5 +265,189 @@ describe("destination_detail context bar mount", () => {
     expect(source).not.toMatch(/render_context_bar/);
     expect(source).not.toMatch(/context_bar_handle/);
     expect(source).not.toMatch(/export const handle/);
+  });
+});
+
+describe("destination_detail action", () => {
+  beforeEach(() => {
+    process.env.UNTANGLED_SESSION_SECRET =
+      "test-only-session-secret-not-for-prod";
+    process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_COOKIE_SECURE = "false";
+    reset_session_storage_for_tests();
+    update_record.mockReset();
+  });
+
+  it("A1: valid PATCH returns updated record", async () => {
+    const saved = { ...INC_RECORD, status: "in-progress" };
+    update_record.mockResolvedValue(saved);
+    const { action } = await import("../routes/destination_detail");
+    const cookie = await session_cookie();
+    const result = await action({
+      request: new Request("http://web.test/incidents/INC00000001", {
+        method: "PATCH",
+        headers: {
+          Cookie: cookie,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "in-progress" }),
+      }),
+      params: { collection: "incidents", locator: "INC00000001" },
+      context: {},
+    } as never);
+    expect(result.data).toEqual({ ok: true, record: saved });
+    expect(update_record).toHaveBeenCalledWith(
+      expect.any(String),
+      "incidents",
+      "INC00000001",
+      { status: "in-progress" },
+    );
+  });
+
+  it("A2: propagates domain 422", async () => {
+    update_record.mockRejectedValue(
+      new Response(JSON.stringify({ detail: "semantic" }), { status: 422 }),
+    );
+    const { action } = await import("../routes/destination_detail");
+    const cookie = await session_cookie();
+    const result = await action({
+      request: new Request("http://web.test/incidents/INC00000001", {
+        method: "PATCH",
+        headers: {
+          Cookie: cookie,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "in-progress" }),
+      }),
+      params: { collection: "incidents", locator: "INC00000001" },
+      context: {},
+    } as never);
+    expect(result.init?.status ?? (result.data.ok ? 200 : result.data.status)).toBe(422);
+    expect(result.data.ok).toBe(false);
+    if (!result.data.ok) {
+      expect(result.data.status).toBe(422);
+    }
+  });
+
+  it("A3: domain forbidden → 403", async () => {
+    const { ApiForbiddenError } = await import("../auth/errors");
+    update_record.mockRejectedValue(new ApiForbiddenError());
+    const { action } = await import("../routes/destination_detail");
+    const cookie = await session_cookie();
+    const result = await action({
+      request: new Request("http://web.test/incidents/INC00000001", {
+        method: "PATCH",
+        headers: {
+          Cookie: cookie,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "in-progress" }),
+      }),
+      params: { collection: "incidents", locator: "INC00000001" },
+      context: {},
+    } as never);
+    expect(result.data).toEqual({
+      ok: false,
+      status: 403,
+      detail: "Forbidden",
+    });
+    expect(result.init?.status).toBe(403);
+  });
+
+  it("A4: domain not found → 404", async () => {
+    update_record.mockRejectedValue(
+      new Response(JSON.stringify({ detail: "missing" }), { status: 404 }),
+    );
+    const { action } = await import("../routes/destination_detail");
+    const cookie = await session_cookie();
+    const result = await action({
+      request: new Request("http://web.test/incidents/INC999", {
+        method: "PATCH",
+        headers: {
+          Cookie: cookie,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "x" }),
+      }),
+      params: { collection: "incidents", locator: "INC999" },
+      context: {},
+    } as never);
+    expect(result.data.ok).toBe(false);
+    if (!result.data.ok) {
+      expect(result.data.status).toBe(404);
+    }
+  });
+
+  it("A5: unrecognized attributes → 400", async () => {
+    const { action } = await import("../routes/destination_detail");
+    const cookie = await session_cookie();
+    const result = await action({
+      request: new Request("http://web.test/incidents/INC00000001", {
+        method: "PATCH",
+        headers: {
+          Cookie: cookie,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ not_a_field: "x" }),
+      }),
+      params: { collection: "incidents", locator: "INC00000001" },
+      context: {},
+    } as never);
+    expect(result.data).toMatchObject({ ok: false, status: 400 });
+    expect(update_record).not.toHaveBeenCalled();
+  });
+
+  it("A6: field type failure → 422", async () => {
+    const { action } = await import("../routes/destination_detail");
+    const cookie = await session_cookie();
+    const result = await action({
+      request: new Request("http://web.test/incidents/INC00000001", {
+        method: "PATCH",
+        headers: {
+          Cookie: cookie,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ assigned_user_id: "not-a-uuid" }),
+      }),
+      params: { collection: "incidents", locator: "INC00000001" },
+      context: {},
+    } as never);
+    expect(result.data).toMatchObject({ ok: false, status: 422 });
+    expect(update_record).not.toHaveBeenCalled();
+  });
+
+  it("A8: unauthenticated → redirect", async () => {
+    const { action } = await import("../routes/destination_detail");
+    await expect(
+      action({
+        request: new Request("http://web.test/incidents/INC00000001", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "x" }),
+        }),
+        params: { collection: "incidents", locator: "INC00000001" },
+        context: {},
+      } as never),
+    ).rejects.toMatchObject({ status: 302 });
+    expect(update_record).not.toHaveBeenCalled();
+  });
+
+  it("A9: non-object JSON → 400", async () => {
+    const { action } = await import("../routes/destination_detail");
+    const cookie = await session_cookie();
+    const result = await action({
+      request: new Request("http://web.test/incidents/INC00000001", {
+        method: "PATCH",
+        headers: {
+          Cookie: cookie,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(["not", "object"]),
+      }),
+      params: { collection: "incidents", locator: "INC00000001" },
+      context: {},
+    } as never);
+    expect(result.data).toMatchObject({ ok: false, status: 400 });
+    expect(update_record).not.toHaveBeenCalled();
   });
 });

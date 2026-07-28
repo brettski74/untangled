@@ -1,112 +1,118 @@
-# Detail view (#81) — test plan
+# Detail view (#82) — test plan
 
-Child of epic [#71](https://github.com/brettski74/untangled/issues/71), slice 2: **route + read layout**.
+Child of epic [#71](https://github.com/brettski74/untangled/issues/71), slice 3: **edit, dirty, save, undo**.
+
+Slice 2 (#81) read-layout cases remain covered by existing suites; this plan owns edit/save/undo.
 
 ## Scope
 
-- Detail route `/:collection/:locator` (UUID or friendly-id)
-- SSR GET-by-locator (no browser domain client)
-- Context bar: menu / title / refresh / copy-link / disabled save-check
-- Rule-based compact + text layout from field meta
-- FK read-only select + open-related control
-- Ignore unknown `view=`
+- In-place edit; dirty vs clean; Save icon + Ctrl+S via SSR PATCH
+- Ctrl+Z undo chunks (app-owned, form-subtree scoped)
+- Focus glow; tab order inherits slice 2 ordinal DOM order
+- `{class}:update` fail-closed (UI + action 403)
+- No browser-originated domain update calls
 
 ## Out of scope (not tested as product behaviour here)
 
-- In-place edit, dirty, Save enablement, Ctrl+S/Z (#82)
 - New-record create (#83)
-- FK picker / friendly-id enrichment (#73 / #87)
-- Token refresh (#14)
+- Unsaved-navigation prompt (deferred)
+- Lost-update / optimistic concurrency (deferred)
+- Redo (Ctrl+Y)
+- FK picker / `current-user` defaults
+- Slice 2-only layout/FK/fetch cases (still run; not re-specified here)
 
 ## Prerequisites
 
 ```bash
 # From repo root — generated Zod + field_meta must exist (gitignored)
-make models   # or: backend/.venv/bin/python -m untangled.mapping
+make models
 
 cd frontend && npm test
+# CI-equivalent:
+make frontend-test
+make frontend-lint
 ```
 
 Touched automated suites:
 
 | Suite | Path |
 | ----- | ---- |
-| Layout partition | `app/detail/default_layout.test.ts` |
-| FK open-related | `app/detail/fk_open_related.test.ts` |
-| Fetch seam | `app/records/fetch.server.test.ts` |
-| Detail loader | `app/routes/destination_detail.test.ts` |
+| Update permission helper | `app/shell/nav.test.ts` (`can_update_class`) |
+| SSR PATCH seam | `app/records/update.server.test.ts` |
+| Editor / registry / Zod status | `app/detail/detail_editor.test.ts` |
+| Detail loader + action | `app/routes/destination_detail.test.ts` |
+| Prior slice 2 | `default_layout`, `fk_open_related`, `fetch.server` |
 
 ## Acceptance criteria → cases
 
-| AC (issue #81) | Cases |
+| AC (issue #82) | Cases |
 | -------------- | ----- |
-| Open INC/CHG by UUID or friendly-id; compact + text; no class-specific branches | D1–D3, L1–L9 |
-| Context bar menu / title / refresh / copy-link per epic | C1–C5 (manual + handle wiring); D1 title/copy_path |
-| FK open-related real hyperlink when set; non-navigable when unset | F1–F4 |
-| Audit fields read-only; `id` omitted from form body | L5, L6, D1 |
-| No browser domain fetch; loader mirrors 400/422/404/403 | S1–S5, D4–D8 (domain junk locator is **422**, not 400) |
+| Edits dirty the page; Save icon reflects dirty/clean; Save/Ctrl+S persist via SSR when permitted | E1–E4, A1, M1–M3 |
+| Refresh reloads from DB and clears dirty/undo | E5–E6, M4 |
+| Ctrl+Z undoes in reverse chunk order; exhausting undo → clean; successful save clears undo | E7–E11, M5–M6 |
+| Update RBAC fail-closed (UI + 403) | P1–P3, A3, M7 |
+| No browser-originated domain update calls | U1–U5, A1, M8 |
+| Implement plan documents coherent Ctrl+Z approach | Plan (implement chat); M5 verifies behaviour |
 
 ---
 
 ## Automated test cases
 
-### A. Layout partition (`default_layout.test.ts`)
+### P. Permissions (`can_update_class`)
 
 | ID | Case | Expect |
 | -- | ---- | ------ |
-| L1 | compact + `text` + `multiline-text` | Text section only those attrs, declaration order |
-| L2 | Compact-only | Empty text section |
-| L3 | Friendly-id present | Pinned first compact; others keep order |
-| L4 | No friendly-id | First non-text author attr leads compact |
-| L5 | Audit append | `created_at`, `created_by`, `updated_at`, `updated_by` after author compact |
-| L6 | `id` in meta | Never in compact or text |
-| L7 | Two-column split | Left then right; `ceil(n/2)` left length |
-| L8 | Missing/invalid `order` | Throws (fail closed) |
-| L9 | `string` / `choice` / `status` | Compact |
+| P1 | `admin` | true for any class |
+| P2 | `{class}:update` | true for that class only |
+| P3 | only `{class}:read` | false |
 
-### B. FK open-related (`fk_open_related.test.ts`)
+### U. SSR update seam (`update.server.test.ts`)
 
 | ID | Case | Expect |
 | -- | ---- | ------ |
-| F1 | Set + mapped `references` | Navigable `href` via `record_detail_path` |
-| F2 | Unset | Non-navigable, `href` null |
-| F3 | Set + unmapped (`user`) | Non-navigable fail-closed |
-| F4 | Tooltip | `Open {uuid}` when set |
+| U1 | 200 object | Parsed record; PATCH path + JSON body |
+| U2 | Domain 404 / 422 / 400 | Thrown `Response` with same status |
+| U3 | 403 from api helper | `ApiForbiddenError` |
+| U4 | 401 from api helper | `ApiUnauthorizedError` |
+| U5 | Module posture | `.server.ts` uses `api_fetch_with_token` + PATCH |
 
-### C. SSR fetch (`fetch.server.test.ts`)
-
-| ID | Case | Expect |
-| -- | ---- | ------ |
-| S1 | 200 object | Parsed record; GET path called |
-| S2 | 404 / 422 | Thrown `Response` with same status |
-| S3 | 403 from api helper | `ApiForbiddenError` |
-| S4 | 401 from api helper | `ApiUnauthorizedError` |
-| S5 | Non-object JSON | Reject / throw |
-
-### D. Detail loader (`destination_detail.test.ts`)
+### R / E. Editor + registry (`detail_editor.test.ts`)
 
 | ID | Case | Expect |
 | -- | ---- | ------ |
-| D1 | INC friendly-id | Loader data + layout; friendly-id first; no `id` slot |
-| D2 | INC UUID | Title prefers friendly-id; copy_path friendly-id form |
-| D3 | CHG friendly-id | change-request meta/layout |
-| D4 | Unknown collection | 404; no fetch |
-| D5 | API 404 | 404 |
-| D6 | API 422 | 422 |
-| D7 | API 403 | 403 Forbidden |
-| D8 | No session | Redirect (302) |
-| D9 | `?view=unknown` | Still loads default |
-| D10 | Fetch once | collection + locator only |
+| R1 | Known class | Update schema resolves |
+| R2 | Unknown class | Observable `null` miss |
+| R3 | Partial body | Optional fields accepted |
+| E1 | Edit one field | Dirty |
+| E2 | Values match baseline | Clean |
+| E3 | Contiguous same-field edits | One undo chunk |
+| E4 | Focus/target change | New chunk |
+| E5/E9 | Reset from record | Undo cleared; clean |
+| E6 | (manual / wiring) Incidental revalidation | Does not call reset while dirty |
+| E7/E8 | Undo / exhaust | Reverse order; clean |
+| E10 | Failed save | Caller keeps snapshot |
+| E11 | Editable set | Author non-FK only |
 
-### E. Context bar (automated coverage + manual)
+### A. Detail action (`destination_detail.test.ts`)
+
+| ID | Case | Expect |
+| -- | ---- | ------ |
+| A1 | Valid PATCH | `ok` + record; `update_record` called |
+| A2 | Domain 422 | Propagates 422 |
+| A3 | Forbidden | 403 |
+| A4 | Not found | 404 |
+| A5 | Unrecognized attributes | 400; no update call |
+| A6 | Field type failure | 422; no update call |
+| A8 | No session | Redirect 302 |
+| A9 | Non-object JSON | 400 |
+
+### C. Context bar wiring
 
 | ID | Case | Expect | Mode |
 | -- | ---- | ------ | ---- |
-| C1 | Detail portals `DetailContextBar` via `ShellContextBar` | Shell host occupied as toolbar (not `aria-hidden`) | Manual / smoke |
-| C2 | Route with no `ShellContextBar` portal | Decorative empty host strip (`aria-hidden`) | Manual |
-| C3 | Title with friendly-id | `{display name} {number}` | D1 + Manual |
-| C4 | Title without friendly-id | UUID fallback | Unit via `detail_title_token` path in D2 when number missing — prefer Manual if no fixture |
-| C5 | Refresh / copy / menu / save-check | Revalidator; clipboard absolute URL; menu items disabled; save disabled | Manual |
+| C1 | Portal via `ShellContextBar` | No handle delivery | Automated source assert |
+| C2 | Clean → `SaveCheck`; dirty → `Save` | Icon tracks dirty only | Manual |
+| C3 | No update permission | Save disabled; Ctrl+S no-op | Manual |
 
 ---
 
@@ -114,18 +120,23 @@ Touched automated suites:
 
 | ID | Case | Expect |
 | -- | ---- | ------ |
-| M1 | Open INC/CHG from list friendly-id link | Detail renders; Network tab shows no browser→API domain GET (SSR only) |
-| M2 | Compact 2-col + full-width text | Labels right-aligned compact; text labels above; multiline ≥4 rows |
-| M3 | FK open-related | New tab when set + mapped; disabled when unset / user FK |
-| M4 | Refresh | Reloads server data |
-| M5 | Copy link | Clipboard gets absolute detail URL (friendly-id preferred) |
-| M6 | Read-only | Fields not editable; Save does not persist |
-| M7 | User without `{class}:read` | 403 page, not empty form |
+| M1 | Dirty + Save | Edit → `Save` icon → Save → persists, `SaveCheck` |
+| M2 | Ctrl+S | Same success path as Save |
+| M3 | Error surface | Rejected save → dismissible error; stays dirty |
+| M4 | Refresh | Dirty → Refresh → DB values; clean; undo empty |
+| M5 | Ctrl+Z chunks | Two-field chunks undo in reverse → clean |
+| M6 | Undo after save | Save clears buffer; Ctrl+Z does not resurrect |
+| M7 | No `{class}:update` | RO fields; Save disabled; Ctrl+S no-op; action 403 |
+| M8 | Network | No browser→domain PATCH; same-origin action only |
+| M9 | Focus / tab | Focus glow; left→right→text order |
+| M10 | Always-RO | friendly-id / audit / FK not editable with update |
+| M11 | Shell undo isolation | Ctrl+Z outside form subtree not stolen by empty stack |
 
 ## Definition of done
 
-1. Generated models present (`make models` / mapping CLI)
-2. `cd frontend && npm test` green (includes suites above)
-3. `npm run typecheck` / `make frontend-lint` as used by CI
+1. Generated models present (`make models`)
+2. `make frontend-test` green
+3. `make frontend-lint` / typecheck green
 4. This TESTPLAN checked in; AC↔case table complete
-5. No backend product changes for this slice
+5. Manual M1–M11 smoke (or deferred items noted)
+6. No domain API contract changes; no browser domain update client

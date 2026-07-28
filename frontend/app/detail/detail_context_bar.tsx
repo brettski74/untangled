@@ -1,11 +1,17 @@
-import { Link2, Menu, RefreshCw, SaveCheck } from "lucide-react";
+import { Link2, Menu, RefreshCw, Save, SaveCheck } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
-import { useRevalidator } from "react-router";
 
 export type DetailContextBarProps = {
   class_display_name: string;
   title_token: string;
   copy_url: string;
+  dirty: boolean;
+  /** When false, Save is disabled (no update permission or clean). */
+  save_enabled: boolean;
+  save_pending?: boolean;
+  on_save: () => void;
+  on_refresh: () => void;
+  refresh_pending?: boolean;
 };
 
 const MENU_ITEMS = [
@@ -17,18 +23,24 @@ const MENU_ITEMS = [
 ] as const;
 
 /**
- * Detail context bar: inert menu, title, refresh, copy-link, disabled save-check.
+ * Detail context bar: inert menu, title, refresh, copy-link, dirty-aware save.
  */
 export function DetailContextBar({
   class_display_name,
   title_token,
   copy_url,
+  dirty,
+  save_enabled,
+  save_pending = false,
+  on_save,
+  on_refresh,
+  refresh_pending = false,
 }: DetailContextBarProps) {
-  const revalidator = useRevalidator();
   const [menu_open, set_menu_open] = useState(false);
   const [copy_status, set_copy_status] = useState<string | null>(null);
   const menu_id = useId();
   const menu_ref = useRef<HTMLDivElement>(null);
+  const SaveIcon = dirty ? Save : SaveCheck;
 
   useEffect(() => {
     if (!menu_open) {
@@ -108,8 +120,8 @@ export function DetailContextBar({
           title="Refresh"
           aria-label="Refresh"
           className="inline-flex h-8 w-8 items-center justify-center rounded hover:bg-white/10 disabled:opacity-50"
-          disabled={revalidator.state === "loading"}
-          onClick={() => revalidator.revalidate()}
+          disabled={refresh_pending}
+          onClick={() => on_refresh()}
         >
           <RefreshCw className="h-4 w-4" aria-hidden />
         </button>
@@ -128,12 +140,17 @@ export function DetailContextBar({
 
         <button
           type="button"
-          title="Save (unavailable until edit lands)"
+          title={dirty ? "Save" : "Save (no changes)"}
           aria-label="Save"
-          disabled
-          className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded text-slate-400"
+          disabled={!save_enabled || save_pending}
+          className={
+            save_enabled
+              ? "inline-flex h-8 w-8 items-center justify-center rounded hover:bg-white/10 disabled:opacity-50"
+              : "inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded text-slate-400"
+          }
+          onClick={() => on_save()}
         >
-          <SaveCheck className="h-4 w-4" aria-hidden />
+          <SaveIcon className="h-4 w-4" aria-hidden />
         </button>
       </div>
     </div>

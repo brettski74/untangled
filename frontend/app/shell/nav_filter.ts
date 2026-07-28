@@ -37,6 +37,15 @@ export function can_create_class(
   );
 }
 
+export function can_update_class(
+  permissions: readonly string[],
+  class_name: string,
+): boolean {
+  return (
+    has_admin(permissions) || permissions.includes(`${class_name}:update`)
+  );
+}
+
 export function filter_nav_by_permissions(
   nav: NavBarView,
   permissions: readonly string[],
