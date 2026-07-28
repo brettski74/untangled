@@ -91,7 +91,7 @@ export function column_width_px(type_name: string): number {
     case "decimal":
       return 112;
     case "datetime":
-      return 180;
+      return 200;
     case "uuid":
       return 280;
     case "string":

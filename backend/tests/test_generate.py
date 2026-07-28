@@ -132,6 +132,20 @@ def test_generate_demo_pydantic_accepts_and_rejects(
     normalized = demo_item.model_validate(offset)
     assert normalized.created_at == datetime(2026, 7, 18, 12, 0, tzinfo=timezone.utc)
 
+    fractional = {
+        **_valid_demo_payload(),
+        "created_at": datetime(2026, 7, 18, 12, 0, 0, 600_000, tzinfo=timezone.utc),
+        "due_at": datetime(2026, 8, 1, 0, 0, 0, 400_000, tzinfo=timezone.utc),
+    }
+    rounded = demo_item.model_validate(fractional)
+    assert rounded.created_at == datetime(2026, 7, 18, 12, 0, 1, tzinfo=timezone.utc)
+    assert rounded.due_at == datetime(2026, 8, 1, 0, 0, 0, tzinfo=timezone.utc)
+    dumped = json.loads(rounded.model_dump_json())
+    assert dumped["created_at"] == "2026-07-18T12:00:01Z"
+    assert dumped["due_at"] == "2026-08-01T00:00:00Z"
+    assert "." not in dumped["created_at"]
+    assert "." not in dumped["due_at"]
+
 
 def test_generate_demo_zod_accepts_and_rejects(
     repo_definitions: Path, tmp_path: Path, repo_root: Path
@@ -184,6 +198,19 @@ def test_generate_demo_zod_accepts_and_rejects(
     ok = run_case(valid)
     assert ok.returncode == 0, ok.stdout + ok.stderr
     assert json.loads(ok.stdout)["ok"] is True
+
+    fractional = {
+        **valid,
+        "created_at": "2026-07-18T12:00:00.600Z",
+        "due_at": "2026-08-01T00:00:00.400Z",
+    }
+    frac_ok = run_case(fractional)
+    assert frac_ok.returncode == 0, frac_ok.stdout + frac_ok.stderr
+    assert json.loads(frac_ok.stdout)["ok"] is True
+    # Transform normalizes; re-parse via helper only reports ok — assert emit source.
+    zod_src = (zod_out / "demo_item.ts").read_text(encoding="utf-8")
+    assert "toSecondPrecisionUtcIso" in zod_src
+    assert ".transform(toSecondPrecisionUtcIso)" in zod_src
 
     bad = run_case(invalid)
     assert bad.returncode != 0

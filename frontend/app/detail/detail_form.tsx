@@ -1,5 +1,7 @@
 import { ExternalLink } from "lucide-react";
 
+import { LocalDatetimeInput } from "../datetime/local_datetime_input";
+import { display_field_value } from "../datetime/format";
 import type { DetailFieldSlot, DetailLayout } from "./default_layout";
 import { fk_open_related } from "./fk_open_related";
 
@@ -93,7 +95,7 @@ function TextField({
   record: Record<string, unknown>;
 }) {
   const value = record[slot.name_snake];
-  const text = display_text(value);
+  const text = display_field_value(slot.type_name, value);
   const multiline = slot.type_name === "multiline-text";
 
   return (
@@ -104,7 +106,13 @@ function TextField({
       >
         {slot.label}
       </label>
-      {multiline ? (
+      {slot.type_name === "datetime" ? (
+        <LocalDatetimeInput
+          id={`detail-${slot.name_snake}`}
+          value={value}
+          className="w-full rounded border border-slate-300 bg-slate-50 px-2 py-1.5 text-sm text-slate-900"
+        />
+      ) : multiline ? (
         <textarea
           id={`detail-${slot.name_snake}`}
           readOnly
@@ -146,12 +154,22 @@ function ReadControl({
     );
   }
 
+  if (slot.type_name === "datetime") {
+    return (
+      <LocalDatetimeInput
+        id={id}
+        value={value}
+        className="min-w-0 flex-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-900"
+      />
+    );
+  }
+
   return (
     <input
       id={id}
       type="text"
       readOnly
-      value={display_text(value)}
+      value={display_field_value(slot.type_name, value)}
       className="min-w-0 flex-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-900"
     />
   );
@@ -209,17 +227,4 @@ function FkReadControl({
       )}
     </>
   );
-}
-
-function display_text(value: unknown): string {
-  if (value == null) {
-    return "";
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return JSON.stringify(value);
 }

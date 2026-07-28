@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from psycopg import Connection
 
+from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.definition import load_definition
 from untangled.persistence.store import RecordStore
 from untangled.records.deps import definitions_dir, model
@@ -58,7 +59,7 @@ def seed_tickets(conn: Connection) -> dict[str, list[str]]:
         conn, change_def, model("change-request"), actor_id=SEED_ADMIN_ID
     )
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     incidents: list[str] = []
     for row_id, fields in _incident_rows(now):
         if incident_store.fetch_by_id(row_id) is None:

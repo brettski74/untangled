@@ -14,26 +14,26 @@ _HEADER = '''\
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, PlainSerializer, field_validator
 
+from untangled.mapping.datetime_utc import format_utc_iso_z, require_utc_seconds
+
 UtcDatetime = Annotated[
     AwareDatetime,
     PlainSerializer(
-        lambda value: value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        format_utc_iso_z,
         return_type=str,
     ),
 ]
 
 
 def _require_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        raise ValueError("datetime must be timezone-aware (UTC)")
-    return value.astimezone(timezone.utc)
+    return require_utc_seconds(value)
 
 '''
 

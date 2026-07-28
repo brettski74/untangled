@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Mapping
 from uuid import UUID
 
@@ -10,6 +9,7 @@ from psycopg import Connection, sql
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
+from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
 from untangled.mapping.types import format_friendly_id, friendly_id_sequence_name
@@ -48,7 +48,7 @@ class RecordStore[T: BaseModel]:
         """Insert a row. Stamps UUIDv7 ``id``, audit fields, and friendly-id if any."""
         self._reject_system_keys(user_fields, context="create")
         self._reject_friendly_id_keys(user_fields, context="create")
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         payload = {
             **dict(user_fields),
             "id": row_id if row_id is not None else new_uuid7(),
@@ -113,7 +113,7 @@ class RecordStore[T: BaseModel]:
         if existing is None:
             raise KeyError(f"{self._definition.name_snake} id={row_id} not found")
 
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         merged = existing.model_dump()
         merged.update(dict(user_fields))
         merged["id"] = existing.id

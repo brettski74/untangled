@@ -15,8 +15,21 @@ _HEADER = """\
  */
 import { z } from "zod";
 
-/** ISO-8601 datetime string that parses as an instant (UTC-oriented at boundaries). */
-const utcDateTime = z.string().datetime({ offset: true });
+/** Round an ISO-8601 instant to whole-second UTC ISO with a Z suffix. */
+function toSecondPrecisionUtcIso(raw) {
+  const ms = Date.parse(raw);
+  if (Number.isNaN(ms)) {
+    throw new Error("invalid datetime");
+  }
+  const rounded = new Date(Math.round(ms / 1000) * 1000);
+  return rounded.toISOString().replace(/\\.\\d{3}Z$/, "Z");
+}
+
+/** ISO-8601 datetime; normalized to whole-second UTC (``…Z``, no fraction). */
+const utcDateTime = z
+  .string()
+  .datetime({ offset: true })
+  .transform(toSecondPrecisionUtcIso);
 
 /** Fixed-point decimal as a decimal string (avoids binary float drift). */
 const decimalString = z

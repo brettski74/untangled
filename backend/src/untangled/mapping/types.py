@@ -53,7 +53,10 @@ TYPE_DESCRIPTIONS: dict[str, str] = {
     "float": "Floating-point number",
     "decimal": "Fixed-point decimal (exact; JSON string boundary)",
     "uuid": "UUID (hyphenated string at JSON boundaries)",
-    "datetime": "Timezone-aware timestamp; stored and exposed as UTC",
+    "datetime": (
+        "Timezone-aware timestamp; stored and exposed as UTC at whole-second "
+        "precision (nearest second; no fractional seconds on the wire)"
+    ),
     "friendly-id": (
         "Server-assigned operational id (prefix + zero-padded sequence); "
         "PostgreSQL text; environment-local"
