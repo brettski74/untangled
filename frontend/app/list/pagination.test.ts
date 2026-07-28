@@ -7,6 +7,7 @@ import {
   clamped_offset_for_total,
   DEFAULT_PER_PAGE,
   digits_only,
+  format_record_count,
   is_per_page_option,
   last_page_start,
   offset_from_start,
@@ -16,6 +17,21 @@ import {
   start_past_last_page,
   visible_row_count,
 } from "./pagination";
+
+describe("format_record_count", () => {
+  it("formats with grouping for an explicit locale", () => {
+    expect(format_record_count(0, "en-AU")).toBe("0");
+    expect(format_record_count(999, "en-AU")).toBe("999");
+    expect(format_record_count(1000, "en-AU")).toBe("1,000");
+    expect(format_record_count(1_234_567, "en-AU")).toBe("1,234,567");
+  });
+
+  it("falls back when given an invalid locale tag", () => {
+    const fallback = format_record_count(1000, "not-a-real-locale");
+    expect(fallback.replace(/\D/g, "")).toBe("1000");
+    expect(fallback).toBe(format_record_count(1000));
+  });
+});
 
 describe("pagination mapping", () => {
   it("maps start ↔ offset", () => {
