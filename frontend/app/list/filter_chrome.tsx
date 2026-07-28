@@ -576,7 +576,7 @@ function ValueControl({
     const local = iso_to_local_combined(as_string);
     const parts = split_datetime_local(local);
 
-    function commit_datetime_time(raw: string): boolean {
+    function commit_datetime_time(raw: string): string | false {
       const next = apply_datetime_time_change(
         raw,
         local,
@@ -588,7 +588,7 @@ function ValueControl({
       }
       on_editor_warning(null);
       on_change(local_combined_to_iso(next.combined));
-      return true;
+      return split_datetime_local(next.combined).time;
     }
 
     return (
