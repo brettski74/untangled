@@ -68,4 +68,38 @@ describe("search_collection error detail", () => {
       globalThis.fetch = original_fetch;
     }
   });
+
+  it("includes sort in the wire body only when non-empty", async () => {
+    const original_fetch = globalThis.fetch;
+    let bodies: unknown[] = [];
+    globalThis.fetch = async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(
+        JSON.stringify({ items: [], limit: 20, offset: 0, total: 0 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+
+    try {
+      await search_collection("token", "incidents", {
+        attributes: ["summary"],
+      });
+      await search_collection("token", "incidents", {
+        attributes: ["summary"],
+        sort: [],
+      });
+      await search_collection("token", "incidents", {
+        attributes: ["summary"],
+        sort: [{ attribute: "summary", direction: "asc" }],
+      });
+      expect(bodies[0]).not.toHaveProperty("sort");
+      expect(bodies[1]).not.toHaveProperty("sort");
+      expect(bodies[2]).toMatchObject({
+        sort: [{ attribute: "summary", direction: "asc" }],
+      });
+    } finally {
+      globalThis.fetch = original_fetch;
+    }
+  });
 });

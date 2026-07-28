@@ -9,7 +9,7 @@ describe("ListContextBar controlled chrome wiring", () => {
     );
     expect(source).toMatch(/selected_name: string/);
     expect(source).toMatch(/on_selected_name_change:/);
-    expect(source).toMatch(/submit_predicate:/);
+    expect(source).toMatch(/submit_search:/);
     expect(source).toMatch(/effective_ref:/);
     expect(source).not.toMatch(/useState\(\s*\(\)\s*=>\s*quick_filter_ui_defaults/);
     expect(source).not.toMatch(/quick_filter_destination_reset\(/);

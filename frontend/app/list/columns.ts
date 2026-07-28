@@ -10,6 +10,8 @@ export type ListColumn = {
   references: string | null;
   label: string;
   is_friendly_id: boolean;
+  /** Declaration ordinal from field meta (ADR 004) — never invent from array index. */
+  order: number;
 };
 
 /**
@@ -73,6 +75,7 @@ function attribute_to_column(attr: AttributeFieldMeta): ListColumn {
     references: attr.references,
     label: attribute_display_label(attr.name_kebab),
     is_friendly_id: attr.type_name === "friendly-id",
+    order: attr.order,
   };
 }
 
