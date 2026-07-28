@@ -18,6 +18,7 @@ import {
   can_go_prev,
   clamp_starting_record,
   digits_only,
+  format_record_count,
   is_per_page_option,
   last_page_start,
   offset_from_start,
@@ -43,7 +44,7 @@ export type ListPaginationProps = {
 };
 
 /**
- * Dense list footer: per-page select (left) + offset-style pager (right).
+ * Dense list footer: per-page + total (left) + offset-style pager (right).
  */
 export function ListPagination({
   total,
@@ -54,12 +55,28 @@ export function ListPagination({
 }: ListPaginationProps) {
   const start = start_from_offset(offset);
   const [draft_start, set_draft_start] = useState(String(start));
+  const [count_locales, set_count_locales] = useState<
+    string | string[] | undefined
+  >(undefined);
   const start_id = useId();
   const per_page_id = useId();
 
   useEffect(() => {
     set_draft_start(String(start_from_offset(offset)));
   }, [offset, limit, total]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") {
+      return;
+    }
+    if (navigator.languages?.length) {
+      set_count_locales([...navigator.languages]);
+      return;
+    }
+    if (navigator.language) {
+      set_count_locales(navigator.language);
+    }
+  }, []);
 
   const prev_enabled = !busy && can_go_prev(start);
   const next_enabled = !busy && can_go_next(start, total, limit);
@@ -127,6 +144,16 @@ export function ListPagination({
         <label htmlFor={per_page_id} className="text-slate-600">
           per page
         </label>
+        {/* ~one pager-button width between per-page and total */}
+        <span className="inline-block w-8 shrink-0" aria-hidden="true" />
+        <span
+          className="text-slate-700"
+          role="status"
+          aria-label="Total records"
+          suppressHydrationWarning
+        >
+          {format_record_count(total, count_locales)} records
+        </span>
       </div>
 
       <div className="flex items-center gap-1">
@@ -170,12 +197,6 @@ export function ListPagination({
           onKeyDown={on_start_key_down}
           onBlur={() => set_draft_start(String(start))}
         />
-        <span className="px-0.5 text-slate-500" aria-hidden="true">
-          /
-        </span>
-        <span className="min-w-[2rem] text-slate-700" aria-label="Total records">
-          {total}
-        </span>
 
         <PagerButton
           label="Next page"

@@ -16,6 +16,26 @@ export function is_per_page_option(value: number): value is PerPageOption {
   return (PER_PAGE_OPTIONS as readonly number[]).includes(value);
 }
 
+/**
+ * Grouped digits for the list total label.
+ * Pass an explicit ``locales`` in tests; UI prefers browser languages when available,
+ * otherwise the runtime default (``undefined``). Falls back if Intl rejects the tag.
+ */
+export function format_record_count(
+  n: number,
+  locales?: string | string[],
+): string {
+  try {
+    return new Intl.NumberFormat(locales, { useGrouping: true }).format(n);
+  } catch {
+    try {
+      return new Intl.NumberFormat(undefined, { useGrouping: true }).format(n);
+    } catch {
+      return String(n);
+    }
+  }
+}
+
 export function start_from_offset(offset: number): number {
   return offset + 1;
 }
