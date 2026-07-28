@@ -28,7 +28,8 @@ const attrs = [
 ];
 
 function local_datetime_text(iso: string): string {
-  const value = new Date(Date.parse(iso));
+  const ms = Date.parse(iso);
+  const value = new Date(Math.round(ms / 1000) * 1000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
 }
@@ -195,6 +196,12 @@ describe("render_predicate_text", () => {
     );
     expect(format_datetime_text("2026-07-14T06:02:34+01:00")).toBe(
       local_datetime_text("2026-07-14T06:02:34+01:00"),
+    );
+  });
+
+  it("rounds fractional seconds when formatting", () => {
+    expect(format_datetime_text("2026-07-14T05:02:34.600Z")).toBe(
+      local_datetime_text("2026-07-14T05:02:34.600Z"),
     );
   });
 

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID
 
 from psycopg import Connection, sql
 
+from untangled.mapping.datetime_utc import utc_now
 from untangled.seed.rbac_catalog import (
     SEED_PERMISSIONS,
     SEED_PERMISSIONS_BY_KEY,
@@ -19,7 +20,7 @@ from untangled.seed.users import SEED_ADMIN_ID
 
 def seed_rbac(conn: Connection) -> dict[str, int]:
     """Upsert roles, permissions, and joins. Returns counts touched per kind."""
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     actor = SEED_ADMIN_ID
     _upsert_roles(conn, now=now, actor=actor)
     _upsert_permissions(conn, now=now, actor=actor)

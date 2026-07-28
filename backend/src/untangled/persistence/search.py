@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
@@ -13,6 +13,7 @@ from psycopg.errors import InvalidRegularExpression
 from psycopg.rows import dict_row
 from pydantic import TypeAdapter, ValidationError
 
+from untangled.mapping.datetime_utc import format_utc_iso_z, require_utc_seconds
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELDS
 
@@ -530,7 +531,7 @@ def _coerce_value(attr: SearchableAttribute, raw: Any) -> Any:
             raise SearchSemanticError(
                 f"value for attribute {attr.name!r} must be timezone-aware (UTC)"
             )
-        return value.astimezone(timezone.utc)
+        return require_utc_seconds(value)
     return value
 
 
@@ -542,7 +543,7 @@ def _serialize_row(row: dict[str, Any], columns: list[str]) -> dict[str, Any]:
         if isinstance(value, UUID):
             out[name] = str(value)
         elif isinstance(value, datetime):
-            out[name] = value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            out[name] = format_utc_iso_z(value)
         elif isinstance(value, Decimal):
             out[name] = str(value)
         else:

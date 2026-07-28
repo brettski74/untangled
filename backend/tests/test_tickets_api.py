@@ -87,20 +87,28 @@ def test_incident_crud_uuid_and_friendly_locator(tickets_client: TestClient) -> 
 def test_change_request_create_requires_schedule(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "admin")
     admin = next(s for s in SEED_USERS if s.username == "admin")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    start = (now + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = (now + timedelta(days=1, hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
     created = tickets_client.post(
         "/change-requests",
         headers=headers,
         json={
             "summary": "Swap switch",
             "status": "draft",
-            "scheduled_start": (now + timedelta(days=1)).isoformat(),
-            "scheduled_end": (now + timedelta(days=1, hours=2)).isoformat(),
+            "scheduled_start": start,
+            "scheduled_end": end,
             "requested_by": str(admin.id),
         },
     )
     assert created.status_code == 201, created.text
-    assert created.json()["number"].startswith("CHG")
+    body = created.json()
+    assert body["number"].startswith("CHG")
+    assert body["scheduled_start"] == start
+    assert "." not in body["scheduled_start"]
+    assert body["scheduled_start"].endswith("Z")
+    assert "." not in body["created_at"]
+    assert body["created_at"].endswith("Z")
 
 
 def test_junk_locator_is_422(tickets_client: TestClient) -> None:

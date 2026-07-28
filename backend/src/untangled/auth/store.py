@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -16,6 +15,7 @@ from untangled.auth.tokens import (
     new_refresh_token,
     refresh_expiry,
 )
+from untangled.mapping.datetime_utc import utc_now
 from untangled.persistence.ids import new_uuid7
 
 
@@ -106,7 +106,7 @@ def revoke_refresh_token(conn: Connection, refresh_plaintext: str) -> bool:
 
 
 def _insert_refresh_token(conn: Connection, *, user_id: UUID, token_plaintext: str) -> None:
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     row_id = new_uuid7()
     with conn.cursor() as cur:
         cur.execute(
@@ -138,7 +138,7 @@ def _insert_refresh_token(conn: Connection, *, user_id: UUID, token_plaintext: s
 def _claim_valid_refresh(conn: Connection, refresh_plaintext: str) -> dict[str, Any] | None:
     """Revoke a still-valid refresh token in one statement; return its id/user_id."""
     token_hash = hash_refresh_token(refresh_plaintext)
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             sql.SQL(
@@ -161,7 +161,7 @@ def _claim_valid_refresh(conn: Connection, refresh_plaintext: str) -> dict[str, 
 
 
 def _revoke_refresh(conn: Connection, token_id: UUID) -> None:
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     with conn.cursor() as cur:
         cur.execute(
             sql.SQL(

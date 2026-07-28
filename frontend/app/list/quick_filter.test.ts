@@ -440,11 +440,21 @@ describe("24-hour time parsing", () => {
     expect(parse_time_24h("23:59:59")).toEqual({ ok: true, time: "23:59:59" });
   });
 
+  it("accepts digit-only and single-digit colon shorthand", () => {
+    expect(parse_time_24h("123456")).toEqual({ ok: true, time: "12:34:56" });
+    expect(parse_time_24h("12345")).toEqual({ ok: true, time: "01:23:45" });
+    expect(parse_time_24h("1234")).toEqual({ ok: true, time: "12:34:00" });
+    expect(parse_time_24h("1:2:3")).toEqual({ ok: true, time: "01:02:03" });
+    expect(parse_time_24h("1:23")).toEqual({ ok: true, time: "01:23:00" });
+  });
+
   it("rejects invalid or 12-hour style values", () => {
     expect(parse_time_24h("24:00:00").ok).toBe(false);
     expect(parse_time_24h("12:60").ok).toBe(false);
     expect(parse_time_24h("2pm").ok).toBe(false);
     expect(parse_time_24h("").ok).toBe(false);
+    expect(parse_time_24h("123").ok).toBe(false);
+    expect(parse_time_24h("12:").ok).toBe(false);
   });
 
   it("apply_datetime_time_change validates and normalizes", () => {

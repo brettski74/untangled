@@ -15,12 +15,14 @@ from untangled.auth.settings import (
     jwt_secret,
     refresh_token_ttl_seconds,
 )
+from untangled.mapping.datetime_utc import require_utc_seconds, utc_now
 
 ACCESS_TOKEN_ALGORITHM = "HS256"
 
 
 def create_access_token(user_id: UUID, *, now: datetime | None = None) -> str:
     """Mint a short-lived JWT access token with ``sub`` = user id."""
+    # Do not round iat forward — PyJWT rejects tokens with a future ``iat``.
     issued = now or datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": str(user_id),
@@ -59,6 +61,6 @@ def hash_refresh_token(token: str) -> str:
 
 
 def refresh_expiry(*, now: datetime | None = None) -> datetime:
-    """Return UTC expiry for a newly issued refresh token."""
-    issued = now or datetime.now(timezone.utc)
+    """Return UTC expiry for a newly issued refresh token (whole-second)."""
+    issued = require_utc_seconds(now) if now is not None else utc_now()
     return issued + timedelta(seconds=refresh_token_ttl_seconds())
