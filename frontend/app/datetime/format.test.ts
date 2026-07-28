@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { display_field_value, format_datetime_local } from "./format";
+import {
+  display_field_value,
+  format_datetime_local,
+  iso_to_local_combined,
+  local_datetime_control_parts,
+} from "./format";
 
 function local_datetime_text(iso: string): string {
   const ms = Date.parse(iso);
@@ -58,5 +63,48 @@ describe("display_field_value", () => {
     expect(display_field_value("text", "hello")).toBe("hello");
     expect(display_field_value("boolean", true)).toBe("true");
     expect(display_field_value("integer", 3)).toBe("3");
+  });
+});
+
+describe("local_datetime_control_parts", () => {
+  it("splits a known UTC ISO into local date and time parts", () => {
+    const expected = local_datetime_text("2026-07-14T05:02:34Z");
+    const [date, time] = expected.split(" ");
+    expect(local_datetime_control_parts("2026-07-14T05:02:34Z")).toEqual({
+      date,
+      time,
+    });
+  });
+
+  it("rounds fractional seconds before splitting", () => {
+    const expected = local_datetime_text("2026-07-14T05:02:34.600Z");
+    const [date, time] = expected.split(" ");
+    expect(local_datetime_control_parts("2026-07-14T05:02:34.600Z")).toEqual({
+      date,
+      time,
+    });
+  });
+
+  it("returns empty parts for null, non-string, or unparseable values", () => {
+    expect(local_datetime_control_parts(null)).toEqual({ date: "", time: "" });
+    expect(local_datetime_control_parts(12)).toEqual({ date: "", time: "" });
+    expect(local_datetime_control_parts("bogus")).toEqual({
+      date: "",
+      time: "",
+    });
+  });
+});
+
+describe("iso_to_local_combined", () => {
+  it("builds local combined datetime from UTC ISO", () => {
+    const parts = local_datetime_control_parts("2026-07-14T05:02:34Z");
+    expect(iso_to_local_combined("2026-07-14T05:02:34Z")).toBe(
+      `${parts.date}T${parts.time}`,
+    );
+  });
+
+  it("returns empty for empty input", () => {
+    expect(iso_to_local_combined("")).toBe("");
+    expect(iso_to_local_combined("   ")).toBe("");
   });
 });

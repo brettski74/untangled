@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 
+import {
+  iso_to_local_combined,
+  local_combined_to_iso,
+} from "../datetime/format";
 import type { AttributeFieldMeta } from "../generated/field_meta";
 import { attribute_display_label } from "./columns";
 import {
@@ -630,27 +634,3 @@ function ValueControl({
   );
 }
 
-function iso_to_local_combined(iso: string): string {
-  if (iso === "") {
-    return "";
-  }
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) {
-    // Already local-ish
-    return iso.includes("T") ? iso : iso.replace(" ", "T");
-  }
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-function local_combined_to_iso(combined: string): string | undefined {
-  if (combined.trim() === "") {
-    return undefined;
-  }
-  const ms = Date.parse(combined);
-  if (Number.isNaN(ms)) {
-    return combined;
-  }
-  return new Date(ms).toISOString();
-}

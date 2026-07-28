@@ -87,6 +87,64 @@ export function display_field_value(
   return JSON.stringify(value);
 }
 
+/**
+ * Local date + time parts for dual-control chrome (detail / filters).
+ * Empty for null, non-string, or unparseable values.
+ */
+export function local_datetime_control_parts(value: unknown): {
+  date: string;
+  time: string;
+} {
+  if (typeof value !== "string") {
+    return { date: "", time: "" };
+  }
+  const formatted = format_datetime_local(value);
+  if (formatted == null) {
+    return { date: "", time: "" };
+  }
+  const space = formatted.indexOf(" ");
+  if (space < 0) {
+    return { date: "", time: "" };
+  }
+  return {
+    date: formatted.slice(0, space),
+    time: formatted.slice(space + 1),
+  };
+}
+
+/**
+ * Convert a UTC ISO (or known datetime) string to local ``YYYY-MM-DDTHH:mm:ss``.
+ * Shared by filter editable chrome and detail read-only dual controls.
+ */
+export function iso_to_local_combined(iso: string): string {
+  const trimmed = iso.trim();
+  if (trimmed === "") {
+    return "";
+  }
+  const parts = local_datetime_control_parts(trimmed);
+  if (parts.date !== "") {
+    return `${parts.date}T${parts.time}`;
+  }
+  if (Number.isNaN(Date.parse(trimmed))) {
+    return trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T");
+  }
+  return "";
+}
+
+/**
+ * Convert a local combined datetime string back to UTC ISO for the wire.
+ */
+export function local_combined_to_iso(combined: string): string | undefined {
+  if (combined.trim() === "") {
+    return undefined;
+  }
+  const ms = Date.parse(combined);
+  if (Number.isNaN(ms)) {
+    return combined;
+  }
+  return new Date(ms).toISOString();
+}
+
 function has_timezone_suffix(raw: string): boolean {
   return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
 }

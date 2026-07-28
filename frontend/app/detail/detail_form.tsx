@@ -110,7 +110,6 @@ function TextField({
         <LocalDatetimeInput
           id={`detail-${slot.name_snake}`}
           value={value}
-          className="w-full rounded border border-slate-300 bg-slate-50 px-2 py-1.5 text-sm text-slate-900"
         />
       ) : multiline ? (
         <textarea
@@ -155,13 +154,7 @@ function ReadControl({
   }
 
   if (slot.type_name === "datetime") {
-    return (
-      <LocalDatetimeInput
-        id={id}
-        value={value}
-        className="min-w-0 flex-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-900"
-      />
-    );
+    return <LocalDatetimeInput id={id} value={value} />;
   }
 
   return (
