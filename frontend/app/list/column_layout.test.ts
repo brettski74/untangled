@@ -5,6 +5,7 @@ import {
   apply_column_order,
   clamp_column_width,
   column_set_signature,
+  drop_separator_x_for_insert_before,
   insert_before_index_for_client_x,
   MIN_COLUMN_WIDTH_PX,
   move_column_order,
@@ -167,5 +168,30 @@ describe("insert_before_index_for_client_x", () => {
 
   it("returns length when past the last midpoint (append)", () => {
     expect(insert_before_index_for_client_x(rects, 260)).toBe(3);
+  });
+});
+
+describe("drop_separator_x_for_insert_before", () => {
+  const rects = [
+    { left: 10, width: 100 },
+    { left: 110, width: 80 },
+    { left: 190, width: 120 },
+  ];
+
+  it("returns left of first when inserting at the start", () => {
+    expect(drop_separator_x_for_insert_before(rects, 0)).toBe(10);
+  });
+
+  it("returns left of the target header for a mid insert", () => {
+    expect(drop_separator_x_for_insert_before(rects, 1)).toBe(110);
+    expect(drop_separator_x_for_insert_before(rects, 2)).toBe(190);
+  });
+
+  it("returns right edge of last when appending", () => {
+    expect(drop_separator_x_for_insert_before(rects, 3)).toBe(310);
+  });
+
+  it("returns null for an empty rect list", () => {
+    expect(drop_separator_x_for_insert_before([], 0)).toBeNull();
   });
 });

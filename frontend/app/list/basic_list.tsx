@@ -13,6 +13,7 @@ import { collection_for_class } from "../shell/nav_paths";
 import { record_detail_path } from "../records/record_paths";
 import {
   clamp_column_width,
+  drop_separator_x_for_insert_before,
   insert_before_index_for_client_x,
   width_for_attribute,
 } from "./column_layout";
@@ -49,9 +50,17 @@ export function BasicList({
 }: BasicListProps) {
   const empty = rows.length === 0;
   const table_ref = useRef<HTMLTableElement | null>(null);
+  const ghost_ref = useRef<HTMLDivElement | null>(null);
+  const separator_ref = useRef<HTMLDivElement | null>(null);
   const live_widths_ref = useRef<Record<string, number>>({});
-  const drag_from_ref = useRef<number | null>(null);
-  const drop_index_ref = useRef<number | null>(null);
+  const drag_ref = useRef<{
+    from_index: number;
+    drop_index: number;
+    grab_offset_x: number;
+    grab_offset_y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const resize_ref = useRef<{
     attribute: string;
     start_x: number;
@@ -70,9 +79,8 @@ export function BasicList({
     apply_colgroup_widths(table_ref.current, columns, live_widths_ref.current);
     // Column set changed — abandon in-flight pointer gestures (React state wins).
     resize_ref.current = null;
-    drag_from_ref.current = null;
-    drop_index_ref.current = null;
-    clear_drop_markers(table_ref.current);
+    drag_ref.current = null;
+    hide_reorder_overlays(ghost_ref.current, separator_ref.current);
   }, [columns, widths]);
 
   function commit_resize(attribute: string) {
@@ -135,15 +143,45 @@ export function BasicList({
     index: number,
   ) {
     event.preventDefault();
-    drag_from_ref.current = index;
-    drop_index_ref.current = index;
-    paint_drop_marker(table_ref.current, index);
+    const table = table_ref.current;
+    const header = table?.querySelectorAll("thead th")[index] as
+      | HTMLTableCellElement
+      | undefined;
+    if (header == null) {
+      return;
+    }
+    const rect = header.getBoundingClientRect();
+    const column = columns[index];
+    if (column == null) {
+      return;
+    }
+    drag_ref.current = {
+      from_index: index,
+      drop_index: index,
+      grab_offset_x: event.clientX - rect.left,
+      grab_offset_y: event.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+    };
+    paint_reorder_overlays({
+      ghost: ghost_ref.current,
+      separator: separator_ref.current,
+      table,
+      label: column.label,
+      client_x: event.clientX,
+      client_y: event.clientY,
+      grab_offset_x: event.clientX - rect.left,
+      grab_offset_y: event.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+      insert_before_index: index,
+    });
     (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
   }
 
   function on_grip_pointer_move(event: ReactPointerEvent<HTMLSpanElement>) {
-    const from = drag_from_ref.current;
-    if (from == null || table_ref.current == null) {
+    const drag = drag_ref.current;
+    if (drag == null || table_ref.current == null) {
       return;
     }
     const headers = table_ref.current.querySelectorAll("thead th");
@@ -152,19 +190,31 @@ export function BasicList({
       return { left: rect.left, width: rect.width };
     });
     const next_drop = insert_before_index_for_client_x(rects, event.clientX);
-    drop_index_ref.current = next_drop;
-    paint_drop_marker(table_ref.current, next_drop);
+    drag.drop_index = next_drop;
+    paint_reorder_overlays({
+      ghost: ghost_ref.current,
+      separator: separator_ref.current,
+      table: table_ref.current,
+      label: columns[drag.from_index]?.label ?? "",
+      client_x: event.clientX,
+      client_y: event.clientY,
+      grab_offset_x: drag.grab_offset_x,
+      grab_offset_y: drag.grab_offset_y,
+      width: drag.width,
+      height: drag.height,
+      insert_before_index: next_drop,
+    });
   }
 
   function on_grip_pointer_end(event: ReactPointerEvent<HTMLSpanElement>) {
-    const from = drag_from_ref.current;
-    if (from == null) {
+    const drag = drag_ref.current;
+    if (drag == null) {
       return;
     }
-    const to = drop_index_ref.current ?? from;
-    drag_from_ref.current = null;
-    drop_index_ref.current = null;
-    clear_drop_markers(table_ref.current);
+    const from = drag.from_index;
+    const to = drag.drop_index;
+    drag_ref.current = null;
+    hide_reorder_overlays(ghost_ref.current, separator_ref.current);
     try {
       (event.currentTarget as HTMLElement).releasePointerCapture?.(
         event.pointerId,
@@ -180,7 +230,7 @@ export function BasicList({
   const primary = sort[0] ?? null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-auto">
         <table
           ref={table_ref}
@@ -321,40 +371,90 @@ export function BasicList({
           </tbody>
         </table>
       </div>
+      {/*
+        List-local fixed overlays (not shell context-bar portal; not clipped by
+        the table scrollport). Updated imperatively during grip drag.
+      */}
+      <div
+        ref={ghost_ref}
+        data-testid="column-drag-ghost"
+        aria-hidden="true"
+        className="pointer-events-none fixed z-50 hidden truncate rounded border border-slate-400 bg-slate-200 px-1 py-1.5 text-sm font-semibold text-slate-900 opacity-30 shadow-sm"
+      />
+      <div
+        ref={separator_ref}
+        data-testid="column-drop-separator"
+        aria-hidden="true"
+        className="pointer-events-none fixed z-50 hidden w-0.5 bg-sky-500"
+      />
     </div>
   );
 }
 
-const DROP_MARKER_CLASS = "ring-inset ring-1 ring-sky-500";
-const DROP_MARKER_END_CLASS = "shadow-[inset_-2px_0_0_0_rgb(14_165_233)]";
+function paint_reorder_overlays({
+  ghost,
+  separator,
+  table,
+  label,
+  client_x,
+  client_y,
+  grab_offset_x,
+  grab_offset_y,
+  width,
+  height,
+  insert_before_index,
+}: {
+  ghost: HTMLDivElement | null;
+  separator: HTMLDivElement | null;
+  table: HTMLTableElement | null;
+  label: string;
+  client_x: number;
+  client_y: number;
+  grab_offset_x: number;
+  grab_offset_y: number;
+  width: number;
+  height: number;
+  insert_before_index: number;
+}) {
+  if (ghost != null) {
+    ghost.textContent = label;
+    ghost.style.width = `${width}px`;
+    ghost.style.height = `${height}px`;
+    ghost.style.left = `${client_x - grab_offset_x}px`;
+    ghost.style.top = `${client_y - grab_offset_y}px`;
+    ghost.classList.remove("hidden");
+  }
 
-function paint_drop_marker(
-  table: HTMLTableElement | null,
-  insert_before_index: number,
-) {
-  if (table == null) {
+  if (separator == null || table == null) {
     return;
   }
-  clear_drop_markers(table);
   const headers = table.querySelectorAll("thead th");
   if (headers.length === 0) {
+    separator.classList.add("hidden");
     return;
   }
-  if (insert_before_index >= headers.length) {
-    headers[headers.length - 1]?.classList.add(DROP_MARKER_END_CLASS);
+  const rects = [...headers].map((header) => {
+    const rect = header.getBoundingClientRect();
+    return { left: rect.left, width: rect.width };
+  });
+  const x = drop_separator_x_for_insert_before(rects, insert_before_index);
+  const first = headers[0]?.getBoundingClientRect();
+  if (x == null || first == null) {
+    separator.classList.add("hidden");
     return;
   }
-  headers[insert_before_index]?.classList.add(...DROP_MARKER_CLASS.split(" "));
+  separator.style.left = `${x - 1}px`;
+  separator.style.top = `${first.top}px`;
+  separator.style.height = `${first.height}px`;
+  separator.classList.remove("hidden");
 }
 
-function clear_drop_markers(table: HTMLTableElement | null) {
-  if (table == null) {
-    return;
-  }
-  for (const header of table.querySelectorAll("thead th")) {
-    header.classList.remove(...DROP_MARKER_CLASS.split(" "));
-    header.classList.remove(DROP_MARKER_END_CLASS);
-  }
+function hide_reorder_overlays(
+  ghost: HTMLDivElement | null,
+  separator: HTMLDivElement | null,
+) {
+  ghost?.classList.add("hidden");
+  separator?.classList.add("hidden");
 }
 
 function apply_colgroup_widths(

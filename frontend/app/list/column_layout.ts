@@ -200,3 +200,28 @@ export function insert_before_index_for_client_x(
   }
   return header_rects.length;
 }
+
+/**
+ * Viewport X for the vertical drop separator at an insert-before index.
+ * Insert before first → left of first; before i → left of header i;
+ * after last (index === length) → right edge of last header.
+ */
+export function drop_separator_x_for_insert_before(
+  header_rects: readonly { left: number; width: number }[],
+  insert_before_index: number,
+): number | null {
+  if (header_rects.length === 0) {
+    return null;
+  }
+  if (insert_before_index <= 0) {
+    return header_rects[0]?.left ?? null;
+  }
+  if (insert_before_index >= header_rects.length) {
+    const last = header_rects[header_rects.length - 1];
+    if (last == null) {
+      return null;
+    }
+    return last.left + last.width;
+  }
+  return header_rects[insert_before_index]?.left ?? null;
+}
