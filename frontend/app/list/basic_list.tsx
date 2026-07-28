@@ -232,7 +232,7 @@ export function BasicList({
   const table_width_px = total_column_widths_px(columns, widths);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto">
         <table
           ref={table_ref}

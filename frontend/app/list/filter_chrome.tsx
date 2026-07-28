@@ -48,8 +48,12 @@ export type ListFilterChromeProps = {
   /**
    * List search seam — same object shape as the route poster.
    * Omit ``sort``; the route keeps the current user sort list.
+   * Execute should pass ``reset_start: true``.
    */
-  submit_search: (args: { predicate: SearchPredicate | null }) => void;
+  submit_search: (args: {
+    predicate: SearchPredicate | null;
+    reset_start?: boolean;
+  }) => void;
   on_warning: (warning: string | null) => void;
 };
 
@@ -145,7 +149,7 @@ export function ListFilterChrome({
     }
     set_editor_warning(null);
     on_warning(null);
-    submit_search({ predicate: committed.predicate });
+    submit_search({ predicate: committed.predicate, reset_start: true });
     set_open(false);
   }
 
