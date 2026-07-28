@@ -35,6 +35,14 @@ import {
   type ListSearchPayload,
 } from "../list/list_context_bar";
 import { list_destination_ui_sync } from "../list/list_destination_sync";
+import { ListPagination } from "../list/list_pagination";
+import {
+  clamped_offset_for_total,
+  DEFAULT_OFFSET,
+  DEFAULT_PER_PAGE,
+  parse_paging_form_values,
+  start_past_last_page,
+} from "../list/pagination";
 import {
   parse_predicate_json,
   type QuickFilterValues,
@@ -88,6 +96,8 @@ async function run_list_search(
   params: Route.LoaderArgs["params"],
   predicate: SearchPredicate | null,
   sort: ListSortSpec[] | null,
+  limit: number = DEFAULT_PER_PAGE,
+  offset: number = DEFAULT_OFFSET,
 ): Promise<ListLoaderData> {
   const collection = params.collection;
   const list_id = params.list_id;
@@ -117,6 +127,8 @@ async function run_list_search(
     const result = await search_collection(access_token, collection, {
       predicate,
       attributes,
+      limit,
+      offset,
       ...(sort != null && sort.length > 0 ? { sort } : {}),
     });
 
@@ -194,12 +206,19 @@ export async function action({
     throw new Response("Invalid sort", { status: 400 });
   }
 
+  const paging = parse_paging_form_values(form.get("limit"), form.get("offset"));
+  if (!paging.ok) {
+    throw new Response("Invalid limit or offset", { status: 422 });
+  }
+
   try {
     const payload = await run_list_search(
       request,
       params,
       parsed.predicate,
       sort_parsed.sort,
+      paging.limit,
+      paging.offset,
     );
     return data({
       ok: true,
@@ -276,10 +295,16 @@ export default function DestinationListPage({
     search.effective_predicate ?? loaderData.baseline_predicate,
   );
   const sort_ref = useRef<ListSortSpec[]>(sort);
+  const paging_ref = useRef({ limit: search.limit, offset: search.offset });
+  const clamp_inflight_ref = useRef(false);
 
   useEffect(() => {
     sort_ref.current = sort;
   }, [sort]);
+
+  useEffect(() => {
+    paging_ref.current = { limit: search.limit, offset: search.offset };
+  }, [search.limit, search.offset]);
 
   useEffect(() => {
     const synced = list_destination_ui_sync(loaderData);
@@ -297,6 +322,11 @@ export default function DestinationListPage({
     seeded_path_ref.current = loaderData.path;
     effective_ref.current =
       synced.search.effective_predicate ?? loaderData.baseline_predicate;
+    paging_ref.current = {
+      limit: synced.search.limit,
+      offset: synced.search.offset,
+    };
+    clamp_inflight_ref.current = false;
     fetcher_path_ref.current = null;
     // Same destination identity for search rows and list chrome.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- path is the list identity
@@ -335,6 +365,38 @@ export default function DestinationListPage({
       search.effective_predicate ?? loaderData.baseline_predicate;
   }, [search.effective_predicate, loaderData.baseline_predicate]);
 
+  const submit_search = useCallback(
+    (args: {
+      predicate: SearchPredicate | null;
+      /** Omit to keep the current user sort list. */
+      sort?: ListSortSpec[];
+      limit?: number;
+      offset?: number;
+      reset_start?: boolean;
+    }) => {
+      const sort = args.sort ?? sort_ref.current;
+      const limit = args.limit ?? paging_ref.current.limit;
+      let offset = args.offset ?? paging_ref.current.offset;
+      if (args.reset_start) {
+        offset = 0;
+      }
+      paging_ref.current = { limit, offset };
+      const form = new FormData();
+      form.set(
+        "predicate",
+        args.predicate == null ? "null" : JSON.stringify(args.predicate),
+      );
+      if (sort.length > 0) {
+        form.set("sort", JSON.stringify(sort));
+      }
+      form.set("limit", String(limit));
+      form.set("offset", String(offset));
+      fetcher_path_ref.current = loaderData.path;
+      void fetcher.submit(form, { method: "post" });
+    },
+    [fetcher, loaderData.path],
+  );
+
   useEffect(() => {
     if (fetcher.state !== "idle" || fetcher.data == null) {
       return;
@@ -344,10 +406,32 @@ export default function DestinationListPage({
     }
     const result = fetcher.data;
     if (!result.ok) {
+      clamp_inflight_ref.current = false;
       set_warning(result.detail);
       return;
     }
+    // Refresh/sort (or any keep-start search) may land past the last page when
+    // the result set shrinks — clamp once and re-fetch.
+    if (
+      start_past_last_page(result.offset, result.total, result.limit) &&
+      !clamp_inflight_ref.current
+    ) {
+      clamp_inflight_ref.current = true;
+      const clamped_offset = clamped_offset_for_total(
+        result.total,
+        result.limit,
+      );
+      effective_ref.current = result.effective_predicate;
+      submit_search({
+        predicate: result.effective_predicate,
+        limit: result.limit,
+        offset: clamped_offset,
+      });
+      return;
+    }
+    clamp_inflight_ref.current = false;
     effective_ref.current = result.effective_predicate;
+    paging_ref.current = { limit: result.limit, offset: result.offset };
     set_search({
       rows: result.rows,
       total: result.total,
@@ -355,34 +439,33 @@ export default function DestinationListPage({
       offset: result.offset,
       effective_predicate: result.effective_predicate,
     });
-  }, [fetcher.state, fetcher.data, loaderData.path]);
-
-  const submit_search = useCallback(
-    (args: {
-      predicate: SearchPredicate | null;
-      /** Omit to keep the current user sort list. */
-      sort?: ListSortSpec[];
-    }) => {
-      const sort = args.sort ?? sort_ref.current;
-      const form = new FormData();
-      form.set(
-        "predicate",
-        args.predicate == null ? "null" : JSON.stringify(args.predicate),
-      );
-      if (sort.length > 0) {
-        form.set("sort", JSON.stringify(sort));
-      }
-      fetcher_path_ref.current = loaderData.path;
-      void fetcher.submit(form, { method: "post" });
-    },
-    [fetcher, loaderData.path],
-  );
+  }, [fetcher.state, fetcher.data, loaderData.path, submit_search]);
 
   const on_selected_name_change = useCallback((name: string) => {
     set_selected_name(name);
     set_values({});
     set_warning(null);
   }, []);
+
+  const on_paging_change = useCallback(
+    (next: { limit: number; offset: number; search: boolean }) => {
+      paging_ref.current = { limit: next.limit, offset: next.offset };
+      if (!next.search) {
+        set_search((current) => ({
+          ...current,
+          limit: next.limit,
+          offset: next.offset,
+        }));
+        return;
+      }
+      submit_search({
+        predicate: effective_ref.current,
+        limit: next.limit,
+        offset: next.offset,
+      });
+    },
+    [submit_search],
+  );
 
   const on_sort_click = useCallback(
     (attribute: string) => {
@@ -462,17 +545,15 @@ export default function DestinationListPage({
         on_warning={set_warning}
       />
 
-      <div className="shrink-0 border-b border-slate-200 px-4 py-2">
-        <h1 className="text-sm font-semibold tracking-tight text-slate-900">
-          {loaderData.option_display_name}
-        </h1>
-        <p className="text-xs text-slate-500">
-          {search.total === 1 ? "1 record" : `${search.total} records`}
+      {layout_notice != null ? (
+        <p
+          className="shrink-0 px-4 py-1 text-xs text-amber-800"
+          role="status"
+        >
+          {layout_notice}
         </p>
-        <p className="mt-1 min-h-[1rem] text-xs text-amber-800" role="status">
-          {layout_notice ?? ""}
-        </p>
-      </div>
+      ) : null}
+
       <BasicList
         collection={loaderData.collection}
         columns={display_columns}
@@ -482,6 +563,14 @@ export default function DestinationListPage({
         on_sort_click={on_sort_click}
         on_reorder={on_reorder}
         on_resize_commit={on_resize_commit}
+      />
+
+      <ListPagination
+        total={search.total}
+        limit={search.limit}
+        offset={search.offset}
+        busy={busy}
+        on_paging_change={on_paging_change}
       />
     </div>
   );

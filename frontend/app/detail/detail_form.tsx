@@ -1,6 +1,8 @@
 import { ExternalLink } from "lucide-react";
 import type { Ref } from "react";
 
+import { LocalDatetimeInput } from "../datetime/local_datetime_input";
+import { display_field_value } from "../datetime/format";
 import type { DetailFieldSlot, DetailLayout } from "./default_layout";
 import { is_slot_editable } from "./detail_editor";
 import { fk_open_related } from "./fk_open_related";
@@ -190,7 +192,7 @@ function TextField({
   const value = editable
     ? (draft[slot.name_snake] ?? null)
     : record[slot.name_snake];
-  const text = display_text(value);
+  const text = display_field_value(slot.type_name, value);
   const multiline = slot.type_name === "multiline-text";
   const field_class = editable
     ? `w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 ${FOCUS_RING}`
@@ -287,16 +289,29 @@ function FieldControl({
     );
   }
 
+  // Dual-control datetime chrome is read-only today; editable datetimes use
+  // a plain ISO text field until LocalDatetimeInput gains write support.
+  if (slot.type_name === "datetime" && !editable) {
+    return <LocalDatetimeInput id={id} value={value} />;
+  }
+
   const field_class = editable
     ? `min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 ${FOCUS_RING}`
     : "min-w-0 flex-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-900";
+
+  const display =
+    slot.type_name === "datetime" && editable
+      ? value == null
+        ? ""
+        : String(value)
+      : display_field_value(slot.type_name, value);
 
   return (
     <input
       id={id}
       type="text"
       readOnly={!editable}
-      value={display_text(value)}
+      value={display}
       className={field_class}
       onChange={
         editable
@@ -385,19 +400,6 @@ function coerce_value(type_name: string, raw: string): unknown {
     const n = Number(raw);
     return Number.isFinite(n) ? n : raw;
   }
-  // decimal stays as string; datetime/uuid/text family stay as string
+  // decimal / datetime / uuid / text family stay as string
   return raw;
-}
-
-function display_text(value: unknown): string {
-  if (value == null) {
-    return "";
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return JSON.stringify(value);
 }

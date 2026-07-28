@@ -11,6 +11,8 @@ import {
 
 import { collection_for_class } from "../shell/nav_paths";
 import { record_detail_path } from "../records/record_paths";
+import { LocalDatetimeText } from "../datetime/local_datetime_text";
+import { display_field_value } from "../datetime/format";
 import {
   clamp_column_width,
   drop_separator_x_for_insert_before,
@@ -232,7 +234,7 @@ export function BasicList({
   const table_width_px = total_column_widths_px(columns, widths);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto">
         <table
           ref={table_ref}
@@ -359,7 +361,10 @@ export function BasicList({
                     <td
                       key={column.name_snake}
                       className="overflow-hidden px-2 py-1 text-left text-ellipsis whitespace-nowrap"
-                      title={cell_title(row[column.name_snake])}
+                      title={cell_title(
+                        column.type_name,
+                        row[column.name_snake],
+                      )}
                     >
                       <ListCell
                         collection={collection}
@@ -501,7 +506,11 @@ function ListCell({
     return null;
   }
 
-  const text = format_cell_value(value);
+  if (column.type_name === "datetime") {
+    return <LocalDatetimeText value={value} />;
+  }
+
+  const text = format_cell_value(column.type_name, value);
 
   if (column.is_friendly_id && typeof value === "string") {
     return (
@@ -535,24 +544,23 @@ function ListCell({
   return <>{text}</>;
 }
 
-function format_cell_value(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  if (value == null) {
-    return "";
-  }
-  return JSON.stringify(value);
+function format_cell_value(type_name: string, value: unknown): string {
+  return display_field_value(type_name, value);
 }
 
-function cell_title(value: unknown): string | undefined {
+function cell_title(
+  type_name: string,
+  value: unknown,
+): string | undefined {
   if (value == null || value === "") {
     return undefined;
   }
-  return format_cell_value(value);
+  if (type_name === "datetime") {
+    // Title set after client format; avoid SSR timezone mismatch in native tooltip.
+    return undefined;
+  }
+  const text = format_cell_value(type_name, value);
+  return text === "" ? undefined : text;
 }
 
 function row_key(row: Record<string, unknown>, index: number): string {

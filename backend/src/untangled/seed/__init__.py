@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from psycopg import Connection, sql
 
 from untangled.auth.passwords import hash_password
 from untangled.auth.store import normalize_username
+from untangled.mapping.datetime_utc import utc_now
 from untangled.persistence.actor import STUB_ACTOR_ID
 from untangled.seed.rbac import seed_rbac
 from untangled.seed.tickets import seed_tickets
@@ -20,7 +19,7 @@ _MIGRATE_STUB_PASSWORD = "migrate-stub-not-for-login"
 def seed_users(conn: Connection) -> list[str]:
     """Upsert baseline seed users. Returns usernames that were inserted or updated."""
     touched: list[str] = []
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     for seed in SEED_USERS:
         username = normalize_username(seed.username)
         password_hash = hash_password(password_for(seed))
@@ -76,7 +75,7 @@ def upsert_stub_actor(conn: Connection) -> None:
     """
     assert SEED_ADMIN_ID == STUB_ACTOR_ID
     admin = SEED_USERS[0]
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     username = normalize_username(admin.username)
     password_hash = hash_password(_MIGRATE_STUB_PASSWORD)
     with conn.cursor() as cur:

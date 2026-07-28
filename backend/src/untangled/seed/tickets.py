@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from psycopg import Connection
 
+from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.definition import load_definition
 from untangled.persistence.store import RecordStore
 from untangled.records.deps import definitions_dir, model
@@ -34,6 +35,17 @@ SEED_CHANGE_12_ID = UUID("01900000-0000-7000-8000-000000000042")
 SEED_CHANGE_13_ID = UUID("01900000-0000-7000-8000-000000000043")
 SEED_CHANGE_14_ID = UUID("01900000-0000-7000-8000-000000000044")
 
+# Bulk extras for list/pagination testing (stable ordinals in the seed UUID block).
+_BULK_INCIDENT_START = 0x101  # …000101 … …000132 (50 rows)
+_BULK_INCIDENT_COUNT = 50
+_BULK_CHANGE_START = 0x151  # …000151 … …000178 (40 rows)
+_BULK_CHANGE_COUNT = 40
+
+
+def _seed_ticket_id(ordinal: int) -> UUID:
+    """Stable UUIDv7-shaped id in the reserved seed block (…000000 + ordinal)."""
+    return UUID(f"01900000-0000-7000-8000-{ordinal:012x}")
+
 
 def seed_tickets(conn: Connection) -> dict[str, list[str]]:
     """Upsert sample INC/CHG rows via RecordStore. Returns created/skipped summaries."""
@@ -47,7 +59,7 @@ def seed_tickets(conn: Connection) -> dict[str, list[str]]:
         conn, change_def, model("change-request"), actor_id=SEED_ADMIN_ID
     )
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     incidents: list[str] = []
     for row_id, fields in _incident_rows(now):
         if incident_store.fetch_by_id(row_id) is None:
@@ -157,7 +169,59 @@ def _incident_rows(now: datetime) -> list[tuple[UUID, dict]]:
                 "resolution_type": "User error",
             },
         ),
+        *_bulk_incident_rows(now),
     ]
+
+
+_INCIDENT_STATUSES = ("new", "in-progress", "resolved", "closed", "cancelled")
+_INCIDENT_SEVERITIES = ("Critical", "High", "Medium", "Low")
+_INCIDENT_RESOLUTIONS = (
+    "User error",
+    "Application fault",
+    "Hardware fault",
+    "Network fault",
+    "Other",
+)
+_INCIDENT_TOPICS = (
+    "Laptop wifi disconnects",
+    "Voicemail quota exceeded",
+    "Badge reader intermittent",
+    "Monitor flickering",
+    "Calendar sync lag",
+    "Chat desktop crash loop",
+    "DNS lookup timeouts",
+    "Printer toner alerts",
+    "Remote desktop freeze",
+    "Mailbox search slow",
+)
+
+
+def _bulk_incident_rows(now: datetime) -> list[tuple[UUID, dict]]:
+    """Extra incidents for pagination / dense list testing."""
+    rows: list[tuple[UUID, dict]] = []
+    for i in range(_BULK_INCIDENT_COUNT):
+        status = _INCIDENT_STATUSES[i % len(_INCIDENT_STATUSES)]
+        severity = _INCIDENT_SEVERITIES[i % len(_INCIDENT_SEVERITIES)]
+        topic = _INCIDENT_TOPICS[i % len(_INCIDENT_TOPICS)]
+        fields: dict = {
+            "summary": f"{topic} (seed bulk {i + 1:02d})",
+            "description": f"Generated seed incident {i + 1} for list pagination.",
+            "status": status,
+            "severity": severity,
+            "major_incident": i % 7 == 0,
+            "assigned_user_id": SEED_READWRITE_ID if i % 2 == 0 else None,
+        }
+        if status in ("resolved", "closed"):
+            resolved_at = now - timedelta(days=(i % 14) + 1, hours=i % 5)
+            fields["resolved_at"] = resolved_at
+            fields["resolution"] = f"Bulk seed resolution for incident {i + 1}."
+            fields["resolution_type"] = _INCIDENT_RESOLUTIONS[
+                i % len(_INCIDENT_RESOLUTIONS)
+            ]
+            if status == "closed":
+                fields["closed_at"] = resolved_at + timedelta(hours=2)
+        rows.append((_seed_ticket_id(_BULK_INCIDENT_START + i), fields))
+    return rows
 
 
 def _change_rows(now: datetime) -> list[tuple[UUID, dict]]:
@@ -378,4 +442,44 @@ def _change_rows(now: datetime) -> list[tuple[UUID, dict]]:
                 "requested_by": SEED_ADMIN_ID,
             },
         ),
+        *_bulk_change_rows(now),
     ]
+
+
+_CHANGE_STATUSES = ("draft", "scheduled", "in-progress", "implemented", "cancelled")
+_CHANGE_TOPICS = (
+    "Patch edge proxies",
+    "Rotate service account keys",
+    "Expand VLAN capacity",
+    "Upgrade bastion hosts",
+    "Rebuild CI runners",
+    "Tune backup retention",
+    "Migrate syslog collectors",
+    "Refresh DHCP scopes",
+)
+
+
+def _bulk_change_rows(now: datetime) -> list[tuple[UUID, dict]]:
+    """Extra change requests for pagination / dense list testing."""
+    rows: list[tuple[UUID, dict]] = []
+    for i in range(_BULK_CHANGE_COUNT):
+        status = _CHANGE_STATUSES[i % len(_CHANGE_STATUSES)]
+        topic = _CHANGE_TOPICS[i % len(_CHANGE_TOPICS)]
+        sched_start = now + timedelta(days=(i % 20) - 5, hours=i % 8)
+        sched_end = sched_start + timedelta(hours=1 + (i % 3))
+        fields: dict = {
+            "summary": f"{topic} (seed bulk {i + 1:02d})",
+            "description": f"Generated seed change {i + 1} for list pagination.",
+            "status": status,
+            "risk_score": 5 + (i * 7) % 96,
+            "scheduled_start": sched_start,
+            "scheduled_end": sched_end,
+            "assigned_user_id": SEED_READWRITE_ID if i % 3 != 0 else None,
+            "requested_by": SEED_ADMIN_ID if i % 2 == 0 else SEED_READWRITE_ID,
+        }
+        if status in ("in-progress", "implemented"):
+            fields["actual_start"] = sched_start + timedelta(minutes=5)
+        if status == "implemented":
+            fields["actual_end"] = sched_start + timedelta(hours=1)
+        rows.append((_seed_ticket_id(_BULK_CHANGE_START + i), fields))
+    return rows

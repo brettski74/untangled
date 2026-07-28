@@ -3,7 +3,10 @@
  * Wire vocabulary only — no new ops or relative-date semantics.
  */
 import type { AttributeFieldMeta } from "../generated/field_meta";
+import { parse_time_24h } from "../datetime/parse_time";
 import { attributes_in_declaration_order } from "./columns";
+
+export { parse_time_24h };
 
 export type SearchPredicate = {
   op: string;
@@ -298,43 +301,6 @@ export function apply_datetime_date_change(
 }
 
 /**
- * Parse a 24-hour time string (`HH:mm` or `HH:mm:ss`). Empty → fail.
- * Native `<input type="time">` follows OS locale (often 12h); text fields use this.
- */
-export function parse_time_24h(
-  raw: string,
-): { ok: true; time: string } | { ok: false; warning: string } {
-  const t = raw.trim();
-  const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(t);
-  if (match == null) {
-    return {
-      ok: false,
-      warning: "Enter time as 24-hour HH:mm:ss (e.g. 14:30:00).",
-    };
-  }
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  const second = match[3] == null ? 0 : Number(match[3]);
-  if (
-    hour < 0 ||
-    hour > 23 ||
-    minute < 0 ||
-    minute > 59 ||
-    second < 0 ||
-    second > 59
-  ) {
-    return {
-      ok: false,
-      warning: "Enter time as 24-hour HH:mm:ss (e.g. 14:30:00).",
-    };
-  }
-  return {
-    ok: true,
-    time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`,
-  };
-}
-
-/**
  * Apply a time change. Requires a date on that side. Validates 24h HH:mm[:ss].
  */
 export function apply_datetime_time_change(
@@ -368,11 +334,7 @@ export function apply_datetime_time_change(
 
 function normalize_time_seconds(time: string): string {
   const t = time.trim();
-  if (/^\d{1,2}:\d{2}$/.test(t)) {
-    const parsed = parse_time_24h(t);
-    return parsed.ok ? parsed.time : `${t}:00`;
-  }
-  if (/^\d{1,2}:\d{2}:\d{2}$/.test(t)) {
+  if (/^\d{1,2}:\d{1,2}(?::\d{1,2})?$/.test(t)) {
     const parsed = parse_time_24h(t);
     return parsed.ok ? parsed.time : t;
   }

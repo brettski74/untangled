@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 
+import {
+  iso_to_local_combined,
+  local_combined_to_iso,
+} from "../datetime/format";
 import type { AttributeFieldMeta } from "../generated/field_meta";
 import { attribute_display_label } from "./columns";
 import {
@@ -48,8 +52,12 @@ export type ListFilterChromeProps = {
   /**
    * List search seam — same object shape as the route poster.
    * Omit ``sort``; the route keeps the current user sort list.
+   * Execute should pass ``reset_start: true``.
    */
-  submit_search: (args: { predicate: SearchPredicate | null }) => void;
+  submit_search: (args: {
+    predicate: SearchPredicate | null;
+    reset_start?: boolean;
+  }) => void;
   on_warning: (warning: string | null) => void;
 };
 
@@ -145,7 +153,7 @@ export function ListFilterChrome({
     }
     set_editor_warning(null);
     on_warning(null);
-    submit_search({ predicate: committed.predicate });
+    submit_search({ predicate: committed.predicate, reset_start: true });
     set_open(false);
   }
 
@@ -568,7 +576,7 @@ function ValueControl({
     const local = iso_to_local_combined(as_string);
     const parts = split_datetime_local(local);
 
-    function commit_datetime_time(raw: string): boolean {
+    function commit_datetime_time(raw: string): string | false {
       const next = apply_datetime_time_change(
         raw,
         local,
@@ -580,7 +588,7 @@ function ValueControl({
       }
       on_editor_warning(null);
       on_change(local_combined_to_iso(next.combined));
-      return true;
+      return split_datetime_local(next.combined).time;
     }
 
     return (
@@ -626,27 +634,3 @@ function ValueControl({
   );
 }
 
-function iso_to_local_combined(iso: string): string {
-  if (iso === "") {
-    return "";
-  }
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) {
-    // Already local-ish
-    return iso.includes("T") ? iso : iso.replace(" ", "T");
-  }
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-function local_combined_to_iso(combined: string): string | undefined {
-  if (combined.trim() === "") {
-    return undefined;
-  }
-  const ms = Date.parse(combined);
-  if (Number.isNaN(ms)) {
-    return combined;
-  }
-  return new Date(ms).toISOString();
-}

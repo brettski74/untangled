@@ -53,8 +53,12 @@ export type ListContextBarProps = {
   /**
    * List search seam — same object shape as the route poster.
    * Omit ``sort``; the route keeps the current user sort list.
+   * Quick-filter Enter should pass ``reset_start: true``; Refresh should not.
    */
-  submit_search: (args: { predicate: SearchPredicate | null }) => void;
+  submit_search: (args: {
+    predicate: SearchPredicate | null;
+    reset_start?: boolean;
+  }) => void;
   /** Controlled quick-filter chrome — owned by DestinationListPage. */
   selected_name: string;
   values: QuickFilterValues;
@@ -129,7 +133,7 @@ export function ListContextBar({
     }
     on_warning_change(null);
     const next = and_predicates(effective_ref.current, ...built.predicates);
-    submit_search({ predicate: next });
+    submit_search({ predicate: next, reset_start: true });
   }
 
   async function on_copy_link() {
@@ -456,6 +460,18 @@ function DatetimeRangeControls({
     return updated;
   }
 
+  function commit_time_display(
+    side: "from" | "to",
+    raw: string,
+  ): string | false {
+    const updated = apply_time(side, raw);
+    if (updated == null) {
+      return false;
+    }
+    const combined = side === "from" ? updated.from : updated.to;
+    return split_datetime_local(combined).time;
+  }
+
   function commit_date_and_enter(
     side: "from" | "to",
     date_value: string,
@@ -531,14 +547,14 @@ function DatetimeRangeControls({
         disabled={from_parts.date === ""}
         placeholder={from_parts.date === "" ? "" : "HH:mm:ss"}
         aria_label="Quick filter from time (24-hour)"
-        on_commit={(raw) => apply_time("from", raw) != null}
+        on_commit={(raw) => commit_time_display("from", raw)}
         on_enter={(raw) => {
-          const updated = apply_time("from", raw);
-          if (updated != null) {
-            on_enter(updated);
-            return true;
+          const display = commit_time_display("from", raw);
+          if (display === false) {
+            return false;
           }
-          return false;
+          on_enter(values_ref.current);
+          return display;
         }}
       />
       <span className="text-[var(--color-shell-chrome-muted)]">To:</span>
@@ -570,14 +586,14 @@ function DatetimeRangeControls({
         disabled={to_parts.date === ""}
         placeholder={to_parts.date === "" ? "" : "HH:mm:ss"}
         aria_label="Quick filter to time (24-hour)"
-        on_commit={(raw) => apply_time("to", raw) != null}
+        on_commit={(raw) => commit_time_display("to", raw)}
         on_enter={(raw) => {
-          const updated = apply_time("to", raw);
-          if (updated != null) {
-            on_enter(updated);
-            return true;
+          const display = commit_time_display("to", raw);
+          if (display === false) {
+            return false;
           }
-          return false;
+          on_enter(values_ref.current);
+          return display;
         }}
       />
     </div>

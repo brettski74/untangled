@@ -6,17 +6,18 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 
 /**
  * Resolve blur/Enter commit for a 24-hour time draft field.
- * Returns the draft to display after a commit attempt (`committed` on failure).
+ * ``commit`` returns the normalized display time on success, or ``false`` to revert.
  */
 export function commit_time_24_draft(
   draft: string,
   committed: string,
-  commit: (raw: string) => boolean,
+  commit: (raw: string) => string | false,
 ): string {
   if (draft === committed) {
     return draft;
   }
-  return commit(draft) ? draft : committed;
+  const next = commit(draft);
+  return next === false ? committed : next;
 }
 
 export function Time24Field({
@@ -33,10 +34,10 @@ export function Time24Field({
   disabled: boolean;
   placeholder: string;
   aria_label: string;
-  /** Return false when commit fails (draft reverts to `value`). */
-  on_commit: (raw: string) => boolean | void;
-  /** Return false when commit fails (draft reverts to `value`). */
-  on_enter: (raw: string) => boolean | void;
+  /** Normalized ``HH:mm:ss`` on success; ``false`` reverts draft to ``value``. */
+  on_commit: (raw: string) => string | false;
+  /** Normalized ``HH:mm:ss`` on success; ``false`` reverts draft to ``value``. */
+  on_enter: (raw: string) => string | false;
 }) {
   const [draft, set_draft] = useState(value);
 
@@ -46,9 +47,12 @@ export function Time24Field({
 
   function attempt_commit(via_enter: boolean) {
     const handler = via_enter ? on_enter : on_commit;
-    set_draft((current) =>
-      commit_time_24_draft(current, value, (raw) => handler(raw) !== false),
-    );
+    if (draft === value) {
+      return;
+    }
+    // Apply outside the draft updater so side-effecting callers are not double-invoked.
+    const next = commit_time_24_draft(draft, value, handler);
+    set_draft(next);
   }
 
   return (
