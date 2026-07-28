@@ -229,6 +229,120 @@ describe("destination_list action", () => {
     expect(search_body.sort).toEqual(sort);
   });
 
+  it("forwards limit and offset to search", async () => {
+    search_collection.mockResolvedValue({
+      items: [],
+      limit: 50,
+      offset: 50,
+      total: 200,
+    });
+
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie();
+    const form = new FormData();
+    form.set("predicate", "null");
+    form.set("limit", "50");
+    form.set("offset", "50");
+
+    const result = await action({
+      request: new Request("http://web.test/incidents/lists/all", {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: form,
+      }),
+      params: { collection: "incidents", list_id: "all" },
+      context: {},
+    } as never);
+
+    expect(result.data).toMatchObject({
+      ok: true,
+      limit: 50,
+      offset: 50,
+      total: 200,
+    });
+    const search_body = search_collection.mock.calls[0]?.[2] as {
+      limit?: number;
+      offset?: number;
+    };
+    expect(search_body.limit).toBe(50);
+    expect(search_body.offset).toBe(50);
+  });
+
+  it("defaults missing limit and offset", async () => {
+    search_collection.mockResolvedValue({
+      items: [],
+      limit: 20,
+      offset: 0,
+      total: 0,
+    });
+
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie();
+    const form = new FormData();
+    form.set("predicate", "null");
+
+    await action({
+      request: new Request("http://web.test/incidents/lists/all", {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: form,
+      }),
+      params: { collection: "incidents", list_id: "all" },
+      context: {},
+    } as never);
+
+    const search_body = search_collection.mock.calls[0]?.[2] as {
+      limit?: number;
+      offset?: number;
+    };
+    expect(search_body.limit).toBe(20);
+    expect(search_body.offset).toBe(0);
+  });
+
+  it("422s on disallowed limit", async () => {
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie();
+    const form = new FormData();
+    form.set("predicate", "null");
+    form.set("limit", "15");
+    form.set("offset", "0");
+
+    await expect(
+      action({
+        request: new Request("http://web.test/incidents/lists/all", {
+          method: "POST",
+          headers: { Cookie: cookie },
+          body: form,
+        }),
+        params: { collection: "incidents", list_id: "all" },
+        context: {},
+      } as never),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(search_collection).not.toHaveBeenCalled();
+  });
+
+  it("422s on negative offset", async () => {
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie();
+    const form = new FormData();
+    form.set("predicate", "null");
+    form.set("limit", "20");
+    form.set("offset", "-1");
+
+    await expect(
+      action({
+        request: new Request("http://web.test/incidents/lists/all", {
+          method: "POST",
+          headers: { Cookie: cookie },
+          body: form,
+        }),
+        params: { collection: "incidents", list_id: "all" },
+        context: {},
+      } as never),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(search_collection).not.toHaveBeenCalled();
+  });
+
   it("400s on malformed sort JSON", async () => {
     const { action } = await import("../routes/destination_list");
     const cookie = await session_cookie();
@@ -378,7 +492,7 @@ describe("destination_list context bar destination identity", () => {
     );
   });
 
-  it("uses a single submit_search seam for predicate and sort", async () => {
+  it("uses a single submit_search seam for predicate, sort, and paging", async () => {
     const { readFile } = await import("node:fs/promises");
     const source = await readFile(
       new URL("./destination_list.tsx", import.meta.url),
@@ -389,6 +503,8 @@ describe("destination_list context bar destination identity", () => {
     expect(source).not.toMatch(/submit_predicate/);
     expect(source).toMatch(/args\.sort \?\? sort_ref\.current/);
     expect(source).toMatch(/form\.set\("sort", JSON\.stringify\(sort\)\)/);
+    expect(source).toMatch(/form\.set\("limit", String\(limit\)\)/);
+    expect(source).toMatch(/form\.set\("offset", String\(offset\)\)/);
   });
 });
 
@@ -402,5 +518,22 @@ describe("destination_list header interactions", () => {
     expect(source).toMatch(/on_sort_click=\{on_sort_click\}/);
     expect(source).toMatch(/on_reorder=\{on_reorder\}/);
     expect(source).toMatch(/on_resize_commit=\{on_resize_commit\}/);
+  });
+});
+
+describe("destination_list pagination", () => {
+  it("renders ListPagination and drops the interim title/count strip", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./destination_list.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/<ListPagination/);
+    expect(source).toMatch(/on_paging_change=\{on_paging_change\}/);
+    expect(source).toMatch(/start_past_last_page/);
+    expect(source).not.toMatch(
+      /<h1[\s\S]*option_display_name/,
+    );
+    expect(source).not.toMatch(/\$\{search\.total\} records/);
   });
 });

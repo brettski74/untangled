@@ -53,8 +53,12 @@ export type ListContextBarProps = {
   /**
    * List search seam — same object shape as the route poster.
    * Omit ``sort``; the route keeps the current user sort list.
+   * Quick-filter Enter should pass ``reset_start: true``; Refresh should not.
    */
-  submit_search: (args: { predicate: SearchPredicate | null }) => void;
+  submit_search: (args: {
+    predicate: SearchPredicate | null;
+    reset_start?: boolean;
+  }) => void;
   /** Controlled quick-filter chrome — owned by DestinationListPage. */
   selected_name: string;
   values: QuickFilterValues;
@@ -129,7 +133,7 @@ export function ListContextBar({
     }
     on_warning_change(null);
     const next = and_predicates(effective_ref.current, ...built.predicates);
-    submit_search({ predicate: next });
+    submit_search({ predicate: next, reset_start: true });
   }
 
   async function on_copy_link() {
