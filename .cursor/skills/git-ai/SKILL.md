@@ -5,8 +5,9 @@ description: >-
   (branch/status), read-only git diff passthrough, topic-vs-default branch
   diffstat, sync default branch, create/switch branches, stage and commit
   explicit paths, push without force, and optionally delete a merged local
-  branch. Use whenever those git steps apply—inside refine/implement/verify,
-  future workflows, or ad-hoc chat—unless the user explicitly wants raw git.
+  branch. Use whenever those git steps apply—inside refine/diagnose/implement/
+  verify, future workflows, or ad-hoc chat—unless the user explicitly wants
+  raw git.
 ---
 
 # Git AI tooling
@@ -19,15 +20,15 @@ Prefer these scripts over ad-hoc `git … && git …` chains. Project convention
 
 | Need | Script |
 | ---- | ------ |
-| Read-only worktree orientation (branch, dirty, upstream, optional issue `N` feature branches) | `scripts/git-status.sh` |
+| Read-only worktree orientation (branch, dirty, upstream, optional issue `N` feature/fix branches) | `scripts/git-status.sh` |
 | Read-only `git diff` passthrough (working tree / staged / paths / refs) | `scripts/git-diff.sh` |
 | Read-only topic-vs-default commits + diffstat (verify checklist; not for routine implement) | `scripts/branch-diff.sh` |
 | Sync default from `origin` (FF-only); optional local topic-branch cleanup | `scripts/sync-default.sh` |
 | Create or switch to a named branch | `scripts/checkout-branch.sh` |
 | Stage explicit paths; optionally commit | `scripts/stage-commit.sh` |
 | Push current topic branch (never force) | `scripts/push.sh` |
-| Mechanical start-of-refine setup for issue `N` (`.refinement/`, repo/origin/draft facts) | `scripts/refine-preflight.sh` |
-| Mechanical end-of-refine publish for issue `N` (body-file → GitHub, READY, unassign, delete draft) | `scripts/refine-publish.sh` |
+| Mechanical draft-dir setup for issue `N` (`.refinement/`, repo/origin/draft facts) | `scripts/git-preflight.sh` |
+| Mechanical draft publish for issue `N` (body-file → GitHub, READY, unassign, delete draft) | `scripts/git-publish.sh` |
 
 Invocation needs **no leading `cd`**: scripts self-locate the repo root. Absolute or workspace-relative paths are fine regardless of shell cwd.
 
@@ -41,8 +42,8 @@ Invocation needs **no leading `cd`**: scripts self-locate the repo root. Absolut
 .cursor/skills/git-ai/scripts/checkout-branch.sh feature/17-git-ai-tooling
 .cursor/skills/git-ai/scripts/stage-commit.sh -m "message" -- path/one path/two
 .cursor/skills/git-ai/scripts/push.sh
-.cursor/skills/git-ai/scripts/refine-preflight.sh 19
-.cursor/skills/git-ai/scripts/refine-publish.sh 19
+.cursor/skills/git-ai/scripts/git-preflight.sh 19
+.cursor/skills/git-ai/scripts/git-publish.sh 19
 ```
 
 Do **not** set `GIT_AI_REPO_ROOT` in normal workflow use (tests/diagnostics only).
@@ -62,7 +63,7 @@ If the user explicitly requests raw git, or no script covers the need, raw git i
 ### `git-status.sh [N]`
 
 - Read-only orientation: branch, dirty/untracked, upstream and vs-default ahead/behind, porcelain paths.
-- Optional `N`: matching local/remote `feature/<N>-*` branches and `on_issue_branch`.
+- Optional `N`: matching local/remote `feature/<N>-*` and `fix/<N>-*` branches and `on_issue_branch`.
 - Detached HEAD reported, not refused. No fetch/checkout/mutation.
 - Fails closed on bad args, missing `origin`, or bootstrap failure.
 
@@ -110,7 +111,7 @@ If the user explicitly requests raw git, or no script covers the need, raw git i
 - Behind and FF-capable → `pull --ff-only` then push; diverge → abort.
 - On push failure with an HTTP(S) remote URL: warn that SSH/git protocol may work better if auth is the issue, then exit non-zero.
 
-### `refine-preflight.sh <N>`
+### `git-preflight.sh <N>`
 
 - `N` is the GitHub issue number: exactly one argument, positive integer, else fail.
 - Ensures `.refinement/` exists (idempotent); **never** creates or modifies `.refinement/<N>-draft.md`.
@@ -119,7 +120,7 @@ If the user explicitly requests raw git, or no script covers the need, raw git i
 - Fails closed on missing `origin` or bootstrap failure; never fails because a URL "looks weird."
 - Does not call `gh` or mutate GitHub issues.
 
-### `refine-publish.sh <N>`
+### `git-publish.sh <N>`
 
 - `N` is the GitHub issue number: exactly one argument, positive integer, else fail.
 - Requires `.refinement/<N>-draft.md` to exist; does not create or edit its contents.
@@ -130,7 +131,7 @@ If the user explicitly requests raw git, or no script covers the need, raw git i
 
 ## Workflow integration
 
-refine / implement / verify (and future workflows) should reference this skill for covered git steps. Applicability is **not** limited to those workflows.
+refine / diagnose / implement / verify (and other workflows) should reference this skill for covered git steps. Applicability is **not** limited to those workflows.
 
 ## Tests
 

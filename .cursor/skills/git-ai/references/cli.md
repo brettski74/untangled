@@ -69,14 +69,14 @@ On `git push` failure: if the remote URL is `http://` or `https://`, print a war
 
 | Arg | Meaning |
 | --- | ------- |
-| `[issue-number]` | Optional GitHub issue number `N` (positive integer). When set, also reports matching `feature/<N>-*` branches. |
+| `[issue-number]` | Optional GitHub issue number `N` (positive integer). When set, also reports matching `feature/<N>-*` and `fix/<N>-*` branches. |
 
 Behaviour:
 
 - Standard bootstrap (`common.sh`), requires `origin`.
 - **Read-only:** no fetch, checkout, or index mutation. Detached HEAD is reported (`head_detached=yes`), not a hard failure.
 - Success output (stable `key=value` lines): `repo_root`, `origin_url` (raw), `default_branch`, `current_branch`, `head_detached`, `on_default`, `tracked_dirty`, `has_untracked`, `upstream` (empty if none), `upstream_ahead` / `upstream_behind` (empty if no upstream), `default_ahead` / `default_behind` vs `origin/<default>`, `status_sb` (first line of `git status -sb`), zero or more `status_path=<porcelain line>`.
-- With `N`: also `issue_number`, `issue_branch_local` / `issue_branch_remote` (comma-separated `feature/<N>-*` matches, may be empty), `on_issue_branch`.
+- With `N`: also `issue_number`, `issue_branch_local` / `issue_branch_remote` (comma-separated `feature/<N>-*` and `fix/<N>-*` matches, may be empty), `on_issue_branch`.
 
 Failure modes (non-zero):
 
@@ -128,7 +128,7 @@ Failure modes (non-zero):
 
 **Verify** uses this to build the acceptance checklist from code changes. **Implement** should not call it routinely (keeps large diffstat out of implement context). Prefer this over hand-rolled `git log` / `git diff --stat` for topic-vs-default. For arbitrary patch content, use `git-diff.sh`.
 
-## `refine-preflight.sh`
+## `git-preflight.sh`
 
 | Arg | Meaning |
 | --- | ------- |
@@ -148,7 +148,7 @@ Failure modes (non-zero):
 
 Owner/repo parsing from `origin_url` is deliberately left to the agent.
 
-## `refine-publish.sh`
+## `git-publish.sh`
 
 | Arg | Meaning |
 | --- | ------- |
@@ -172,4 +172,4 @@ Failure modes (non-zero):
 - `gh` missing or not authenticated
 - Any `gh issue edit` / `gh issue view` failure
 
-Does not create child issues or perform refine judgment (feature vs bug, READY confirmation)—workflow skill only.
+Does not create child issues or perform workflow judgment (feature vs bug, READY confirmation)—workflow skill only.
