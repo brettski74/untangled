@@ -69,6 +69,45 @@ export function find_match_for_path(
   return null;
 }
 
+/**
+ * Route-driven open nav class for the accordion.
+ *
+ * Rule order (do not reorder casually):
+ * 1. Exact list/new option path → that option's section class.
+ * 2. Else exactly two non-empty segments `/{collection}/{locator}` whose
+ *    collection maps to a section present in `nav` → that class.
+ *    Today only `/new` and `/:locator` share that shape under a collection;
+ *    `/new` is covered by (1). Three-segment list paths (`/lists/...`) are
+ *    never treated as detail. A future two-segment collection route that is
+ *    neither an option path nor detail must update this helper deliberately.
+ * 3. Otherwise null (no route-forced open section).
+ */
+export function open_class_for_path(
+  nav: NavBarView,
+  pathname: string,
+): string | null {
+  const option_match = find_match_for_path(nav, pathname);
+  if (option_match != null) {
+    return option_match.section.class_name;
+  }
+
+  const segments = pathname.split("/").filter((segment) => segment.length > 0);
+  if (segments.length !== 2) {
+    return null;
+  }
+  const [collection, _locator] = segments;
+  if (collection == null) {
+    return null;
+  }
+  const class_name = class_for_collection(collection);
+  if (class_name == null) {
+    return null;
+  }
+  return nav.some((section) => section.class_name === class_name)
+    ? class_name
+    : null;
+}
+
 export function find_list_option(
   nav: NavBarView,
   collection: string,
