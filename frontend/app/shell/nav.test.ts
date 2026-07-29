@@ -10,6 +10,7 @@ import {
   display_name_to_slug,
   find_match_for_path,
   find_list_option,
+  open_class_for_path,
   option_path,
 } from "./nav_paths";
 import { load_default_nav, reset_default_nav_cache_for_tests } from "./nav_config.server";
@@ -112,6 +113,36 @@ describe("nav paths", () => {
     expect(find_match_for_path(nav, "/change-requests/lists/all")?.path).toBe(
       "/change-requests/lists/all",
     );
+  });
+
+  it("open_class_for_path expands list, new, and detail for known collections", () => {
+    reset_default_nav_cache_for_tests();
+    const nav = load_default_nav();
+    expect(open_class_for_path(nav, "/incidents/lists/all")).toBe("incident");
+    expect(open_class_for_path(nav, "/incidents/new")).toBe("incident");
+    expect(open_class_for_path(nav, "/incidents/INC00000001")).toBe("incident");
+    expect(open_class_for_path(nav, "/change-requests/lists/all")).toBe(
+      "change-request",
+    );
+    expect(open_class_for_path(nav, "/change-requests/new")).toBe(
+      "change-request",
+    );
+    expect(open_class_for_path(nav, "/change-requests/CRQ00000001")).toBe(
+      "change-request",
+    );
+  });
+
+  it("open_class_for_path returns null when collection or section is unknown", () => {
+    reset_default_nav_cache_for_tests();
+    const full = load_default_nav();
+    const incident_only = full.filter((s) => s.class_name === "incident");
+    expect(open_class_for_path(full, "/unknown-things/ABC")).toBeNull();
+    expect(
+      open_class_for_path(incident_only, "/change-requests/CRQ00000001"),
+    ).toBeNull();
+    expect(open_class_for_path(full, "/")).toBeNull();
+    expect(open_class_for_path(full, "/incidents")).toBeNull();
+    expect(open_class_for_path(full, "/incidents/lists/all/extra")).toBeNull();
   });
 });
 

@@ -10,7 +10,7 @@ import {
   read_nav_prefs,
   write_nav_prefs,
 } from "./nav_prefs";
-import { find_match_for_path, option_path } from "./nav_paths";
+import { open_class_for_path, option_path } from "./nav_paths";
 import type { NavBarView } from "./nav_schema";
 
 export type ShellNavRailProps = {
@@ -19,8 +19,7 @@ export type ShellNavRailProps = {
 
 export function ShellNavRail({ nav }: ShellNavRailProps) {
   const location = useLocation();
-  const active = find_match_for_path(nav, location.pathname);
-  const route_open_class = active?.section.class_name ?? null;
+  const route_open_class = open_class_for_path(nav, location.pathname);
 
   const [prefs, set_prefs] = useState<NavPrefs>({
     collapsed: false,
