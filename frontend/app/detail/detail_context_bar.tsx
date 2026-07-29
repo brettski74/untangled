@@ -23,7 +23,7 @@ const MENU_ITEMS = [
 ] as const;
 
 /**
- * Detail context bar: inert menu, title, refresh, copy-link, dirty-aware save.
+ * Detail context bar: inert menu, title, dirty-aware save, copy-link, refresh.
  */
 export function DetailContextBar({
   class_display_name,
@@ -117,13 +117,18 @@ export function DetailContextBar({
       <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
-          title="Refresh"
-          aria-label="Refresh"
-          className="inline-flex h-8 w-8 items-center justify-center rounded hover:bg-white/10 disabled:opacity-50"
-          disabled={refresh_pending}
-          onClick={() => on_refresh()}
+          title={dirty ? "Save" : "Save (no changes)"}
+          aria-label="Save"
+          disabled={!save_enabled || save_pending}
+          className={
+            save_enabled
+              ? "inline-flex h-8 items-center gap-1.5 rounded border border-[var(--color-shell-separator)] px-2 text-xs text-[var(--color-shell-chrome-fg)] hover:bg-white/10 disabled:opacity-50"
+              : "inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded border border-[var(--color-shell-separator)] px-2 text-xs text-[var(--color-shell-chrome-muted)]"
+          }
+          onClick={() => on_save()}
         >
-          <RefreshCw className="h-4 w-4" aria-hidden />
+          <SaveIcon className="h-4 w-4" aria-hidden />
+          Save
         </button>
 
         <button
@@ -140,17 +145,13 @@ export function DetailContextBar({
 
         <button
           type="button"
-          title={dirty ? "Save" : "Save (no changes)"}
-          aria-label="Save"
-          disabled={!save_enabled || save_pending}
-          className={
-            save_enabled
-              ? "inline-flex h-8 w-8 items-center justify-center rounded hover:bg-white/10 disabled:opacity-50"
-              : "inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded text-slate-400"
-          }
-          onClick={() => on_save()}
+          title="Refresh"
+          aria-label="Refresh"
+          className="inline-flex h-8 w-8 items-center justify-center rounded hover:bg-white/10 disabled:opacity-50"
+          disabled={refresh_pending}
+          onClick={() => on_refresh()}
         >
-          <SaveIcon className="h-4 w-4" aria-hidden />
+          <RefreshCw className="h-4 w-4" aria-hidden />
         </button>
       </div>
     </div>
