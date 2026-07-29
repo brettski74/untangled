@@ -19,6 +19,12 @@ describe("LocalDatetimeInput", () => {
     expect(source).toMatch(/apply_datetime_date_change/);
     expect(source).toMatch(/apply_datetime_time_change/);
     expect(source).toMatch(/relatedTarget/);
+    // Pair blur must discard incomplete native date drafts (Time24Field parity).
+    expect(source).toMatch(/sync_datetime_chrome_from_committed/);
+    expect(source).toMatch(/date_remount_key/);
+    expect(source).toMatch(/key=\{date_remount_key\}/);
+    expect(source).toMatch(/set_date_remount_key\(synced\.remount_key\)/);
+    expect(source).toMatch(/set_parts\(synced\.parts\)/);
     expect(source).toMatch(/inline-flex/);
     expect(source).toMatch(/w-\[9\.5rem\]/);
     expect(source).toMatch(/w-\[calc\(9ch\+1rem\)\]/);

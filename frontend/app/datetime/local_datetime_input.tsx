@@ -16,6 +16,7 @@ import {
   DATETIME_FROM_DEFAULT_TIME,
   split_datetime_local,
 } from "./local_datetime_compose";
+import { sync_datetime_chrome_from_committed } from "./local_datetime_chrome_sync";
 import { Time24Field } from "./time_24_field";
 
 export type LocalDatetimeInputProps = {
@@ -33,6 +34,8 @@ const FOCUS_RING =
 /**
  * Dual-control datetime chrome for detail forms (native date + 24-hour time text).
  * Read-only and editable modes share the same pair; dense list cells stay plain text.
+ * On pair blur, remount the date input so incomplete native drafts match committed value
+ * (parity with Time24Field revert-on-failed-commit).
  */
 export function LocalDatetimeInput({
   id,
@@ -43,6 +46,7 @@ export function LocalDatetimeInput({
   on_blur,
 }: LocalDatetimeInputProps) {
   const [parts, set_parts] = useState({ date: "", time: "" });
+  const [date_remount_key, set_date_remount_key] = useState(0);
 
   useEffect(() => {
     set_parts(local_datetime_control_parts(value));
@@ -83,6 +87,7 @@ export function LocalDatetimeInput({
   const pair: ReactNode = (
     <>
       <input
+        key={date_remount_key}
         id={id}
         type="date"
         lang="en-GB"
@@ -145,6 +150,12 @@ export function LocalDatetimeInput({
         if (next instanceof Node && event.currentTarget.contains(next)) {
           return;
         }
+        const synced = sync_datetime_chrome_from_committed(
+          date_remount_key,
+          value,
+        );
+        set_date_remount_key(synced.remount_key);
+        set_parts(synced.parts);
         on_blur?.();
       }}
     >
