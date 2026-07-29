@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Mechanical start-of-refinement setup for the refine workflow.
-# Usage: refine-preflight.sh <issue-number>
+# Mechanical draft-dir / origin setup for issue-scoped workflows (refine, diagnose, …).
+# Usage: git-preflight.sh <issue-number>
 set -euo pipefail
 
 # shellcheck source=common.sh
@@ -11,9 +11,9 @@ git_ai_require_origin
 
 if [[ $# -ne 1 ]]; then
   cat <<'EOF' >&2
-Usage: refine-preflight.sh <issue-number>
+Usage: git-preflight.sh <issue-number>
 
-Ensures .refinement/ exists and prints repo/origin/draft facts for refine.
+Ensures .refinement/ exists and prints repo/origin/draft facts for issue N.
 Never creates or modifies the draft file itself.
 EOF
   exit 1

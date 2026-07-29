@@ -1,7 +1,7 @@
 ---
-description: Never commit local requirements refinement drafts under .refinement/
+description: Never commit local requirements/diagnosis drafts under .refinement/
 alwaysApply: true
 ---
 
-- Files under `.refinement/` are temporary local drafts for the refine workflow. Never stage, commit, or force-add them.
+- Files under `.refinement/` are temporary local drafts for the refine and diagnose workflows. Never stage, commit, or force-add them.
 - Do not add `.refinement/` to `.cursorignore` (that blocks agent edits). It belongs in `.gitignore` only.

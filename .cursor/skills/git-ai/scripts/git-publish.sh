@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Mechanical end-of-refinement publish for the refine workflow.
-# Usage: refine-publish.sh <issue-number>
+# Mechanical end-of-draft publish for issue-scoped workflows (refine, diagnose, …).
+# Usage: git-publish.sh <issue-number>
 set -euo pipefail
 
 # shellcheck source=common.sh
@@ -12,7 +12,7 @@ git_ai_require_gh
 
 if [[ $# -ne 1 ]]; then
   cat <<'EOF' >&2
-Usage: refine-publish.sh <issue-number>
+Usage: git-publish.sh <issue-number>
 
 Publishes .refinement/<N>-draft.md to the GitHub issue body via gh
 (--body-file), ensures READY label, unassigns all assignees, deletes the
@@ -29,7 +29,7 @@ fi
 
 DRAFT_PATH=".refinement/${ISSUE}-draft.md"
 if [[ ! -f "$DRAFT_PATH" ]]; then
-  git_ai_die "draft not found: $DRAFT_PATH (refine publish requires an agreed draft)"
+  git_ai_die "draft not found: $DRAFT_PATH (publish requires an agreed draft)"
 fi
 
 DRAFT_BYTES="$(wc -c <"$DRAFT_PATH" | tr -d ' ')"

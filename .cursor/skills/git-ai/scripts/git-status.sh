@@ -15,8 +15,8 @@ if [[ $# -gt 1 ]]; then
 Usage: git-status.sh [issue-number]
 
 Prints stable key=value facts about the current worktree (branch, dirty state,
-upstream, issue-matching feature branches). Read-only: no fetch, checkout, or
-index mutation.
+upstream, issue-matching feature/ and fix/ branches). Read-only: no fetch,
+checkout, or index mutation.
 EOF
   exit 1
 fi
@@ -104,19 +104,29 @@ while IFS= read -r line; do
 done < <(git status --porcelain)
 
 if [[ -n "$ISSUE" ]]; then
-  # Collect feature/<N>-* local and remote branch names (comma-separated, sorted).
+  # Collect feature/<N>-* and fix/<N>-* local and remote branch names (comma-separated, sorted).
   local_matches=()
   remote_matches=()
   while IFS= read -r ref; do
     [[ -n "$ref" ]] || continue
     local_matches+=("${ref#refs/heads/}")
-  done < <(git for-each-ref --format='%(refname)' "refs/heads/feature/${ISSUE}-*" | sort)
+  done < <(
+    {
+      git for-each-ref --format='%(refname)' "refs/heads/feature/${ISSUE}-*"
+      git for-each-ref --format='%(refname)' "refs/heads/fix/${ISSUE}-*"
+    } | sort -u
+  )
 
   while IFS= read -r ref; do
     [[ -n "$ref" ]] || continue
-    # Strip refs/remotes/ → origin/feature/...
+    # Strip refs/remotes/ → origin/feature/... or origin/fix/...
     remote_matches+=("${ref#refs/remotes/}")
-  done < <(git for-each-ref --format='%(refname)' "refs/remotes/origin/feature/${ISSUE}-*" | sort)
+  done < <(
+    {
+      git for-each-ref --format='%(refname)' "refs/remotes/origin/feature/${ISSUE}-*"
+      git for-each-ref --format='%(refname)' "refs/remotes/origin/fix/${ISSUE}-*"
+    } | sort -u
+  )
 
   local_joined=""
   remote_joined=""

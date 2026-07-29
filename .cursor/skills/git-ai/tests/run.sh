@@ -414,13 +414,13 @@ EOF
   PATH="$stub:$PATH" assert_fail "gh auth failure blocks delete" "$SCRIPTS/sync-default.sh" --delete-branch feature/no-gh
 }
 
-# --- refine-preflight ---
-test_refine_preflight_creates_and_reports() {
+# --- git-preflight ---
+test_git_preflight_creates_and_reports() {
   local out
   # .refinement absent → created, draft_exists=no
   [[ ! -d "$REPO/.refinement" ]]
   assert_eq "no .refinement before run" "0" "$?"
-  out="$("$SCRIPTS/refine-preflight.sh" 42 2>&1)" || {
+  out="$("$SCRIPTS/git-preflight.sh" 42 2>&1)" || {
     echo "  FAIL: preflight run (rc=$?)"
     echo "$out" | sed 's/^/    /'
     FAIL=$((FAIL + 1))
@@ -436,26 +436,26 @@ test_refine_preflight_creates_and_reports() {
   assert_eq "draft_exists no" "draft_exists=no" "$(echo "$out" | grep '^draft_exists=')"
 
   # Idempotent when .refinement already exists
-  assert_ok "idempotent rerun" "$SCRIPTS/refine-preflight.sh" 42
+  assert_ok "idempotent rerun" "$SCRIPTS/git-preflight.sh" 42
 
   # Existing draft reported and left untouched
   echo "draft body" >"$REPO/.refinement/42-draft.md"
-  out="$("$SCRIPTS/refine-preflight.sh" 42 2>&1)"
+  out="$("$SCRIPTS/git-preflight.sh" 42 2>&1)"
   assert_eq "draft_exists yes" "draft_exists=yes" "$(echo "$out" | grep '^draft_exists=')"
   assert_eq "draft untouched" "draft body" "$(cat "$REPO/.refinement/42-draft.md")"
 }
 
-test_refine_preflight_bad_args() {
-  assert_fail "missing N" "$SCRIPTS/refine-preflight.sh"
-  assert_fail "non-integer N" "$SCRIPTS/refine-preflight.sh" abc
-  assert_fail "zero N" "$SCRIPTS/refine-preflight.sh" 0
-  assert_fail "negative N" "$SCRIPTS/refine-preflight.sh" -7
-  assert_fail "extra args" "$SCRIPTS/refine-preflight.sh" 42 43
+test_git_preflight_bad_args() {
+  assert_fail "missing N" "$SCRIPTS/git-preflight.sh"
+  assert_fail "non-integer N" "$SCRIPTS/git-preflight.sh" abc
+  assert_fail "zero N" "$SCRIPTS/git-preflight.sh" 0
+  assert_fail "negative N" "$SCRIPTS/git-preflight.sh" -7
+  assert_fail "extra args" "$SCRIPTS/git-preflight.sh" 42 43
 }
 
-test_refine_preflight_missing_origin() {
+test_git_preflight_missing_origin() {
   git -C "$REPO" remote remove origin
-  assert_fail "missing origin" "$SCRIPTS/refine-preflight.sh" 42
+  assert_fail "missing origin" "$SCRIPTS/git-preflight.sh" 42
 }
 
 # --- git-status ---
@@ -487,8 +487,9 @@ test_git_status_dirty_and_issue_branches() {
   assert_ok "commit feature" "$SCRIPTS/stage-commit.sh" -m "feat" -- feat.txt
   assert_ok "push feature" "$SCRIPTS/push.sh"
 
-  # Second local-only match should appear in issue_branch_local
+  # Second local-only feature match + a fix/ match should appear in issue_branch_local
   git -C "$REPO" branch feature/28-other >/dev/null
+  git -C "$REPO" branch fix/28-quick-patch >/dev/null
 
   echo dirty >"$REPO/README"
   echo untracked >"$REPO/u.txt"
@@ -507,7 +508,7 @@ test_git_status_dirty_and_issue_branches() {
   assert_eq "upstream set" "upstream=origin/feature/28-schema-ir" "$(echo "$out" | grep '^upstream=')"
   assert_eq "issue_number" "issue_number=28" "$(echo "$out" | grep '^issue_number=')"
   assert_eq "on_issue_branch yes" "on_issue_branch=yes" "$(echo "$out" | grep '^on_issue_branch=')"
-  assert_eq "local matches" "issue_branch_local=feature/28-other,feature/28-schema-ir" "$(echo "$out" | grep '^issue_branch_local=')"
+  assert_eq "local matches" "issue_branch_local=feature/28-other,feature/28-schema-ir,fix/28-quick-patch" "$(echo "$out" | grep '^issue_branch_local=')"
   assert_eq "remote matches" "issue_branch_remote=origin/feature/28-schema-ir" "$(echo "$out" | grep '^issue_branch_remote=')"
   echo "$out" | grep -qE '^status_path=.M README'
   assert_eq "porcelain modified README" "0" "$?"
@@ -671,8 +672,8 @@ test_git_diff_bad_args_and_no_origin_ok() {
   assert_ok "no origin still ok" "$SCRIPTS/git-diff.sh"
 }
 
-# --- refine-publish ---
-test_refine_publish_happy_path() {
+# --- git-publish ---
+test_git_publish_happy_path() {
   mkdir -p "$REPO/.refinement"
   echo "# agreed draft" >"$REPO/.refinement/7-draft.md"
 
@@ -713,7 +714,7 @@ EOF
   local out
   out="$(
     PATH="$stub:$PATH" GIT_AI_GH_LOG="$log" \
-      "$SCRIPTS/refine-publish.sh" 7 2>&1
+      "$SCRIPTS/git-publish.sh" 7 2>&1
   )" || {
     echo "  FAIL: publish run (rc=$?)"
     echo "$out" | sed 's/^/    /'
@@ -738,11 +739,11 @@ EOF
   assert_eq "added READY" "0" "$?"
 }
 
-test_refine_publish_bad_args_and_missing_draft() {
-  assert_fail "missing N" "$SCRIPTS/refine-publish.sh"
-  assert_fail "non-integer N" "$SCRIPTS/refine-publish.sh" abc
-  assert_fail "zero N" "$SCRIPTS/refine-publish.sh" 0
-  assert_fail "missing draft" "$SCRIPTS/refine-publish.sh" 99
+test_git_publish_bad_args_and_missing_draft() {
+  assert_fail "missing N" "$SCRIPTS/git-publish.sh"
+  assert_fail "non-integer N" "$SCRIPTS/git-publish.sh" abc
+  assert_fail "zero N" "$SCRIPTS/git-publish.sh" 0
+  assert_fail "missing draft" "$SCRIPTS/git-publish.sh" 99
 }
 
 # --- run all ---
@@ -767,9 +768,9 @@ main() {
   with_fixture "sync delete gh" test_sync_delete_via_gh_stub
   with_fixture "sync abort unpushed" test_sync_abort_unpushed
   with_fixture "gh auth fail" test_gh_missing_auth_failure
-  with_fixture "refine preflight" test_refine_preflight_creates_and_reports
-  with_fixture "refine preflight bad args" test_refine_preflight_bad_args
-  with_fixture "refine preflight no origin" test_refine_preflight_missing_origin
+  with_fixture "git preflight" test_git_preflight_creates_and_reports
+  with_fixture "git preflight bad args" test_git_preflight_bad_args
+  with_fixture "git preflight no origin" test_git_preflight_missing_origin
   with_fixture "git-status clean default" test_git_status_clean_default
   with_fixture "git-status dirty+issue" test_git_status_dirty_and_issue_branches
   with_fixture "git-status detached" test_git_status_detached
@@ -782,8 +783,8 @@ main() {
   with_fixture "git-diff clean" test_git_diff_clean_empty
   with_fixture "git-diff unstaged+cached" test_git_diff_unstaged_and_cached
   with_fixture "git-diff bad args / no origin" test_git_diff_bad_args_and_no_origin_ok
-  with_fixture "refine publish" test_refine_publish_happy_path
-  with_fixture "refine publish bad args" test_refine_publish_bad_args_and_missing_draft
+  with_fixture "git publish" test_git_publish_happy_path
+  with_fixture "git publish bad args" test_git_publish_bad_args_and_missing_draft
 
   echo
   echo "Results: $PASS passed, $FAIL failed"
