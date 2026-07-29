@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import type { AttributeFieldMeta } from "../generated/field_meta";
 import {
-  and_predicates,
   apply_datetime_date_change,
   apply_datetime_time_change,
-  build_quick_filter_predicates,
   combine_datetime_local,
   DATETIME_FROM_DEFAULT_TIME,
   DATETIME_TO_DEFAULT_TIME,
+  split_datetime_local,
+} from "../datetime/local_datetime_compose";
+import {
+  and_predicates,
+  build_quick_filter_predicates,
   datetime_default_time_for_op,
   datetime_side_for_op,
   parse_predicate_json,
@@ -18,7 +21,6 @@ import {
   quick_filter_ui_defaults,
   quick_filterable_attributes,
   should_clear_value_on_field_change,
-  split_datetime_local,
 } from "./quick_filter";
 
 function attr(
