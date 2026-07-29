@@ -320,6 +320,7 @@ Used for:
 
 * Consistent interaction patterns
 * No special-case UI behavior
+* Datetime field controls (detail form and other editable-capable surfaces, whether currently editable or temporarily/permanently read-only) use a native date picker paired with 24-hour time text — never a single ISO text box, `datetime-local`, or a third-party picker. The intentionally narrow exception is dense list cell / plain text output with no field control at all.
 
 ---
 

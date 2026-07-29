@@ -289,22 +289,31 @@ function FieldControl({
     );
   }
 
-  // Dual-control datetime chrome is read-only today; editable datetimes use
-  // a plain ISO text field until LocalDatetimeInput gains write support.
-  if (slot.type_name === "datetime" && !editable) {
-    return <LocalDatetimeInput id={id} value={value} />;
+  // Dual-control datetime chrome for both editable and read-only detail slots.
+  if (slot.type_name === "datetime") {
+    return (
+      <LocalDatetimeInput
+        id={id}
+        value={value}
+        editable={editable}
+        on_change={
+          editable
+            ? (next) => on_field_change(slot.name_snake, next)
+            : undefined
+        }
+        on_focus={
+          editable ? () => on_field_focus(slot.name_snake) : undefined
+        }
+        on_blur={editable ? () => on_field_blur() : undefined}
+      />
+    );
   }
 
   const field_class = editable
     ? `min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 ${FOCUS_RING}`
     : "min-w-0 flex-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-900";
 
-  const display =
-    slot.type_name === "datetime" && editable
-      ? value == null
-        ? ""
-        : String(value)
-      : display_field_value(slot.type_name, value);
+  const display = display_field_value(slot.type_name, value);
 
   return (
     <input

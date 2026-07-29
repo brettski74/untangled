@@ -23,7 +23,7 @@ describe("ListContextBar controlled chrome wiring", () => {
     );
     expect(source).toMatch(/type="date"/);
     expect(source).toMatch(/Time24Field/);
-    expect(source).toMatch(/from "\.\/time_24_field"/);
+    expect(source).toMatch(/from "\.\.\/datetime\/time_24_field"/);
     expect(source).toMatch(/apply_datetime_date_change/);
     expect(source).toMatch(/commit_time_display/);
     expect(source).toMatch(/split_datetime_local\(combined\)\.time/);
