@@ -2,6 +2,7 @@
  * FK open-related href resolution (fail-closed when unset or unmapped).
  */
 import { record_detail_path } from "../records/record_paths";
+import { fk_display_label, fk_link_locator } from "../records/fk_identity";
 import { collection_for_class } from "../shell/nav_paths";
 
 export type FkOpenRelated = {
@@ -12,13 +13,15 @@ export type FkOpenRelated = {
 
 /**
  * Build open-related control state for an FK value.
- * Display stays on UUID until #73; tooltip uses the referenced id token.
+ * Label text is owned by callers via fk_display_label; tooltip uses the
+ * display fallback when available.
  */
 export function fk_open_related(
   references: string | null,
   value: unknown,
 ): FkOpenRelated {
-  if (typeof value !== "string" || value.trim() === "") {
+  const locator = fk_link_locator(value);
+  if (locator == null) {
     return {
       navigable: false,
       href: null,
@@ -26,8 +29,8 @@ export function fk_open_related(
     };
   }
 
-  const id = value.trim();
-  const tooltip = `Open ${id}`;
+  const label = fk_display_label(value) ?? locator;
+  const tooltip = `Open ${label}`;
 
   if (references == null || references === "") {
     return { navigable: false, href: null, tooltip };
@@ -40,7 +43,7 @@ export function fk_open_related(
 
   return {
     navigable: true,
-    href: record_detail_path(collection, id),
+    href: record_detail_path(collection, locator),
     tooltip,
   };
 }

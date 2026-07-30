@@ -70,6 +70,8 @@ class ClassDefinition:
     description: str
     attributes: tuple[AttributeDefinition, ...]
     source_path: Path
+    # Class-scoped display identity attribute (exact compact-text), or None.
+    display_attribute: AttributeDefinition | None = None
 
     def friendly_id_attr(self) -> AttributeDefinition | None:
         """Return the sole friendly-id attribute, if any."""
@@ -84,6 +86,8 @@ def load_definitions(definitions_dir: Path) -> list[ClassDefinition]:
 
     The directory path is an input so the same pipeline can later run against
     custom-class definition trees, not only committed core fixtures.
+    Does not require a full platform set (e.g. ``user``); call
+    ``validate_platform_definitions`` at full-platform entry points.
     """
     if not definitions_dir.is_dir():
         raise DefinitionError(f"definitions directory does not exist: {definitions_dir}")
@@ -102,6 +106,25 @@ def load_definitions(definitions_dir: Path) -> list[ClassDefinition]:
     _validate_references(definitions)
     _validate_friendly_id_prefixes(definitions)
     return definitions
+
+
+def validate_platform_definitions(definitions: list[ClassDefinition]) -> None:
+    """Require the system ``user`` class for a full platform definition set.
+
+    Missing ``user`` is a catastrophic invalid platform configuration: audit
+    foreign keys and related-identity enrichment depend on it.
+    """
+    users = [d for d in definitions if d.name_snake == "user"]
+    if len(users) == 0:
+        raise DefinitionError(
+            "platform definitions require a system 'user' class "
+            "(audit foreign keys and related-identity enrichment depend on it)"
+        )
+    if len(users) > 1:
+        paths = ", ".join(str(d.source_path) for d in users)
+        raise DefinitionError(
+            f"platform definitions require exactly one 'user' class; found {len(users)}: {paths}"
+        )
 
 
 def load_definition(path: Path) -> ClassDefinition:
@@ -286,9 +309,19 @@ def load_definition(path: Path) -> ClassDefinition:
             )
         )
 
-    unknown_top = set(raw) - {"name", "display-name", "description", "attributes"}
+    unknown_top = set(raw) - {
+        "name",
+        "display-name",
+        "description",
+        "attributes",
+        "display-attribute",
+    }
     if unknown_top:
         raise DefinitionError(f"{path}: unknown top-level keys: {sorted(unknown_top)}")
+
+    display_attribute = _resolve_display_attribute(
+        path, name, attributes, raw.get("display-attribute", _DISPLAY_ATTRIBUTE_OMITTED)
+    )
 
     return ClassDefinition(
         name_kebab=name,
@@ -297,7 +330,59 @@ def load_definition(path: Path) -> ClassDefinition:
         description=description,
         attributes=tuple(attributes),
         source_path=path,
+        display_attribute=display_attribute,
     )
+
+
+# Sentinel: key omitted from YAML (distinct from explicit null).
+_DISPLAY_ATTRIBUTE_OMITTED = object()
+
+
+def _resolve_display_attribute(
+    path: Path,
+    class_name: str,
+    attributes: list[AttributeDefinition],
+    raw: object,
+) -> AttributeDefinition | None:
+    """Resolve class-scoped ``display-attribute`` (omit / null / explicit value)."""
+    by_kebab = {attr.name_kebab: attr for attr in attributes}
+
+    if raw is _DISPLAY_ATTRIBUTE_OMITTED:
+        default = by_kebab.get("display-name")
+        if default is not None and default.type_name == "compact-text":
+            return default
+        return None
+
+    if raw is None:
+        # Explicit null: suppress implicit display-name default.
+        return None
+
+    if not isinstance(raw, str) or not raw.strip():
+        raise DefinitionError(
+            f"{path}: class {class_name!r}: display-attribute must be a non-empty "
+            f"kebab-case attribute name or null, got {raw!r}"
+        )
+    value = raw.strip()
+    try:
+        _require_kebab(value, path, "display-attribute")
+    except DefinitionError as exc:
+        raise DefinitionError(
+            f"{path}: class {class_name!r}: display-attribute {value!r} is not "
+            f"kebab-case"
+        ) from exc
+
+    attr = by_kebab.get(value)
+    if attr is None:
+        raise DefinitionError(
+            f"{path}: class {class_name!r}: display-attribute {value!r} does not "
+            f"name a declared attribute"
+        )
+    if attr.type_name != "compact-text":
+        raise DefinitionError(
+            f"{path}: class {class_name!r}: display-attribute {value!r} must have "
+            f"type exactly 'compact-text', got {attr.type_name!r}"
+        )
+    return attr
 
 
 def _validate_references(definitions: list[ClassDefinition]) -> None:

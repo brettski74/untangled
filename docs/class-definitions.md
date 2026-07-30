@@ -32,8 +32,9 @@ Each file declares at least:
 | Key | Meaning |
 | --- | ------- |
 | `name` | Logical class name (kebab-case), e.g. `demo-item` |
-| `display-name` | Human-readable label (not a table/column identifier) |
+| `display-name` | Human-readable **class label** (not a table/column identifier; not related-record display identity) |
 | `description` | Purpose and other details configurers/users should know |
+| `display-attribute` | Optional. Kebab-case attribute name used as limited related-record display identity (see below) |
 | `attributes` | Map of attribute name → `{ type, required, … }` |
 
 Attribute names in YAML are kebab-case. They map mechanically to snake_case in
@@ -142,8 +143,43 @@ rejected:
 | `id` | Primary key (UUIDv7) |
 | `created_at` | Created time (UTC) |
 | `updated_at` | Last updated time (UTC) |
-| `created_by` | Creating user id (uuid; FK to `user.id` when a `user` class exists) |
-| `updated_by` | Last updating user id (uuid; FK to `user.id` when a `user` class exists) |
+| `created_by` | Creating user id (uuid; FK to required system `user.id`) |
+| `updated_by` | Last updating user id (uuid; FK to required system `user.id`) |
+
+### `display-attribute` (class-scoped related-record identity)
+
+Optional top-level key naming which attribute may appear as limited related-record
+identity when another class’s foreign key points at this class (for example on
+`/api/v1` fetch/search responses).
+
+| YAML | Effective result |
+| ---- | ---------------- |
+| omitted | If the class declares an attribute literally named `display-name` with type **exactly** `compact-text`, that attribute is used; otherwise the class has no display attribute |
+| `display-attribute: null` | Explicit opt-out: no display identity (suppresses the implicit `display-name` default) |
+| `display-attribute: some-attr` | Must be a declared kebab-case attribute whose type is exactly `compact-text` |
+
+Invalid explicit values (missing attribute, wrong type including deprecated
+`string` / `text` / `friendly-id`, non-kebab, non-string) fail definition
+loading/generation with an error that identifies the class, value, and reason.
+
+This metadata is **presentation/protocol only**: it is emitted on generated
+TypeScript `ClassFieldMeta.display_attribute` (snake_case name or null) and used
+by versioned read projection. It does **not** change PostgreSQL columns,
+constraints, schema hashes, migrate plans, or DDL.
+
+**Security:** declaring (or defaulting to) a display attribute is an intentional
+API exposure decision. Callers who may read a *referencing* record receive that
+one target field as limited identity even without permission to read the target
+record itself. Do not point it at secret material merely because the field is
+`compact-text` (for example never `password-hash`). Use explicit `null` when
+exposure is inappropriate.
+
+On the wire, the stable member name is always `display_name` regardless of which
+`compact-text` attribute the metadata names.
+
+The platform definition set **requires** the system `user` class. Missing `user`
+fails full-platform generation, migrate planning/application, and API/runtime
+bootstrap. Audit foreign keys always target `user`.
 
 Optional attribute flag: `unique: true` adds a unique index on that column
 (e.g. `user.username`).

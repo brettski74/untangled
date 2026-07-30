@@ -225,7 +225,17 @@ Expose externally:
 
 ---
 
-### 3.9 Git Integration (First-Class)
+### 3.9 API Compatibility Cleanup
+
+When an API change retains an older route or version temporarily for compatibility:
+
+* Create a linked follow-up issue to remove the deprecated API surface
+* State the migration/deprecation conditions that must be met before removal
+* Do not leave removal tracked only in code comments, ticket prose, or memory
+
+---
+
+### 3.10 Git Integration (First-Class)
 
 The system must:
 
@@ -242,7 +252,7 @@ User abstraction:
 
 ---
 
-### 3.10 Environment Promotion
+### 3.11 Environment Promotion
 
 * Promote configuration across environments
 * Validate before deployment
@@ -250,7 +260,7 @@ User abstraction:
 
 ---
 
-### 3.11 Deployment & Scaling
+### 3.12 Deployment & Scaling
 
 * Containerized (Docker)
 * Kubernetes for orchestration

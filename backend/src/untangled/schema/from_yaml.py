@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from untangled.mapping.definition import ClassDefinition, load_definitions
+from untangled.mapping.definition import (
+    ClassDefinition,
+    load_definitions,
+    validate_platform_definitions,
+)
 from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.system_fields import AUDIT_USER_TABLE, SYSTEM_FIELDS
 from untangled.mapping.types import friendly_id_sequence_name
@@ -18,12 +22,12 @@ def desired_schema_from_definitions(definitions_dir: Path) -> SchemaIR:
 
 
 def desired_schema_from_classes(definitions: list[ClassDefinition]) -> SchemaIR:
-    """Build desired Schema IR from already-loaded class definitions."""
-    class_names = {defn.name_snake for defn in definitions}
-    include_audit_fks = AUDIT_USER_TABLE in class_names
-    tables = tuple(
-        _table_from_definition(defn, include_audit_fks=include_audit_fks) for defn in definitions
-    )
+    """Build desired Schema IR from a full platform definition set.
+
+    Requires the system ``user`` class and always emits audit foreign keys.
+    """
+    validate_platform_definitions(definitions)
+    tables = tuple(_table_from_definition(defn) for defn in definitions)
     sequences = tuple(_sequences_from_definitions(definitions))
     return SchemaIR(tables=tables, sequences=sequences)
 
@@ -58,11 +62,7 @@ def _sequences_from_definitions(definitions: list[ClassDefinition]) -> list[Sequ
     return sorted(sequences, key=lambda s: s.name)
 
 
-def _table_from_definition(
-    definition: ClassDefinition,
-    *,
-    include_audit_fks: bool,
-) -> TableIR:
+def _table_from_definition(definition: ClassDefinition) -> TableIR:
     columns: list[ColumnIR] = []
     foreign_keys: list[ForeignKeyIR] = []
     indexes: list[IndexIR] = []
@@ -78,7 +78,7 @@ def _table_from_definition(
         )
         if field.name == "id":
             primary_key = ("id",)
-        if include_audit_fks and field.name in {"created_by", "updated_by"}:
+        if field.name in {"created_by", "updated_by"}:
             foreign_keys.append(
                 ForeignKeyIR(
                     name=foreign_key_constraint_name(definition.name_snake, field.name),

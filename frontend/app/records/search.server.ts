@@ -4,6 +4,8 @@
 import { z } from "zod";
 
 import { api_fetch_with_token } from "../auth/api.server";
+import { class_for_collection } from "../shell/nav_paths";
+import { parse_v1_record } from "./fetch.server";
 
 export const search_response_schema = z.object({
   items: z.array(z.record(z.string(), z.unknown())),
@@ -46,10 +48,13 @@ const DEFAULT_LIMIT = 20;
 const DEFAULT_OFFSET = 0;
 
 /**
- * POST /{collection}/search via the web-tier Bearer seam.
+ * POST /api/v1/{collection}/search via the web-tier Bearer seam.
  * Includes ``sort`` only when the caller supplies a non-empty list so the UI
  * does not invent an API default sort.
  * 400/422 raise {@link SearchApiError} with API ``detail`` when present.
+ *
+ * Callers must include every FK attribute the UI will render in ``attributes``
+ * so the versioned projection joins and returns identity objects for those fields.
  */
 export async function search_collection(
   access_token: string,
@@ -68,7 +73,7 @@ export async function search_collection(
 
   const response = await api_fetch_with_token(
     access_token,
-    `/${collection}/search`,
+    `/api/v1/${collection}/search`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -88,7 +93,15 @@ export async function search_collection(
   }
 
   const response_payload: unknown = await response.json();
-  return search_response_schema.parse(response_payload);
+  const parsed = search_response_schema.parse(response_payload);
+  const class_kebab = class_for_collection(collection);
+  if (class_kebab == null) {
+    throw new Error(`Unknown collection for v1 search: ${collection}`);
+  }
+  return {
+    ...parsed,
+    items: parsed.items.map((item) => parse_v1_record(item, class_kebab)),
+  };
 }
 
 async function read_error_detail(response: Response): Promise<string> {

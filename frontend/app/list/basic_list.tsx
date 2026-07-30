@@ -11,6 +11,11 @@ import {
 
 import { collection_for_class } from "../shell/nav_paths";
 import { record_detail_path } from "../records/record_paths";
+import {
+  fk_display_label,
+  fk_link_locator,
+  is_fk_identity,
+} from "../records/fk_identity";
 import { LocalDatetimeText } from "../datetime/local_datetime_text";
 import { display_field_value } from "../datetime/format";
 import {
@@ -510,6 +515,26 @@ function ListCell({
     return <LocalDatetimeText value={value} />;
   }
 
+  if (column.references != null && (is_fk_identity(value) || typeof value === "string")) {
+    const label = fk_display_label(value);
+    if (label == null) {
+      return null;
+    }
+    const locator = fk_link_locator(value);
+    const target_collection = collection_for_class(column.references);
+    if (target_collection != null && locator != null) {
+      return (
+        <a
+          className="text-sky-800 underline underline-offset-2"
+          href={record_detail_path(target_collection, locator)}
+        >
+          {label}
+        </a>
+      );
+    }
+    return <>{label}</>;
+  }
+
   const text = format_cell_value(column.type_name, value);
 
   if (column.is_friendly_id && typeof value === "string") {
@@ -521,24 +546,6 @@ function ListCell({
         {text}
       </a>
     );
-  }
-
-  if (
-    column.type_name === "uuid" &&
-    column.references != null &&
-    typeof value === "string"
-  ) {
-    const target_collection = collection_for_class(column.references);
-    if (target_collection != null) {
-      return (
-        <a
-          className="text-sky-800 underline underline-offset-2"
-          href={record_detail_path(target_collection, value)}
-        >
-          {text}
-        </a>
-      );
-    }
   }
 
   return <>{text}</>;
@@ -558,6 +565,9 @@ function cell_title(
   if (type_name === "datetime") {
     // Title set after client format; avoid SSR timezone mismatch in native tooltip.
     return undefined;
+  }
+  if (is_fk_identity(value) || (typeof value === "object" && value != null && "id" in value)) {
+    return fk_display_label(value) ?? undefined;
   }
   const text = format_cell_value(type_name, value);
   return text === "" ? undefined : text;

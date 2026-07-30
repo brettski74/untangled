@@ -16,6 +16,12 @@ from pydantic import TypeAdapter, ValidationError
 from untangled.mapping.datetime_utc import format_utc_iso_z, require_utc_seconds
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELDS
+from untangled.persistence.fk_enrichment import (
+    RelatedIdentity,
+    build_enriched_read_plan,
+    map_enriched_row,
+    qualify_source_column,
+)
 
 # Hard-coded M1 guardrails (not system-configurable yet).
 MAX_SEARCH_NESTING_DEPTH = 3
@@ -148,40 +154,84 @@ def execute_search(
     attributes: list[str] | None = None,
     limit: int | None = None,
     offset: int | None = None,
+    enrich_fk_identity: bool = False,
+    definitions_by_kebab: dict[str, ClassDefinition] | None = None,
 ) -> SearchResult:
-    """Validate request, run COUNT + SELECT, return projected items."""
+    """Validate request, run COUNT + SELECT, return projected items.
+
+    When ``enrich_fk_identity`` is true, the SELECT uses bounded LEFT JOINs for
+    projected FK fields and items may contain ``RelatedIdentity`` values.
+    COUNT remains unjoined. Predicates and sorts still use source columns.
+    """
     attrs = searchable_attributes(definition)
     resolved_limit = _resolve_limit(limit)
     resolved_offset = _resolve_offset(offset)
     select_columns = _resolve_projection(attributes, attrs)
     order_by = _resolve_sort(sort, attrs)
-    where_sql, params = _compile_predicate_root(predicate, attrs)
 
+    # COUNT never joins; compile an unqualified WHERE for it.
+    count_where, count_params = _compile_predicate_root(
+        predicate, attrs, qualify_source=False
+    )
     table = sql.Identifier(definition.name_snake)
-    count_query = sql.SQL("SELECT COUNT(*) FROM {} WHERE {}").format(table, where_sql)
-    select_list = sql.SQL(", ").join(sql.Identifier(c) for c in select_columns)
-    order_sql = sql.SQL(", ").join(
-        sql.SQL("{} {}").format(
-            sql.Identifier(name),
-            sql.SQL("ASC") if direction == "asc" else sql.SQL("DESC"),
-        )
-        for name, direction in order_by
-    )
-    select_query = sql.SQL(
-        "SELECT {} FROM {} WHERE {} ORDER BY {} LIMIT {} OFFSET {}"
-    ).format(
-        select_list,
-        table,
-        where_sql,
-        order_sql,
-        sql.Placeholder(),
-        sql.Placeholder(),
+    count_query = sql.SQL("SELECT COUNT(*) FROM {} WHERE {}").format(
+        table, count_where
     )
 
-    select_params = [*params, resolved_limit, resolved_offset]
+    select_where, select_params_base = _compile_predicate_root(
+        predicate, attrs, qualify_source=enrich_fk_identity
+    )
+
+    if enrich_fk_identity:
+        if definitions_by_kebab is None:
+            raise RuntimeError(
+                "definitions_by_kebab is required when enrich_fk_identity is true"
+            )
+        plan = build_enriched_read_plan(
+            definition, definitions_by_kebab, select_columns
+        )
+        order_sql = sql.SQL(", ").join(
+            sql.SQL("{} {}").format(
+                qualify_source_column(name),
+                sql.SQL("ASC") if direction == "asc" else sql.SQL("DESC"),
+            )
+            for name, direction in order_by
+        )
+        select_query = sql.SQL(
+            "SELECT {} FROM {} WHERE {} ORDER BY {} LIMIT {} OFFSET {}"
+        ).format(
+            plan.select_list,
+            plan.from_clause,
+            select_where,
+            order_sql,
+            sql.Placeholder(),
+            sql.Placeholder(),
+        )
+    else:
+        plan = None
+        select_list = sql.SQL(", ").join(sql.Identifier(c) for c in select_columns)
+        order_sql = sql.SQL(", ").join(
+            sql.SQL("{} {}").format(
+                sql.Identifier(name),
+                sql.SQL("ASC") if direction == "asc" else sql.SQL("DESC"),
+            )
+            for name, direction in order_by
+        )
+        select_query = sql.SQL(
+            "SELECT {} FROM {} WHERE {} ORDER BY {} LIMIT {} OFFSET {}"
+        ).format(
+            select_list,
+            table,
+            select_where,
+            order_sql,
+            sql.Placeholder(),
+            sql.Placeholder(),
+        )
+
+    select_params = [*select_params_base, resolved_limit, resolved_offset]
     try:
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(count_query, params)
+            cur.execute(count_query, count_params)
             count_row = cur.fetchone()
             assert count_row is not None
             total = int(count_row["count"])
@@ -194,7 +244,13 @@ def execute_search(
             "invalid regular expression in regexp predicate"
         ) from exc
 
-    items = [_serialize_row(dict(row), select_columns) for row in rows]
+    if plan is not None:
+        items = [
+            _serialize_enriched_row(map_enriched_row(dict(row), plan), select_columns)
+            for row in rows
+        ]
+    else:
+        items = [_serialize_row(dict(row), select_columns) for row in rows]
     return SearchResult(
         items=items,
         limit=resolved_limit,
@@ -273,13 +329,17 @@ def _resolve_sort(
 def _compile_predicate_root(
     predicate: dict[str, Any] | None,
     attrs: dict[str, SearchableAttribute],
+    *,
+    qualify_source: bool = False,
 ) -> tuple[sql.Composable, list[Any]]:
     if predicate is None:
         return sql.SQL("TRUE"), []
     if not isinstance(predicate, dict):
         raise SearchStructuralError("predicate must be an object or null")
     params: list[Any] = []
-    compiled = _compile_predicate(predicate, attrs, depth=1, params=params)
+    compiled = _compile_predicate(
+        predicate, attrs, depth=1, params=params, qualify_source=qualify_source
+    )
     return compiled, params
 
 
@@ -289,6 +349,7 @@ def _compile_predicate(
     *,
     depth: int,
     params: list[Any],
+    qualify_source: bool,
 ) -> sql.Composable:
     if depth > MAX_SEARCH_NESTING_DEPTH:
         raise SearchSemanticError(
@@ -305,16 +366,32 @@ def _compile_predicate(
         raise SearchSemanticError(f"unknown operator: {op!r}")
 
     if op in {"and", "or"}:
-        return _compile_logical_list(op, node, attrs, depth=depth, params=params)
+        return _compile_logical_list(
+            op, node, attrs, depth=depth, params=params, qualify_source=qualify_source
+        )
     if op == "not":
-        return _compile_not(node, attrs, depth=depth, params=params)
+        return _compile_not(
+            node, attrs, depth=depth, params=params, qualify_source=qualify_source
+        )
     if op in _VALUE_OPS:
-        return _compile_comparison(op, node, attrs, params=params)
+        return _compile_comparison(
+            op, node, attrs, params=params, qualify_source=qualify_source
+        )
     if op in _ORDERED_OPS:
-        return _compile_ordered_comparison(op, node, attrs, params=params)
+        return _compile_ordered_comparison(
+            op, node, attrs, params=params, qualify_source=qualify_source
+        )
     if op in _TEXT_PATTERN_OPS:
-        return _compile_text_pattern(op, node, attrs, params=params)
-    return _compile_null_check(op, node, attrs)
+        return _compile_text_pattern(
+            op, node, attrs, params=params, qualify_source=qualify_source
+        )
+    return _compile_null_check(op, node, attrs, qualify_source=qualify_source)
+
+
+def _column_ref(name: str, *, qualify_source: bool) -> sql.Composable:
+    if qualify_source:
+        return qualify_source_column(name)
+    return sql.Identifier(name)
 
 
 def _unexpected_keys(node: dict[str, Any], allowed: set[str]) -> None:
@@ -332,6 +409,7 @@ def _compile_logical_list(
     *,
     depth: int,
     params: list[Any],
+    qualify_source: bool,
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "predicates"})
     children = node.get("predicates")
@@ -351,7 +429,9 @@ def _compile_logical_list(
             f"{MAX_SEARCH_NESTING_LENGTH} (got {len(children)})"
         )
     parts = [
-        _compile_predicate(child, attrs, depth=depth + 1, params=params)
+        _compile_predicate(
+            child, attrs, depth=depth + 1, params=params, qualify_source=qualify_source
+        )
         for child in children
     ]
     joiner = sql.SQL(" AND ") if op == "and" else sql.SQL(" OR ")
@@ -364,11 +444,18 @@ def _compile_not(
     *,
     depth: int,
     params: list[Any],
+    qualify_source: bool,
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "predicate"})
     if "predicate" not in node:
         raise SearchStructuralError("'not' requires a 'predicate' child")
-    child = _compile_predicate(node["predicate"], attrs, depth=depth + 1, params=params)
+    child = _compile_predicate(
+        node["predicate"],
+        attrs,
+        depth=depth + 1,
+        params=params,
+        qualify_source=qualify_source,
+    )
     return sql.SQL("NOT ({})").format(child)
 
 
@@ -378,6 +465,7 @@ def _compile_comparison(
     attrs: dict[str, SearchableAttribute],
     *,
     params: list[Any],
+    qualify_source: bool,
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "attribute", "value"})
     attr = _require_attribute(node, attrs)
@@ -392,7 +480,7 @@ def _compile_comparison(
     params.append(typed)
     operator = sql.SQL("=") if op == "eq" else sql.SQL("<>")
     return sql.SQL("{} {} {}").format(
-        sql.Identifier(attr.name),
+        _column_ref(attr.name, qualify_source=qualify_source),
         operator,
         sql.Placeholder(),
     )
@@ -404,6 +492,7 @@ def _compile_ordered_comparison(
     attrs: dict[str, SearchableAttribute],
     *,
     params: list[Any],
+    qualify_source: bool,
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "attribute", "value"})
     attr = _require_attribute(node, attrs)
@@ -421,7 +510,7 @@ def _compile_ordered_comparison(
         )
     typed = _coerce_value(attr, raw)
     params.append(typed)
-    column: sql.Composable = sql.Identifier(attr.name)
+    column: sql.Composable = _column_ref(attr.name, qualify_source=qualify_source)
     if attr.type_name in _TEXT_ORDERED_TYPES:
         # Pin byte/codepoint order so case-sensitive text bounds are portable
         # across database locales (see docs; text sort collation is separate).
@@ -437,12 +526,15 @@ def _compile_null_check(
     op: str,
     node: dict[str, Any],
     attrs: dict[str, SearchableAttribute],
+    *,
+    qualify_source: bool,
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "attribute"})
     attr = _require_attribute(node, attrs)
+    column = _column_ref(attr.name, qualify_source=qualify_source)
     if op == "empty":
-        return sql.SQL("{} IS NULL").format(sql.Identifier(attr.name))
-    return sql.SQL("{} IS NOT NULL").format(sql.Identifier(attr.name))
+        return sql.SQL("{} IS NULL").format(column)
+    return sql.SQL("{} IS NOT NULL").format(column)
 
 
 def _compile_text_pattern(
@@ -451,6 +543,7 @@ def _compile_text_pattern(
     attrs: dict[str, SearchableAttribute],
     *,
     params: list[Any],
+    qualify_source: bool,
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "attribute", "value"})
     attr = _require_attribute(node, attrs)
@@ -471,9 +564,10 @@ def _compile_text_pattern(
         raise SearchSemanticError(
             f"value for attribute {attr.name!r} must be a string for operator {op!r}"
         )
+    column = _column_ref(attr.name, qualify_source=qualify_source)
     if op == "regexp":
         params.append(typed)
-        return sql.SQL("{} ~ {}").format(sql.Identifier(attr.name), sql.Placeholder())
+        return sql.SQL("{} ~ {}").format(column, sql.Placeholder())
 
     escaped = _escape_like_literal(typed)
     if op == "contains":
@@ -484,7 +578,7 @@ def _compile_text_pattern(
         pattern = f"%{escaped}"
     params.append(pattern)
     return sql.SQL("{} LIKE {} ESCAPE {}").format(
-        sql.Identifier(attr.name),
+        column,
         sql.Placeholder(),
         sql.Literal(_LIKE_ESCAPE_CHAR),
     )
@@ -541,6 +635,26 @@ def _serialize_row(row: dict[str, Any], columns: list[str]) -> dict[str, Any]:
     for name in columns:
         value = row[name]
         if isinstance(value, UUID):
+            out[name] = str(value)
+        elif isinstance(value, datetime):
+            out[name] = format_utc_iso_z(value)
+        elif isinstance(value, Decimal):
+            out[name] = str(value)
+        else:
+            out[name] = value
+    return out
+
+
+def _serialize_enriched_row(
+    row: dict[str, Any], columns: list[str]
+) -> dict[str, Any]:
+    """Serialize scalars for the wire; leave RelatedIdentity for the protocol layer."""
+    out: dict[str, Any] = {}
+    for name in columns:
+        value = row[name]
+        if isinstance(value, RelatedIdentity):
+            out[name] = value
+        elif isinstance(value, UUID):
             out[name] = str(value)
         elif isinstance(value, datetime):
             out[name] = format_utc_iso_z(value)
