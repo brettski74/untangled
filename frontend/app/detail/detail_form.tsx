@@ -3,6 +3,7 @@ import type { Ref } from "react";
 
 import { LocalDatetimeInput } from "../datetime/local_datetime_input";
 import { display_field_value } from "../datetime/format";
+import { fk_display_label } from "../records/fk_identity";
 import type { DetailFieldSlot, DetailLayout } from "./default_layout";
 import { is_slot_editable } from "./detail_editor";
 import { fk_open_related } from "./fk_open_related";
@@ -347,8 +348,9 @@ function FkReadControl({
   value: unknown;
 }) {
   const open = fk_open_related(slot.references, value);
-  const has_value = typeof value === "string" && value.trim() !== "";
-  const option_label = has_value ? String(value).trim() : "";
+  const label = fk_display_label(value);
+  const has_value = label != null;
+  const option_label = has_value ? label : "";
 
   return (
     <>

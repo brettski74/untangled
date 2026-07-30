@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from untangled.mapping.types import TEXT_STORAGE_FAMILY
+from untangled.persistence.sql_types import postgres_type
 from untangled.schema.diff import diff_schemas
 from untangled.schema.ir import ColumnIR, ForeignKeyIR, SchemaIR, TableIR
 from untangled.schema.plan import (
@@ -13,8 +17,6 @@ from untangled.schema.plan import (
     DropForeignKey,
     DropTable,
 )
-from untangled.mapping.types import TEXT_STORAGE_FAMILY
-from untangled.persistence.sql_types import postgres_type
 
 
 def _table(
@@ -152,6 +154,27 @@ def test_intra_family_text_type_rename_emits_no_alter() -> None:
     assert not any(isinstance(op, AlterColumnType) for op in plan.ops)
 
 
+def test_display_attribute_metadata_does_not_change_schema_hash(
+    repo_definitions: Path,
+) -> None:
+    from dataclasses import replace
+
+    from untangled.mapping.definition import load_definitions
+    from untangled.schema.from_yaml import desired_schema_from_classes
+    from untangled.schema.hash import schema_hash
+
+    definitions = load_definitions(repo_definitions)
+    cleared = [replace(defn, display_attribute=None) for defn in definitions]
+    assert schema_hash(desired_schema_from_classes(cleared)) == schema_hash(
+        desired_schema_from_classes(definitions)
+    )
+    plan = diff_schemas(
+        desired_schema_from_classes(definitions),
+        desired_schema_from_classes(cleared),
+    )
+    assert plan.ops == ()
+
+
 def test_string_to_text_family_retarget_preserves_schema_hash(
     repo_definitions: Path,
 ) -> None:
@@ -159,7 +182,6 @@ def test_string_to_text_family_retarget_preserves_schema_hash(
     from dataclasses import replace
 
     from untangled.mapping.definition import load_definitions
-    from untangled.mapping.types import TEXT_STORAGE_FAMILY
     from untangled.schema.from_yaml import desired_schema_from_classes
     from untangled.schema.hash import schema_hash
 

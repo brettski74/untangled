@@ -16,7 +16,7 @@ _HEADER = """\
 import { z } from "zod";
 
 /** Round an ISO-8601 instant to whole-second UTC ISO with a Z suffix. */
-function toSecondPrecisionUtcIso(raw) {
+function toSecondPrecisionUtcIso(raw: string) {
   const ms = Date.parse(raw);
   if (Number.isNaN(ms)) {
     throw new Error("invalid datetime");

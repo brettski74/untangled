@@ -124,15 +124,67 @@ Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-orig
 3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
 4. Hit `GET /auth/rbac-probe` (requires `demo-item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo-item:read`) get **403**; a user with no roles gets **403**.
 5. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
-   - `GET /incidents/{locator}` / `GET /change-requests/{locator}` with either the stable seed UUID or the friendly number (`INC…` / `CHG…`).
-   - `POST` create (omit `number` — server assigns it), `PATCH` update, `DELETE` (admin only among seed roles).
+   - Prefer versioned reads: `GET /api/v1/incidents/{locator}` /
+     `GET /api/v1/change-requests/{locator}` (UUID or friendly number).
+   - Legacy (deprecated) scalar reads: `GET /incidents/{locator}` /
+     `GET /change-requests/{locator}`.
+   - `POST` create (omit `number` — server assigns it), `PATCH` update, `DELETE`
+     (admin only among seed roles) on **unversioned** routes.
    - Junk locators → **422**; missing records → **404**; readonly cannot create → **403**.
 6. Exercise predicate search (same Authorize token; requires `{class}:read`):
-   - `POST /incidents/search` and `POST /change-requests/search` with a JSON body (see [Predicate search](#predicate-search) below).
+   - Prefer `POST /api/v1/incidents/search` and
+     `POST /api/v1/change-requests/search` (see [Predicate search](#predicate-search)
+     and [API versioning](#api-versioning) below).
+   - Legacy `POST /incidents/search` / `POST /change-requests/search` remain for
+     compatibility (scalar FK UUIDs).
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
    - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
 7. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
 8. `POST /auth/logout` with the refresh token to revoke it.
+
+### API versioning
+
+Public domain API versions are **path-based**: `/api/v{major}/…`.
+
+- `/api/v1` is the first versioned contract. Existing unversioned
+  `/{collection}/…` fetch and search routes are **pre-versioning legacy**
+  compatibility surfaces — they are not retrospectively called v1.
+- Every new public domain endpoint, and every existing public domain endpoint
+  whose contract is changed, must have an API-version path. Operational
+  endpoints such as `/health` and `/` are exempt.
+- Backward-incompatible request/response changes increment the major path
+  version and leave the previous version available for a documented
+  compatibility period.
+- Versioned reads in M1: `GET /api/v1/{collection}/{locator}` and
+  `POST /api/v1/{collection}/search`. Create/update/delete/auth are not
+  bulk-copied under `/api/v1`.
+- Removal of the legacy unversioned fetch/search routes is tracked by
+  [#117](https://github.com/brettski74/untangled/issues/117).
+
+#### Versioned FK identity (v1 reads)
+
+On `/api/v1` fetch and search responses, each projected foreign-key field
+(including audit `created_by` / `updated_by`) is either JSON `null` or:
+
+```json
+{
+  "id": "01901234-5678-7abc-89ab-cdef01234567",
+  "display_name": "Alex Taylor",
+  "friendly_id": "USR00000042"
+}
+```
+
+Rules:
+
+- `id` is always present for a non-null FK (canonical hyphenated UUID).
+- `display_name` is included only when the target class has an effective
+  `display-attribute`; value may be string or `null`.
+- `friendly_id` is included only when the target class defines a `friendly-id`
+  attribute; value may be string or `null`.
+- Unsupported keys are omitted (not emitted as null).
+- Non-FK UUID attributes remain scalar UUID strings.
+- Search predicates, sort attributes, and create/update bodies continue to use
+  **scalar UUID** values for FK fields.
 
 ### Predicate search
 
@@ -140,9 +192,11 @@ Generic, definition-driven search for any class mounted via the class router fac
 
 | Method | Path | Permission |
 | ------ | ---- | ---------- |
-| `POST` | `/{collection}/search` | `{class}:read` |
+| `POST` | `/api/v1/{collection}/search` | `{class}:read` (preferred for new consumers) |
+| `POST` | `/{collection}/search` | `{class}:read` (legacy scalar FK responses; deprecated) |
 
-Examples: `POST /incidents/search`, `POST /change-requests/search`.
+Examples: `POST /api/v1/incidents/search`, `POST /api/v1/change-requests/search`.
+Legacy: `POST /incidents/search`, `POST /change-requests/search`.
 
 #### Request envelope
 

@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from untangled.mapping.definition import ClassDefinition, load_definitions
+from untangled.mapping.definition import (
+    ClassDefinition,
+    load_definitions,
+    validate_platform_definitions,
+)
 from untangled.mapping.emit_field_meta import write_field_meta
 from untangled.mapping.emit_pydantic import write_pydantic_models
 from untangled.mapping.emit_zod import write_zod_models
@@ -31,8 +35,10 @@ def generate_models(
     Writes Pydantic under ``pydantic_out`` and Zod + field meta under ``zod_out``
     (frontend ``app/generated/``). Paths are inputs so the same pipeline can run
     for core fixtures or a later custom-class product feature without a rewrite.
+    Requires a full platform definition set (including ``user``).
     """
     definitions = load_definitions(definitions_dir)
+    validate_platform_definitions(definitions)
     pydantic_paths = write_pydantic_models(definitions, pydantic_out)
     zod_paths = write_zod_models(definitions, zod_out)
     field_meta_path = write_field_meta(definitions, zod_out)

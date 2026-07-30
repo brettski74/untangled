@@ -1,7 +1,7 @@
 """Tests for YAML class definition loading and validation."""
 
-from pathlib import Path
 import warnings
+from pathlib import Path
 
 import pytest
 

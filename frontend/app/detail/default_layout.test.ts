@@ -16,6 +16,7 @@ function sample_meta(
     display_name: "Sample",
     attributes,
     friendly_id_attr,
+    display_attribute: null,
   };
 }
 

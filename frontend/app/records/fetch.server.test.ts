@@ -25,7 +25,7 @@ describe("fetch_record", () => {
     expect(record).toEqual({ id: "u1", number: "INC00000001" });
     expect(api_fetch_with_token).toHaveBeenCalledWith(
       "token",
-      "/incidents/INC00000001",
+      "/api/v1/incidents/INC00000001",
       { method: "GET" },
     );
   });

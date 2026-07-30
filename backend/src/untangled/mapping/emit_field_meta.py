@@ -37,10 +37,14 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
         "  name_kebab: string;",
         "  name_snake: string;",
         "  display_name: string;",
-        "  /** Author attributes; sort by ``order`` for layout (array may match but is not authoritative). */",
+        "  /** Author attributes; sort by ``order`` for layout",
+        "   * (array may match but is not authoritative). */",
         "  attributes: readonly AttributeFieldMeta[];",
         "  /** Snake_case friendly-id attribute name, if any. */",
         "  friendly_id_attr: string | null;",
+        "  /** Snake_case display-attribute name, if any",
+        "   * (exact compact-text). */",
+        "  display_attribute: string | null;",
         "};",
         "",
         "export const CLASS_FIELD_META: Readonly<Record<string, ClassFieldMeta>> = {",
@@ -60,6 +64,11 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
             "null" if friendly is None else _ts_string(friendly.name_snake)
         )
         lines.append(f"    friendly_id_attr: {friendly_snake},")
+        display_attr = definition.display_attribute
+        display_snake = (
+            "null" if display_attr is None else _ts_string(display_attr.name_snake)
+        )
+        lines.append(f"    display_attribute: {display_snake},")
         lines.append("  },")
 
     lines.append("};")

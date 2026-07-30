@@ -26,6 +26,8 @@ const zodHref = pathToFileURL(require.resolve("zod")).href;
 
 let source = readFileSync(schemaPath, "utf8");
 source = source.replace(/^export type .*$/gm, "");
+// Generated helpers may use TS parameter types; Node ESM needs plain JS.
+source = source.replace(/\(raw: string\)/g, "(raw)");
 source = source.replace(
   /from\s+["']zod["']/,
   `from ${JSON.stringify(zodHref)}`,

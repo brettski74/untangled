@@ -13,7 +13,11 @@ from psycopg import Connection
 from pydantic import BaseModel
 
 import untangled
-from untangled.mapping.definition import ClassDefinition, load_definitions
+from untangled.mapping.definition import (
+    ClassDefinition,
+    load_definitions,
+    validate_platform_definitions,
+)
 from untangled.mapping.generate import generate_models
 from untangled.mapping.naming import snake_to_pascal
 from untangled.persistence.store import RecordStore
@@ -115,7 +119,9 @@ def ensure_generated_package() -> None:
 
 @lru_cache(maxsize=1)
 def _definitions_by_kebab() -> dict[str, ClassDefinition]:
-    return {d.name_kebab: d for d in load_definitions(definitions_dir())}
+    definitions = load_definitions(definitions_dir())
+    validate_platform_definitions(definitions)
+    return {d.name_kebab: d for d in definitions}
 
 
 def class_definition(class_kebab: str) -> ClassDefinition:
@@ -143,22 +149,30 @@ def record_store(
 ) -> RecordStore[Any]:
     """Build a RecordStore for ``class_kebab`` with the authenticated actor."""
     definition = class_definition(class_kebab)
-    return RecordStore(conn, definition, model(class_kebab), actor_id=actor_id)
+    return RecordStore(
+        conn,
+        definition,
+        model(class_kebab),
+        actor_id=actor_id,
+        definitions_by_kebab=_definitions_by_kebab(),
+    )
 
 
 def fetch_by_locator(
     store: RecordStore[Any],
     definition: ClassDefinition,
     locator: str,
+    *,
+    enrich_fk_identity: bool = False,
 ) -> Any:
     """Resolve locator and fetch; raise 422/404 as appropriate."""
     kind, value = classify_locator(definition, locator)
     if kind == "id":
         assert isinstance(value, UUID)
-        row = store.fetch_by_id(value)
+        row = store.fetch_by_id(value, enrich_fk_identity=enrich_fk_identity)
     else:
         assert isinstance(value, str)
-        row = store.fetch_by_friendly_id(value)
+        row = store.fetch_by_friendly_id(value, enrich_fk_identity=enrich_fk_identity)
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
