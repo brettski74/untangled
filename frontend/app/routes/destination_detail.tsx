@@ -20,6 +20,7 @@ import {
   undo_last_chunk,
   type EditorSnapshot,
 } from "../detail/detail_editor";
+import { commit_active_editor_field } from "../detail/commit_active_editor_field";
 import { DetailForm } from "../detail/detail_form";
 import { partition_detail_layout } from "../detail/default_layout";
 import { use_record_editor_undo } from "../detail/use_record_editor_undo";
@@ -270,6 +271,8 @@ export default function DestinationDetailPage({
   const [pending_refresh, set_pending_refresh] = useState(false);
 
   const form_ref = useRef<HTMLDivElement>(null);
+  const editor_ref = useRef(editor);
+  editor_ref.current = editor;
   const revalidator = useRevalidator();
   const fetcher = useFetcher<DetailSaveActionResult>();
   const handled_fetcher_key = useRef<string | null>(null);
@@ -342,12 +345,18 @@ export default function DestinationDetailPage({
 
   const activate_save_ref = useRef(() => {});
   activate_save_ref.current = () => {
-    if (!can_update || !is_dirty(editor.baseline, editor.draft, editable)) {
+    if (!can_update || fetcher.state !== "idle") {
+      return;
+    }
+    // Time24Field commits on blur; flush before dirty/changed computation.
+    commit_active_editor_field(form_ref.current);
+    const snap = editor_ref.current;
+    if (!is_dirty(snap.baseline, snap.draft, editable)) {
       return;
     }
     const changed = compute_changed_fields(
-      editor.baseline,
-      editor.draft,
+      snap.baseline,
+      snap.draft,
       editable,
     );
     if (Object.keys(changed).length === 0) {

@@ -193,6 +193,16 @@ describe("destination_new context bar mount", () => {
     expect(source).not.toMatch(/render_context_bar/);
     expect(source).not.toMatch(/export const handle/);
   });
+
+  it("W3: Save flushes active editor field and blocks in-flight resubmit", async () => {
+    const source = await readFile(
+      new URL("./destination_new.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/commit_active_editor_field/);
+    expect(source).toMatch(/editor_ref\.current\.draft/);
+    expect(source).toMatch(/fetcher\.state !== "idle"/);
+  });
 });
 
 describe("destination_new datetime chrome (#109)", () => {

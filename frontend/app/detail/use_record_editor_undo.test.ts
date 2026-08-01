@@ -11,6 +11,7 @@ describe("use_record_editor_undo", () => {
     expect(source).toMatch(/form\.contains\(target\)/);
     expect(source).toMatch(/form\.contains\(active\)/);
     expect(source).toMatch(/pointerdown/);
+    expect(source).toMatch(/flushSync/);
     expect(source).toMatch(/active\.blur\(\)/);
     expect(source).not.toMatch(/window\.addEventListener\("keydown"/);
   });
