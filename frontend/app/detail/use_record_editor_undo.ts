@@ -2,8 +2,12 @@
  * ADR 007: Ctrl/Cmd+Z is form-subtree scoped. Clicking shell chrome often does
  * not move focus out of a controlled input; blur on outside pointer so undo
  * does not keep owning the keystroke after the operator left the editor.
+ *
+ * Outside blur is flushSync'd so commit-on-blur widgets (Time24Field) land in
+ * draft state before a following Save click reads the editor snapshot.
  */
 import { useEffect, useRef, type RefObject } from "react";
+import { flushSync } from "react-dom";
 
 export function use_record_editor_undo(
   form_ref: RefObject<HTMLElement | null>,
@@ -49,8 +53,10 @@ export function use_record_editor_undo(
       }
       const active = document.activeElement;
       if (active instanceof HTMLElement && form.contains(active)) {
-        active.blur();
-        on_leave_ref.current?.();
+        flushSync(() => {
+          active.blur();
+          on_leave_ref.current?.();
+        });
       }
     }
 

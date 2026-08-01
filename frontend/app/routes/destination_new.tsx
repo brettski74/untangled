@@ -31,6 +31,7 @@ import {
   undo_last_chunk,
   type EditorSnapshot,
 } from "../detail/detail_editor";
+import { commit_active_editor_field } from "../detail/commit_active_editor_field";
 import { DetailForm } from "../detail/detail_form";
 import { partition_detail_layout } from "../detail/default_layout";
 import { use_record_editor_undo } from "../detail/use_record_editor_undo";
@@ -284,6 +285,8 @@ export default function DestinationNewPage({
   const [save_error, set_save_error] = useState<string | null>(null);
 
   const form_ref = useRef<HTMLDivElement>(null);
+  const editor_ref = useRef(editor);
+  editor_ref.current = editor;
   const navigate = useNavigate();
   const fetcher = useFetcher<NewSaveActionResult>();
   const handled_fetcher_key = useRef<string | null>(null);
@@ -367,14 +370,17 @@ export default function DestinationNewPage({
 
   const activate_save_ref = useRef(() => {});
   activate_save_ref.current = () => {
-    if (!can_create) {
+    if (!can_create || fetcher.state !== "idle") {
       return;
     }
+    // Time24Field commits on blur; flush before reading draft for create body.
+    commit_active_editor_field(form_ref.current);
+    const draft = editor_ref.current.draft;
     const meta_now = class_field_meta(loaderData.class_name);
     const merged =
       meta_now != null
-        ? merge_create_body(meta_now, editor.draft)
-        : { ...editor.draft };
+        ? merge_create_body(meta_now, draft)
+        : { ...draft };
     const schema = create_schema_for_class(loaderData.class_name);
     if (schema != null) {
       const parsed = schema.safeParse(merged);
@@ -386,7 +392,7 @@ export default function DestinationNewPage({
     }
     set_save_error(null);
     void fetcher.submit(
-      editor.draft as Record<string, string | number | boolean | null>,
+      draft as Record<string, string | number | boolean | null>,
       {
         method: "POST",
         action: `.`,
