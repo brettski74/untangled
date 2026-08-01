@@ -22,6 +22,7 @@ import {
 } from "../detail/detail_editor";
 import { DetailForm } from "../detail/detail_form";
 import { partition_detail_layout } from "../detail/default_layout";
+import { use_record_editor_undo } from "../detail/use_record_editor_undo";
 import {
   update_schema_for_class,
   update_schema_keys,
@@ -314,24 +315,12 @@ export default function DestinationDetailPage({
     }
   }, [fetcher.state, fetcher.data, fetcher.formAction, editable]);
 
-  useEffect(() => {
-    const node = form_ref.current;
-    if (node == null || !can_update) {
-      return;
-    }
-    function on_keydown(event: KeyboardEvent) {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") {
-        return;
-      }
-      if (event.shiftKey) {
-        return;
-      }
-      event.preventDefault();
-      set_editor((snap) => undo_last_chunk(snap));
-    }
-    node.addEventListener("keydown", on_keydown);
-    return () => node.removeEventListener("keydown", on_keydown);
-  }, [can_update]);
+  use_record_editor_undo(
+    form_ref,
+    can_update,
+    () => set_editor((snap) => undo_last_chunk(snap)),
+    () => set_editor((snap) => close_active_chunk(snap)),
+  );
 
   // Ctrl/Cmd+S is deliberately page-level (Save is a record command), unlike
   // Ctrl+Z which stays form-subtree-scoped so shell chrome keeps native undo.
