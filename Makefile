@@ -9,6 +9,11 @@ BACKEND_PYTHON := $(BACKEND_VENV)/bin/python
 BACKEND_PIP := $(BACKEND_VENV)/bin/pip
 
 COMPOSE ?= docker compose
+COMPOSE_WAIT_FLAG ?= --wait
+
+ifneq (,$(findstring podman-compose,$(COMPOSE)))
+COMPOSE_WAIT_FLAG :=
+endif
 
 .PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait backend-dev frontend-dev backend-install frontend-install lint test backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
 
@@ -28,7 +33,10 @@ frontend-install: ## Install frontend npm dependencies
 	cd $(FRONTEND_DIR) && npm ci
 
 up: ## Build and start postgres + api + web via Compose
-	$(COMPOSE) up -d --build --wait
+	$(COMPOSE) up -d --build $(COMPOSE_WAIT_FLAG)
+ifneq (,$(findstring podman-compose,$(COMPOSE)))
+	@$(MAKE) db-wait
+endif
 
 down: ## Stop Compose runtime (keeps named DB volume)
 	$(COMPOSE) down
