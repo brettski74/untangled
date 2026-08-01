@@ -29,7 +29,7 @@ export function zod_error_http_status(error: ZodError): 400 | 422 {
 
 function format_issue(issue: ZodIssue): string {
   const path = issue.path
-    .map((segment) => (typeof segment === "symbol" ? segment.toString() : String(segment)))
+    .map((segment) => String(segment))
     .filter((segment) => segment.length > 0)
     .join(".");
   if (path.length === 0) {

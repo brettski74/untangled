@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { local_datetime_control_parts } from "../datetime/format";
 import { LocalDatetimeInput } from "../datetime/local_datetime_input";
 import { commit_active_editor_field } from "./commit_active_editor_field";
 
@@ -63,10 +64,12 @@ describe("commit_active_editor_field", () => {
     time.focus();
     fireEvent.change(time, { target: { value: "15:30:00" } });
 
-    // Without flushSync blur, Save would still see 00:00:00.
+    // Without flushSync blur, Save would still see the initial 00:00:00 local time.
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(saved).toMatch(/T15:30:00/);
+    // Assert via local control parts — wire ISO hour depends on host TZ.
+    expect(saved).not.toBe("2026-02-01T00:00:00Z");
+    expect(local_datetime_control_parts(saved).time).toBe("15:30:00");
   });
 
   it("no-ops when focus is outside the editor form", () => {
