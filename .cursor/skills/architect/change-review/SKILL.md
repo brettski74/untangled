@@ -17,6 +17,9 @@ This skill is **not** limited to a fixed list of workflows. Any workflow or simi
 
 - **Adversarial by default.** Assume the material is flawed until proven otherwise. Actively seek reasons to reject or reshape it. Consider load and future maintenance impact.
 - **Guidance sources only:** `/architecture/**` plus the material under review supplied in the Task prompt. Do **not** use the wider codebase or other docs as architectural guidance.
+- **Security intent is architect-owned guidance:** When `/architecture/security/` exists, read whichever durable, explicitly human-accepted threat-model and security-requirements files are present on every invocation; either file may validly be absent during the staged lifecycle. If a working intent file is marked `Draft`, use its latest committed `Accepted` revision as governing intent and treat the working copy as non-governing unless it was supplied as material under review; if no committed accepted revision exists, that intent is not yet established. Treat accepted files as governing intent alongside the main architecture documents. Security review evidence and candidate findings outside `/architecture/` are never governing intent; when supplied as material they may inform the review only.
+- **No inferred precedence:** If durable security intent conflicts with other architectural intent, report the conflict as unresolved for a human ruling. Do not silently prefer either source or claim alignment.
+- **Security ownership boundary:** Do not create, edit, normalize, move, or delete `/architecture/security/**`. Those files are owned by the architect security skills; this skill may only read them as guidance.
 - **Prefer existing architecture.** Look for ways to stay within current principles, constraints, boundaries, and tradeoffs. Call `record-decision` **only** when the required outcome cannot be achieved without an architectural adjustment.
 - **Do not** edit main architecture docs (`principles.md`, `constraints.md`, `boundaries.md`, `tradeoffs.md`, `unknowns.md`). ADRs (Architecture Decision Records) go only through `record-decision`.
 - Keep the review **concise and high-signal**. Do not paste architecture docs into the output.
@@ -112,10 +115,10 @@ Do not restate this skill’s `/architecture` guidance or output format in the T
 
 ## Steps (sub-agent)
 
-1. **Read** `/architecture/` (principles, constraints, boundaries, tradeoffs, unknowns, and relevant `decisions/`) for guidance only—on **every** invocation, including resume.
+1. **Read** `/architecture/` (principles, constraints, boundaries, tradeoffs, unknowns, relevant `decisions/`, and durable security intent under `security/` when present) for guidance only—on **every** invocation, including resume.
 2. Honor **Settled points** and human rulings relayed in the prompt; do not re-litigate them unless the updated material changes the claim or a human ruling reopens them.
 3. If the purpose is `incorporation-follow-up` or `adr-follow-up`, only confirm incorporation, record an already-decided ADR via `record-decision`, or acknowledge a human ruling. If the primary is smuggling a substantive third critique under a follow-up label, treat that as a hard rule failure (see Hard rules).
-4. **Review** the supplied material (including any diffs) adversarially against intent—especially new or changed claims, the invoker’s review context, and the full new material class when a class-change header is present. When expected results or proposed solutions may conflict with existing architecture, call that out explicitly (human may still overrule).
+4. **Review** the supplied material (including any diffs) adversarially against intent—especially new or changed claims, the invoker’s review context, and the full new material class when a class-change header is present. When expected results or proposed solutions may conflict with existing architecture or durable security intent, call that out explicitly (human may still overrule). Report conflicts between those intent sources as unresolved rather than inferring precedence.
 5. If an architectural adjustment is **unavoidable**, invoke **`record-decision`** and note the new ADR path in the review (primary agent must tell the human).
 6. **Return** only the fixed output format below—no preamble, no architecture file dumps.
 
@@ -145,5 +148,5 @@ If a section has nothing to report, use a single bullet `- None.`
 
 ## Notes
 
-- Out of scope: editing main architecture docs; inspecting the wider codebase for architectural truth; running in the same context as the material’s author; cross-chat / cross-skill / cross-ticket architect continuity; building a memory store outside Task `resume` + Settled points.
+- Out of scope: editing main architecture docs or security-owned intent; inspecting the wider codebase for architectural truth; running in the same context as the material’s author; cross-chat / cross-skill / cross-ticket architect continuity; building a memory store outside Task `resume` + Settled points.
 - Tradeoff: workflow-long resume grows context (less re-litigation and better mid-workflow ADR/human-ruling memory vs larger retained history). Mitigate with Settled points and the fresh-Task fallback when resume is unreliable.

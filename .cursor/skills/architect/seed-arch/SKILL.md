@@ -17,6 +17,7 @@ Use this skill when a human architect explicitly asks to **seed** (or re-seed) `
 - **Human-explicit only.** Never start this skill because refine, implement, verify, or any other workflow mentioned architecture. If the user did not ask for `seed-arch` / seeding architecture, do not run it.
 - Inspect the repo **outside** `/architecture` only to **infer** candidates for the intent store—not to invent product requirements or dump implementation detail into architecture docs.
 - Keep architecture docs **concise and high-signal** (invariants, constraints, intent). Do not paste low-level code behaviour or duplicate `AGENTS.md` / docs wholesale.
+- **Preserve security-owned intent:** `/architecture/security/**` is an optional architect-owned extension managed only by the architect security skills. Never create, inspect for seeding, edit, normalize, move, delete, or use it as source material for the five main documents.
 - **Write architecture files directly**—never draft substantive architecture content in chat for later confirmation. The human reviews via IDE diffs; chat stays minimal.
 - Do **not** merge the seed PR yourself. Wait for explicit human confirmation that the PR is merged before local cleanup.
 
@@ -36,14 +37,15 @@ Use this skill when a human architect explicitly asks to **seed** (or re-seed) `
   tradeoffs.md
   unknowns.md
   decisions/
+  security/           # optional; preserved and managed by architect security skills
 ```
 
-Create missing files/directories as needed. Existing content may be refined; do not silently delete confirmed material without human agreement.
+Create missing core files/directories as needed. Do not create `security/`; its absence is valid. Existing core content may be refined; do not silently delete confirmed material without human agreement.
 
 ## Steps
 
 1. **Orient** with git-ai `scripts/git-status.sh` (pass optional issue `N` if the user supplied one). If the tree is in a bad state for branching, stop and resolve with the user first.
-2. **Non-empty store guard:** If `/architecture/` already has substantive content (more than scaffold stubs / “awaiting seed-arch” placeholders), stop and ask whether they really want to **re-seed** with `seed-arch`, or whether they meant **`review-arch`** instead. Only continue after explicit confirmation that they want `seed-arch`; then proceed **surgically** (targeted updates, no blind overwrite).
+2. **Non-empty core-store guard:** If the five main documents or `decisions/` already have substantive content (more than scaffold stubs / “awaiting seed-arch” placeholders), stop and ask whether they really want to **re-seed** with `seed-arch`, or whether they meant **`review-arch`** instead. The presence of `/architecture/security/` alone does not make the core store seeded and must not block seeding missing core documents. Only continue after explicit confirmation that they want to re-seed substantive core content; then proceed **surgically** (targeted updates, no blind overwrite).
 3. **Branch choice:**
    - If already on a **non-default** branch: tell the user the current branch name and ask whether to perform seeding **on this branch**. Only run `scripts/sync-default.sh` and `scripts/checkout-branch.sh` if they agree to leave the current branch for a new one; otherwise stay and work on the current branch.
    - If on the **default** branch (or they agreed to switch): sync via `scripts/sync-default.sh`, then `scripts/checkout-branch.sh <branch>` where:
@@ -60,5 +62,6 @@ Create missing files/directories as needed. Existing content may be refined; do 
 ## Notes
 
 - Re-seeding after confirmation is surgical: prefer minimal diffs over rewriting whole files.
+- `/architecture/security/` is outside this workflow’s seeding scope. Preserve it byte-for-byte regardless of whether the core store is being seeded or re-seeded.
 - Primary workflow agents (refine / implement / verify) must **NEVER** consult `/architecture/`. This skill (and other architect skills) are the only agents that may read or write it.
 - Out of scope for this skill: implementing `review-arch`, `record-decision`, `change-review`, and wiring architect hooks into workflows (pointing the user at `review-arch` when appropriate is in scope).
