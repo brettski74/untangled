@@ -11,7 +11,9 @@ BACKEND_PIP := $(BACKEND_VENV)/bin/pip
 COMPOSE ?= docker compose
 COMPOSE_WAIT_FLAG ?= --wait
 
-ifneq (,$(findstring podman-compose,$(COMPOSE)))
+# Detect podman whether COMPOSE is "podman-compose" or "docker" aliased to podman
+_COMPOSE_IS_PODMAN := $(shell $(firstword $(COMPOSE)) --version 2>/dev/null | grep -qi podman && echo yes || echo no)
+ifeq (yes,$(_COMPOSE_IS_PODMAN))
 COMPOSE_WAIT_FLAG :=
 endif
 
@@ -34,7 +36,7 @@ frontend-install: ## Install frontend npm dependencies
 
 up: ## Build and start postgres + api + web via Compose
 	$(COMPOSE) up -d --build $(COMPOSE_WAIT_FLAG)
-ifneq (,$(findstring podman-compose,$(COMPOSE)))
+ifeq (yes,$(_COMPOSE_IS_PODMAN))
 	@$(MAKE) db-wait
 endif
 
