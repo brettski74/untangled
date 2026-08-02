@@ -6,6 +6,8 @@ For iterative coding with hot reload, use `make backend-dev` / `make frontend-de
 
 Schema apply and baseline seed are **intentional**: after `make up`, run `make migrate` then `make seed`. Neither runs automatically on Compose start.
 
+Published GHCR images (optional; not used by default Compose `build:`) and GitHub Actions product CI are documented in [container-images.md](./container-images.md).
+
 ## Prerequisites
 
 - Docker with Compose v2 (`docker compose`) — required for `make up` and DB-backed tests
@@ -339,6 +341,7 @@ Six incident rows and fourteen change-request rows are seeded; full stable UUID 
 | `make frontend-dev` | Run React Router dev server on the host (port 5173) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
 | `make test` | Backend pytest (starts DB; uses migrate path) + frontend build smoke test |
+| `make test-ci` | Same as lint + test, but skip Compose `db-up` (Postgres must already be up; used by Actions) |
 | `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
 | `make clean` | Same as `clean-models` (clean source tree of codegen output) |
