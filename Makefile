@@ -8,19 +8,41 @@ BACKEND_VENV := $(BACKEND_DIR)/.venv
 BACKEND_PYTHON := $(BACKEND_VENV)/bin/python
 BACKEND_PIP := $(BACKEND_VENV)/bin/pip
 
-COMPOSE ?= docker compose
-COMPOSE_WAIT_FLAG ?= --wait
-
-# Detect podman whether COMPOSE is "podman-compose" or "docker" aliased to podman
-_COMPOSE_IS_PODMAN := $(shell $(firstword $(COMPOSE)) --version 2>/dev/null | grep -qi podman && echo yes || echo no)
-ifeq (yes,$(_COMPOSE_IS_PODMAN))
-COMPOSE_WAIT_FLAG :=
+# Compose engine: unset COMPOSE → auto-detect (prefer Podman); env/CLI override wins.
+# Empty COMPOSE is an error. Export so nested $(MAKE) keeps the same engine/wait flags.
+_COMPOSE_ORIGIN := $(origin COMPOSE)
+ifeq ($(_COMPOSE_ORIGIN),undefined)
+  ifeq ($(shell podman compose version >/dev/null 2>&1 && echo yes),yes)
+    COMPOSE := podman compose
+  else ifeq ($(shell podman-compose version >/dev/null 2>&1 && echo yes),yes)
+    COMPOSE := podman-compose
+  else ifeq ($(shell docker compose version >/dev/null 2>&1 && echo yes),yes)
+    COMPOSE := docker compose
+  else ifeq ($(shell docker-compose version >/dev/null 2>&1 && echo yes),yes)
+    COMPOSE := docker-compose
+  else
+    $(error No usable Compose engine found (tried: podman compose, podman-compose, docker compose, docker-compose). Install one, or set COMPOSE explicitly, e.g. COMPOSE="docker compose")
+  endif
+else ifeq ($(COMPOSE),)
+  $(error COMPOSE is set but empty; unset it for auto-detect, or set a Compose command e.g. COMPOSE="docker compose")
 endif
+
+COMPOSE_SUPPORTS_WAIT := $(shell $(COMPOSE) up --help 2>/dev/null | grep -q -- '--wait' && echo yes || echo no)
+ifeq ($(COMPOSE_SUPPORTS_WAIT),yes)
+  COMPOSE_WAIT_FLAG := --wait
+else
+  COMPOSE_WAIT_FLAG :=
+endif
+
+export COMPOSE
+export COMPOSE_WAIT_FLAG
+export COMPOSE_SUPPORTS_WAIT
 
 .PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
+	@echo "  Compose engine: $(COMPOSE) (override: make COMPOSE=\"docker compose\" <target>)"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 install: backend-install frontend-install ## Install backend and frontend dependencies
@@ -36,7 +58,7 @@ frontend-install: ## Install frontend npm dependencies
 
 up: ## Build and start postgres + api + web via Compose
 	$(COMPOSE) up -d --build $(COMPOSE_WAIT_FLAG)
-ifeq (yes,$(_COMPOSE_IS_PODMAN))
+ifneq ($(COMPOSE_SUPPORTS_WAIT),yes)
 	@$(MAKE) db-wait
 endif
 

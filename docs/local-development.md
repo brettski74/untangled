@@ -1,6 +1,6 @@
 # Local development
 
-Untangled is **containers-first**: `make up` brings up PostgreSQL, the API, and the web app via Docker Compose.
+Untangled is **containers-first**: `make up` brings up PostgreSQL, the API, and the web app via Compose (Podman or Docker).
 
 For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` if you need Postgres). Those are not required for the Compose runtime.
 
@@ -10,9 +10,36 @@ Published GHCR images (optional; not used by default Compose `build:`) and GitHu
 
 ## Prerequisites
 
-- Docker with Compose v2 (`docker compose`) — required for `make up` and DB-backed tests
+- **Podman or Docker** with a usable Compose entrypoint — required for `make up` and DB-backed tests (see [Compose engine selection](#compose-engine-selection))
 - GNU Make
 - Python 3.12+ and Node.js 20+ — only needed for host-side `make install`, lint/test, and `*-dev` targets
+
+## Compose engine selection
+
+This section documents how the root `Makefile` selects and uses Compose for developers and operators (and for reuse by future start/shutdown scripts). It describes Make behavior—not a separate policy source.
+
+The root `Makefile` picks a Compose command once per Make invocation and uses it for all Compose targets (`up`, `down`, `db-up`, `db-down`, `db-wait`, `reinstall`, etc.). Nested Make calls inherit the same selection.
+
+**When `COMPOSE` is unset**, auto-detect uses this precedence (first *usable* wins; usable means a version/capability probe succeeds, not merely that a binary is on `PATH`):
+
+1. `podman compose`
+2. `podman-compose`
+3. `docker compose`
+4. `docker-compose` (legacy)
+
+If none are usable, Make fails and lists the candidates that were tried.
+
+**Prefer Podman when both Podman and Docker are installed.** That is intentional (RHEL/Rocky-style hosts). On a dual-engine machine where you want Docker Compose instead:
+
+```bash
+make COMPOSE="docker compose" up
+```
+
+**Override:** if you set `COMPOSE` in the environment or on the Make command line, that value always wins (no auto-detect). An empty `COMPOSE=` is an error — unset the variable for auto-detect, or pass a real command.
+
+**Wait / readiness:** if the selected engine supports `compose up --wait`, `make up` uses it; otherwise `--wait` is omitted and Postgres readiness uses `make db-wait` (capability probe of the selected engine, not a name check for “podman”).
+
+Future production start/shutdown scripts should reuse this same precedence, override, and wait behavior so operator `make` and host scripts stay equivalent.
 
 ## First-time setup
 
