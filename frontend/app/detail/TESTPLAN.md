@@ -14,7 +14,7 @@ Slice 2 (#81) read-layout cases remain covered by existing suites; this plan own
 
 ## Out of scope (not tested as product behaviour here)
 
-- New-record create (#83)
+- New-record create (#83) — see [`TESTPLAN-83.md`](./TESTPLAN-83.md)
 - Unsaved-navigation prompt (deferred)
 - Lost-update / optimistic concurrency (deferred)
 - Redo (Ctrl+Y)

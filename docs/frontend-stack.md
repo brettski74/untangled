@@ -8,7 +8,7 @@ Untangled M1 uses **React Router v7 in framework mode** for the web application.
 - **Loaders and actions** — route modules colocate data loading and mutations, which fits authenticated CRUD list/detail screens without bolting on a separate data layer.
 - **Progressive enhancement** — forms and navigation can work with standard HTTP semantics before client hydration.
 - **Single React codebase** — same components and routes for dev SSR, production SSR, and optional SPA-style navigation.
-- **Login gate + shell chrome** — `/login` plus fail-closed authenticated layout with header / nav rail / context bar, YAML-driven class nav. Schema-driven list destinations (#13); detail read layout (#81 / epic #71); new-record placeholder until #83; token refresh #14.
+- **Login gate + shell chrome** — `/login` plus fail-closed authenticated layout with header / nav rail / context bar, YAML-driven class nav. Schema-driven list destinations (#13); detail read/edit + new-record create (#81–#83 / epic #71); token refresh #14.
 
 ## Auth delivery (SSR)
 
@@ -32,7 +32,7 @@ Cookie `maxAge` is derived from the access JWT `exp` claim (no separate web TTL 
 | `frontend/app/auth/` | Session cookie, API seam, Zod envelopes, gate helpers |
 | `frontend/app/shell/` | Operator chrome (header, nav rail, context bar host, YAML nav). Context bar mount: routes portal chrome via `ShellContextBar` into one always-present layout host (inert when empty). Binding contract: ADR `architecture/decisions/005-portal-shell-context-bars.md`. |
 | `frontend/app/list/` | Schema-driven list chrome (#13): context bar, quick filter, filter row + nested editor (`filter_chrome.tsx`), shared predicate text renderer (`predicate_text.ts`) |
-| `frontend/app/detail/` | Schema-driven detail read layout (#81) + TESTPLAN |
+| `frontend/app/detail/` | Schema-driven detail read/edit (#81–#82) + new-record (#83); `TESTPLAN.md` / `TESTPLAN-83.md` |
 | `frontend/app/records/` | SSR search/fetch/update seams (Bearer via session). Fetch/search use `/api/v1` with FK identity enrichment; update remains unversioned. Shared helpers in `fk_identity.ts`. |
 | `frontend/app/config/nav-bar.yaml` | M1 product-default nav (instance override later) |
 | `frontend/app/root.tsx` | HTML shell / root layout |

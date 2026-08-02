@@ -27,12 +27,24 @@ export function zod_error_http_status(error: ZodError): 400 | 422 {
   return 422;
 }
 
+function format_issue(issue: ZodIssue): string {
+  const path = issue.path
+    .map((segment) => String(segment))
+    .filter((segment) => segment.length > 0)
+    .join(".");
+  if (path.length === 0) {
+    return issue.message;
+  }
+  return `${path}: ${issue.message}`;
+}
+
+/** Human-readable validation detail; includes field paths when Zod provides them. */
 export function zod_error_detail(error: ZodError): {
   detail: string;
   issues: ZodIssue[];
 } {
   return {
-    detail: error.issues.map((i) => i.message).join("; ") || "Validation failed",
+    detail: error.issues.map(format_issue).join("; ") || "Validation failed",
     issues: error.issues,
   };
 }

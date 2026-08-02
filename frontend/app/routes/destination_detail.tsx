@@ -20,8 +20,10 @@ import {
   undo_last_chunk,
   type EditorSnapshot,
 } from "../detail/detail_editor";
+import { commit_active_editor_field } from "../detail/commit_active_editor_field";
 import { DetailForm } from "../detail/detail_form";
 import { partition_detail_layout } from "../detail/default_layout";
+import { use_record_editor_undo } from "../detail/use_record_editor_undo";
 import {
   update_schema_for_class,
   update_schema_keys,
@@ -269,6 +271,8 @@ export default function DestinationDetailPage({
   const [pending_refresh, set_pending_refresh] = useState(false);
 
   const form_ref = useRef<HTMLDivElement>(null);
+  const editor_ref = useRef(editor);
+  editor_ref.current = editor;
   const revalidator = useRevalidator();
   const fetcher = useFetcher<DetailSaveActionResult>();
   const handled_fetcher_key = useRef<string | null>(null);
@@ -314,24 +318,12 @@ export default function DestinationDetailPage({
     }
   }, [fetcher.state, fetcher.data, fetcher.formAction, editable]);
 
-  useEffect(() => {
-    const node = form_ref.current;
-    if (node == null || !can_update) {
-      return;
-    }
-    function on_keydown(event: KeyboardEvent) {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") {
-        return;
-      }
-      if (event.shiftKey) {
-        return;
-      }
-      event.preventDefault();
-      set_editor((snap) => undo_last_chunk(snap));
-    }
-    node.addEventListener("keydown", on_keydown);
-    return () => node.removeEventListener("keydown", on_keydown);
-  }, [can_update]);
+  use_record_editor_undo(
+    form_ref,
+    can_update,
+    () => set_editor((snap) => undo_last_chunk(snap)),
+    () => set_editor((snap) => close_active_chunk(snap)),
+  );
 
   // Ctrl/Cmd+S is deliberately page-level (Save is a record command), unlike
   // Ctrl+Z which stays form-subtree-scoped so shell chrome keeps native undo.
@@ -353,12 +345,18 @@ export default function DestinationDetailPage({
 
   const activate_save_ref = useRef(() => {});
   activate_save_ref.current = () => {
-    if (!can_update || !is_dirty(editor.baseline, editor.draft, editable)) {
+    if (!can_update || fetcher.state !== "idle") {
+      return;
+    }
+    // Time24Field commits on blur; flush before dirty/changed computation.
+    commit_active_editor_field(form_ref.current);
+    const snap = editor_ref.current;
+    if (!is_dirty(snap.baseline, snap.draft, editable)) {
       return;
     }
     const changed = compute_changed_fields(
-      editor.baseline,
-      editor.draft,
+      snap.baseline,
+      snap.draft,
       editable,
     );
     if (Object.keys(changed).length === 0) {

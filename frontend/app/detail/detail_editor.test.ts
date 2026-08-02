@@ -17,7 +17,10 @@ import {
   update_schema_for_class,
   update_schema_keys,
 } from "../records/update_schema_registry";
-import { zod_error_http_status } from "../records/zod_http_status";
+import {
+  zod_error_detail,
+  zod_error_http_status,
+} from "../records/zod_http_status";
 
 function slot(
   partial: Partial<DetailFieldSlot> &
@@ -194,6 +197,26 @@ describe("zod_error_http_status", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(zod_error_http_status(result.error)).toBe(422);
+    }
+  });
+});
+
+describe("zod_error_detail", () => {
+  it("prefixes messages with field paths", () => {
+    const schema = z.object({
+      scheduled_start: z.string(),
+      scheduled_end: z.string(),
+    });
+    const result = schema.safeParse({
+      scheduled_start: null,
+      scheduled_end: null,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const { detail } = zod_error_detail(result.error);
+      expect(detail).toContain("scheduled_start:");
+      expect(detail).toContain("scheduled_end:");
+      expect(detail).toMatch(/Expected string, received null/);
     }
   });
 });
