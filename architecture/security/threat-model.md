@@ -7,7 +7,7 @@ Supersedes: None
 Scope: Untangled ITSM platform as a single-tenant, customer self-hosted, internet-facing deployment — implemented Milestone 1 surfaces plus confirmed architectural intent
 Prepared date: 2026-08-02
 Accepted date: 2026-08-03
-Accepted by: Human authority — identity not supplied
+Accepted by: Brettski74
 
 ## 1. Executive summary
 
@@ -1039,4 +1039,4 @@ The threat catalogue is authoritative. This table is a derived summary and must 
 
 | Revision | Date | Status | Scope or trigger | Author or agent | Human acceptance |
 | --- | --- | --- | --- | --- | --- |
-| TM-REV-001 | 2026-08-02 | Accepted | Initial model — Milestone 1 implementation plus confirmed architectural intent, rated against a production internet-facing single-tenant deployment | threat-model skill, primary agent (Claude Opus 5 Thinking High) | Accepted 2026-08-03 by human authority; identity not supplied |
+| TM-REV-001 | 2026-08-02 | Accepted | Initial model — Milestone 1 implementation plus confirmed architectural intent, rated against a production internet-facing single-tenant deployment | threat-model skill, primary agent (Claude Opus 5 Thinking High) | Accepted 2026-08-03 by Brettski74 |
