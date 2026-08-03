@@ -1,13 +1,13 @@
 # Untangled ITSM Threat Model
 
-Status: Draft
+Status: Accepted
 Revision: TM-REV-001
 Source revision: None
 Supersedes: None
 Scope: Untangled ITSM platform as a single-tenant, customer self-hosted, internet-facing deployment — implemented Milestone 1 surfaces plus confirmed architectural intent
 Prepared date: 2026-08-02
-Accepted date: Not accepted
-Accepted by: Not accepted
+Accepted date: 2026-08-03
+Accepted by: Human authority — identity not supplied
 
 ## 1. Executive summary
 
@@ -975,7 +975,7 @@ The threat catalogue is authoritative. This table is a derived summary and must 
 
 | Threat ID | Decision | Rationale | Accepted by | Review trigger |
 | --- | --- | --- | --- | --- |
-| None | No risks accepted at TM-REV-001 | Acceptance was not sought during the initial interview; the human should decide which items are accepted rather than remediated | Not accepted | First revision after security requirements are defined |
+| None | No individual risk accepted at TM-REV-001 | Accepting this revision means accepting it as an accurate description of the threat landscape. It does not accept any threat in it as a risk to live with: no item here has been designated tolerate-rather-than-remediate. That decision belongs with security design, once requirements exist to remediate against | Not accepted | First revision after security requirements are defined |
 
 ### Open questions
 
@@ -1039,4 +1039,4 @@ The threat catalogue is authoritative. This table is a derived summary and must 
 
 | Revision | Date | Status | Scope or trigger | Author or agent | Human acceptance |
 | --- | --- | --- | --- | --- | --- |
-| TM-REV-001 | 2026-08-02 | Draft | Initial model — Milestone 1 implementation plus confirmed architectural intent, rated against a production internet-facing single-tenant deployment | threat-model skill, primary agent (Claude Opus 5 Thinking High) | Not accepted |
+| TM-REV-001 | 2026-08-02 | Accepted | Initial model — Milestone 1 implementation plus confirmed architectural intent, rated against a production internet-facing single-tenant deployment | threat-model skill, primary agent (Claude Opus 5 Thinking High) | Accepted 2026-08-03 by human authority; identity not supplied |
