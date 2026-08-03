@@ -18,6 +18,9 @@ Use this skill when a human architect explicitly asks to **review** `/architectu
 - Prioritize **architecture docs and human intent**. Do **not** rely heavily on code inspection; do not treat the wider codebase as architectural truth.
 - Keep architecture docs **concise and high-signal** (invariants, constraints, intent). Do not paste low-level code behaviour or duplicate `AGENTS.md` / docs wholesale.
 - **Never** deprecate or remove material from the main architecture docs without first confirming with the human that it is no longer valid or appropriate.
+- **Preserve security-owned intent:** `/architecture/security/**` is an optional architect-owned extension managed only by the architect security skills. Never create, edit, normalize, move, delete, or roll its content into the five main documents. Durable security intent may participate in conflict analysis, but candidate findings and review evidence outside `/architecture/` are not governing intent.
+- **Draft security intent:** If a security-intent working file is marked `Draft`, use its latest committed `Accepted` revision for conflict analysis and treat the working copy as non-governing. If no committed accepted revision exists, that security intent is not yet established.
+- **No inferred precedence:** If durable security intent conflicts with the main documents or an ADR, report the conflict and obtain a human ruling. Do not silently prefer either source. Any resulting security-intent change must be made through an architect security skill, not this workflow.
 - **Write architecture files directly**—apply agreed edits to disk; chat stays focused on conflicts, proposed edit summaries, and agreement gates—not long pasted file bodies.
 - Do **not** merge the review PR yourself. Wait for explicit human confirmation that the PR is merged before local cleanup.
 
@@ -38,6 +41,7 @@ Use this skill when a human architect explicitly asks to **review** `/architectu
   tradeoffs.md
   unknowns.md
   decisions/          # ADRs to reconcile (then remove when incorporated)
+  security/           # optional durable security intent; preserved, not rolled up
 ```
 
 ## Steps
@@ -52,16 +56,16 @@ Use this skill when a human architect explicitly asks to **review** `/architectu
 4. **Ticket association for the PR:** If the current branch matches `<prefix>/<N>-<kebab-case-summary>` (e.g. `feature/42-…`), ask whether this PR should close/fix that open ticket. If yes, use `Fixes #N` in the PR body. If the user supplied `N` explicitly, use that unless they say otherwise.
 5. **Conflict pass (mandatory, before any incorporation):**
    - List ADRs under `/architecture/decisions/` (ignore non-ADR placeholders such as `.gitkeep`).
-   - Review **all** current ADRs for contradictions with each other and, where relevant, with the main architecture docs.
+   - Review **all** current ADRs for contradictions with each other and, where relevant, with the main architecture docs and durable intent under `/architecture/security/`.
    - Summarize each conflict to the user.
-   - Resolve conflicting ADRs **with the human first** (edit, supersede, or drop by agreement). Do **not** incorporate any non-conflicting ADRs into the main docs until the conflict set is cleared.
+   - Resolve conflicting ADRs **with the human first** (edit, supersede, or drop by agreement). When resolution requires changing security intent, give the human a clear handoff naming the conflict and the architect security skill responsible for resolving it, then keep the conflict open until that change is accepted. Do **not** incorporate any non-conflicting ADRs into the main docs until the conflict set is cleared.
 6. **One ADR at a time:** For each remaining ADR, in a stable order (e.g. filename / date order):
    - Propose the **concrete** edits to the applicable main docs (`principles.md`, `constraints.md`, `boundaries.md`, `tradeoffs.md`, `unknowns.md`).
    - Apply edits only after the human **agrees** for that ADR.
    - After agreement and incorporation: **remove** the ADR file from `decisions/`.
    - Do not move on to the next ADR until this ADR is incorporated and removed (or explicitly deferred/discarded by the human).
 7. **Context budget nudge:** Once every **10 ADRs** processed in the session (incorporated, deferred, or discarded), remind the human to check context usage and consider a fresh chat. If they want a new chat or say context is full, produce a **handoff prompt** that includes enough state to continue `review-arch` elsewhere (branch name, conflict-pass status, ADRs remaining, last completed ADR, open human decisions).
-8. **After all ADRs:** When `decisions/` has no remaining ADRs (or the human stops the roll-up), solicit feedback on **additional improvements** to the architectural documents beyond ADR roll-up. Apply agreed follow-ups the same way (direct file edits; no silent deletions).
+8. **After all ADRs:** When `decisions/` has no remaining ADRs (or the human stops the roll-up), solicit feedback on **additional improvements** to the five main architectural documents beyond ADR roll-up. Apply agreed follow-ups the same way (direct file edits; no silent deletions). Refer security-intent improvements to the appropriate architect security skill.
 9. When the human agrees the review is complete: briefly list paths touched. Wait for explicit approval to commit and open the PR.
 10. After approval: **commit and push** via git-ai (`scripts/stage-commit.sh`, then `scripts/push.sh`), then **open a PR** with user-github MCP (include `Fixes #N` when agreed in step 4).
 11. Tell the user the PR URL and that you are waiting for them to merge (or confirm merge).
@@ -70,5 +74,6 @@ Use this skill when a human architect explicitly asks to **review** `/architectu
 ## Notes
 
 - Prefer minimal, surgical diffs when folding ADR content into main docs.
+- `/architecture/security/` is read-only context for this workflow. Its absence is valid and its presence must not be treated as an unsupported layout or cleanup target.
 - Primary workflow agents (refine / implement / verify) must **NEVER** consult `/architecture/`. This skill (and other architect skills) are the only agents that may read or write it.
 - Out of scope for this skill: implementing `record-decision`, `change-review`, and wiring architect hooks into workflows.
