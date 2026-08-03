@@ -162,7 +162,7 @@ Review-context counts:
 - [ ] Run contract was human-confirmed before launch.
 - [ ] Repository outside the run directory, diff, changed files, accepted intent, and toolchain are pinned and hash-verified.
 - [ ] Exactly two Sol and two Opus outputs are Complete.
-- [ ] Every phase used its required model and prompt contract.
+- [ ] Every phase was launched with its required model and prompt contract, and its output records the same assigned model.
 - [ ] Every completed output hash matches the phase ledger.
 - [ ] Consolidation ran in the primary orchestrator context.
 - [ ] Findings are Complete and have zero unaccounted source items.

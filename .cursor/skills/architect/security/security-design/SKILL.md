@@ -14,7 +14,7 @@ Create or revise `/architecture/security/security-requirements.md` through a pri
 
 ## Hard rules
 
-- **Explicit, primary-agent use only.** Run only when the human explicitly invokes security design, in a dedicated primary-agent chat using Claude Opus 5 Thinking High. Never run in a sub-agent or automated pipeline loop. If the required model is unavailable or cannot be verified, stop clearly; do not substitute another model.
+- **Explicit, primary-agent use only.** Run only when the human explicitly invokes security design, in a dedicated primary-agent chat using Claude Opus 5 Thinking High. Never run in a sub-agent or automated pipeline loop. If the required model is unavailable, or cannot be verified from inside the session, disclose that and obtain an explicit human waiver before continuing; never substitute another model silently.
 - **Committed review evidence required.** Consume one or more completed, committed security-review runs. Verify each `findings.md` and referenced run artefact against its source commit and SHA-256 hashes. Uncommitted or incomplete findings cannot become design inputs.
 - **Human authority.** The human decides controls, tradeoffs, priorities, deferrals, accepted risks, and final acceptance. Do not silently convert candidate findings into requirements or resolve disagreement on the human’s behalf.
 - **Architect ownership.** This architect skill may read `/architecture/**` and committed `/security/reviews/**`. It may write only `/architecture/security/security-requirements.md` and, when a human-approved cross-architecture adjustment requires it, an ADR through `record-decision`. Do not edit the five main architecture documents, threat model, or review evidence.

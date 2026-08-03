@@ -3,7 +3,7 @@
 Status: Incomplete
 Run ID:
 Iteration:
-Model: GPT-5.6 Sol Medium
+Assigned model (caller-supplied, not self-verified):
 Review mode:
 Prepared date:
 

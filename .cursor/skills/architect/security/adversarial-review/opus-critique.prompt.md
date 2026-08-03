@@ -15,6 +15,7 @@ Repository root: <absolute-path>
 Run ID: <collision-resistant-run-id>
 Run directory: <absolute-path>/security/reviews/<run-id>
 Iteration: <1-or-2>
+Assigned model: claude-opus-5-thinking-high
 Review mode: <full-review-or-diff-aware>
 Review scope: <systems-components-endpoints-or-change>
 Explicit exclusions: <exclusions-or-none>
@@ -56,6 +57,7 @@ Do not launch other agents, alter architecture intent, commit, publish, mutate i
 - Iteration 1 uses the iteration 1 Sol review as `Current Sol input` and `not-applicable` for all iteration-history fields.
 - Iteration 2 uses the iteration 2 Sol review as `Current Sol input` and requires all iteration 1 paths and hashes.
 - Reuse the same run ID and unchanged pinned system inputs across both iterations.
+- `Assigned model` must match the model the Task was actually launched with. The sub-agent records it for provenance and cannot verify it; supplying a value that does not match what was launched silently falsifies the run evidence.
 - Read accepted intent from pinned source commits and verify content hashes.
 - Verify the supplied diff and every Sol/Opus artefact against its hash before analysis.
 - Do not resume the iteration 1 Task for iteration 2; use a fresh Opus Task with explicit prior artefact paths so each pass has a clear audit boundary.

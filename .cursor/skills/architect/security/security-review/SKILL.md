@@ -14,7 +14,7 @@ Perform one Sol analysis pass and write non-governing review evidence. The pipel
 
 ## Hard rules
 
-- **Sub-agent phase only.** Run in a separate Task sub-agent using `gpt-5.6-sol-medium`. Do not run as the primary threat-modelling or security-design agent. If the required model is unavailable, fail clearly rather than silently substituting another model.
+- **Sub-agent phase only.** The caller launches this skill in a separate Task sub-agent with model `gpt-5.6-sol-medium`, and must fail clearly rather than silently substitute another model if it is unavailable. Model selection is the caller's: this skill records the assigned-model slug it is given and never asserts, infers, or verifies which model is running it. Do not run as the primary threat-modelling or security-design agent.
 - **One iteration per invocation.** Accept only iteration `1` or `2`. Never launch Opus, another Sol pass, consolidation, or the wider pipeline.
 - **Accepted intent only.** Read the `Accepted` threat model and optional security requirements from the pinned source commit and verify their recorded content hashes. Never substitute working-tree content; a working file marked `Draft` is non-governing. An accepted threat model is required.
 - **Evidence, not intent.** Output under `/security/reviews/` is audit evidence and candidate analysis, never governing architecture. Do not edit `/architecture/**`.
@@ -35,6 +35,7 @@ The caller must supply all applicable fields from [sol-analysis.prompt.md](sol-a
 - Absolute repository root.
 - Run ID and run directory.
 - Iteration number.
+- Assigned model slug, exactly as launched.
 - Full-review or diff-aware mode.
 - Review scope and explicit exclusions.
 - Pinned repository commit and, for diff-aware mode, base/target refs plus diff hash or supplied diff.
@@ -83,7 +84,7 @@ For disagreement, state both positions, evidence for each, and Sol’s conclusio
 ### 1. Validate the run
 
 - Confirm the invocation contract is complete.
-- Confirm the requested model and iteration.
+- Confirm the iteration.
 - Confirm the output path is inside the supplied run directory.
 - Confirm pinned inputs match the run manifest.
 - Read accepted intent from its pinned Git commit and verify its SHA-256 content hash.
@@ -148,6 +149,7 @@ Explain the classification. Focus the executive summary on newly introduced risk
 Read [security-review.template.md](security-review.template.md). Write a complete report to the required output path.
 
 - Use deterministic section ordering.
+- Copy the assigned-model slug verbatim from the invocation into the header. Do not assert, infer, or substitute which model produced the report.
 - Populate every section; `None identified` means examined and none found.
 - Keep detailed evidence in finding records, with summary tables derived from them.
 - Mark output `Complete` only after all required sections and iteration-specific ledgers are populated.

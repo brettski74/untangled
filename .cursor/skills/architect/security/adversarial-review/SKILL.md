@@ -13,7 +13,7 @@ Perform one Opus adversarial pass and write non-governing review evidence. Itera
 
 ## Hard rules
 
-- **Sub-agent phase only.** Run in a separate Task sub-agent using `claude-opus-5-thinking-high`. Do not run as the primary threat-modelling or security-design agent. If the required model is unavailable, fail clearly rather than silently substituting another model.
+- **Sub-agent phase only.** The caller launches this skill in a separate Task sub-agent with model `claude-opus-5-thinking-high`, and must fail clearly rather than silently substitute another model if it is unavailable. Model selection is the caller's: this skill records the assigned-model slug it is given and never asserts, infers, or verifies which model is running it. Do not run as the primary threat-modelling or security-design agent.
 - **One iteration per invocation.** Accept only iteration `1` or `2`. Never launch Sol, another Opus pass, consolidation, or the wider pipeline.
 - **Accepted intent only.** Read the `Accepted` threat model and optional security requirements from their pinned source commits and verify recorded content hashes. Never substitute working-tree content.
 - **Evidence, not intent.** Output under `/security/reviews/` is audit evidence and candidate analysis, never governing architecture. Do not edit `/architecture/**`.
@@ -35,6 +35,7 @@ The caller must supply all applicable fields from [opus-critique.prompt.md](opus
 - Absolute repository root.
 - Run ID and run directory.
 - Iteration number.
+- Assigned model slug, exactly as launched.
 - Full-review or diff-aware mode.
 - Review scope and explicit exclusions.
 - Pinned repository commit and, for diff-aware mode, base/target refs plus diff hash or supplied diff.
@@ -92,7 +93,7 @@ This is the final automated adversarial pass. Do not demand a third Sol iteratio
 ### 1. Validate the run
 
 - Confirm the invocation contract is complete.
-- Confirm the requested model and iteration.
+- Confirm the iteration.
 - Confirm the output path is inside the supplied run directory.
 - Confirm pinned inputs match the run manifest.
 - Read accepted intent from pinned Git commits and verify SHA-256 hashes.
@@ -150,6 +151,7 @@ Keep the executive focus on introduced risk, regressions, and exposure changes w
 Read [adversarial-review.template.md](adversarial-review.template.md). Write the complete report to the required output path.
 
 - Use deterministic section ordering.
+- Copy the assigned-model slug verbatim from the invocation into the header. Do not assert, infer, or substitute which model produced the report.
 - Populate every section; `None identified` means examined and none found.
 - Keep detailed critique records authoritative and summary tables derived.
 - In iteration 2, map every unresolved critique, missed-finding candidate, and human question to consolidation or human review; request no further automated Sol or Opus pass.

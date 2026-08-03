@@ -21,7 +21,7 @@ Threat modelling and security design are separate, explicitly invoked primary-ag
 
 - **Explicit primary orchestration.** Run only when the human explicitly invokes the pipeline in a dedicated primary Cursor Auto chat. This skill orchestrates; it does not replace any phase’s model or instructions.
 - **Exactly two iterations.** Launch exactly two Sol and two Opus phase invocations in order. Never add a third automated analysis pass.
-- **Exact model assignment.** Sol phases use `gpt-5.6-sol-medium`; Opus phases use `claude-opus-5-thinking-high`. If either model is unavailable, stop clearly without substitution.
+- **Exact model assignment.** Sol phases use `gpt-5.6-sol-medium`; Opus phases use `claude-opus-5-thinking-high`. If either model is unavailable, stop clearly without substitution. Pass the assigned slug in each phase prompt so the phase output records it. Phase sub-agents cannot verify which model is running them and must never be asked to; the orchestrator is the only party that knows what it launched.
 - **Accepted threat model required.** Pin and verify a committed `Accepted` threat model. A working Draft is non-governing. Optional accepted security requirements are pinned the same way.
 - **Immutable inputs.** Pin repository state, accepted intent, review mode, scope, exclusions, diff, and changed-file snapshot before launching a phase. Outside the active run directory, the working repository must match the pinned target and any explicitly supplied diff snapshot. Verify this before every later phase. Material input change aborts the run; start a new run ID.
 - **Evidence, not intent.** All outputs under `/security/reviews/<run-id>/` are non-governing review evidence and candidate findings. Do not edit `/architecture/**`.

@@ -15,6 +15,7 @@ Repository root: <absolute-path>
 Run ID: <collision-resistant-run-id>
 Run directory: <absolute-path>/security/reviews/<run-id>
 Iteration: <1-or-2>
+Assigned model: gpt-5.6-sol-medium
 Review mode: <full-review-or-diff-aware>
 Review scope: <systems-components-endpoints-or-change>
 Explicit exclusions: <exclusions-or-none>
@@ -52,6 +53,7 @@ Do not launch other agents, alter architecture intent, commit, publish, mutate i
 - Iteration 1 uses `not-applicable` for all iteration-history paths and hashes.
 - Iteration 2 requires both iteration-history paths and their SHA-256 hashes.
 - Reuse the same run ID and pinned inputs across both iterations.
+- `Assigned model` must match the model the Task was actually launched with. The sub-agent records it for provenance and cannot verify it; supplying a value that does not match what was launched silently falsifies the run evidence.
 - Do not paste an unpinned live diff into only one iteration.
 - Read accepted intent from the pinned source commit, not from potentially modified working-tree content, and verify its content hash.
 - Verify the supplied diff and prior artefacts against their hashes before analysis.

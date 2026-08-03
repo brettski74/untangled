@@ -3,7 +3,7 @@
 Status: Incomplete
 Run ID:
 Iteration:
-Model: Claude Opus 5 Thinking High
+Assigned model (caller-supplied, not self-verified):
 Review mode:
 Prepared date:
 
