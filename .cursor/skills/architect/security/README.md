@@ -23,26 +23,26 @@ A working file with `Status: Draft` is non-governing. Its latest committed `Acce
 
 ### Non-governing review evidence
 
-Created only when the security-review pipeline is invoked:
-
 ```text
-security/reviews/<run-id>/
-  manifest.md
-  inputs/
-  iteration-1/
-    security-review.md
-    adversarial-review.md
-  iteration-2/
-    security-review.md
-    adversarial-review.md
-  findings.md
+security/
+  AGENTS.md                 # sentinel: not architectural intent
+  reviews/<run-id>/
+    manifest.md
+    inputs/
+    iteration-1/
+      security-review.md
+      adversarial-review.md
+    iteration-2/
+      security-review.md
+      adversarial-review.md
+    findings.md
 ```
 
-Review evidence is version-controlled for traceability but never becomes architecture intent automatically. `findings.md` contains candidate recommendations.
+`security/AGENTS.md` ships with the skills so agents that open this tree are told the contents are not governing intent. Review-run artefacts under `security/reviews/` are created only when the security-review pipeline is invoked. They are version-controlled for traceability but never become architecture intent automatically. `findings.md` contains candidate recommendations.
 
 ### Skill templates
 
-Files under `.cursor/skills/architect/security/` are instructions and empty templates. Installing these skills does not create either artefact directory.
+Files under `.cursor/skills/architect/security/` are instructions and empty templates. Installing these skills does not create `/architecture/security/` or review-run directories.
 
 ## Standard end-to-end workflow
 

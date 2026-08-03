@@ -47,22 +47,26 @@ Use Cursor’s `/review-security` instead when the goal is only a tactical revie
 
 ## Run layout
 
-The invoked pipeline creates:
+The invoked pipeline creates a run under the existing `/security/` tree (which includes the sentinel `AGENTS.md` stating that review evidence is not architectural intent):
 
 ```text
-security/reviews/<run-id>/
-  manifest.md
-  inputs/
-    review.diff                 # diff-aware only
-    changed-files.md            # diff-aware only
-  iteration-1/
-    security-review.md
-    adversarial-review.md
-  iteration-2/
-    security-review.md
-    adversarial-review.md
-  findings.md
+security/
+  AGENTS.md
+  reviews/<run-id>/
+    manifest.md
+    inputs/
+      review.diff                 # diff-aware only
+      changed-files.md            # diff-aware only
+    iteration-1/
+      security-review.md
+      adversarial-review.md
+    iteration-2/
+      security-review.md
+      adversarial-review.md
+    findings.md
 ```
+
+Never overwrite or delete `security/AGENTS.md` when creating a run.
 
 Use a collision-resistant run ID:
 

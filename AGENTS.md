@@ -363,6 +363,10 @@ AI agents must:
 
 The `/architecture/` directory is private to **architect** skills. Primary workflow agents (refine, implement, verify, and similar) must **NEVER** consult `/architecture/` for guidance, planning, or review. Do not paste architecture content into this file or into workflow skill prompts.
 
+### 6.2 Security review evidence
+
+The `/security/` directory holds non-governing review evidence and candidate findings. It is **not** architectural intent. Durable security intent lives only in committed, Accepted files under `/architecture/security/`. See `/security/AGENTS.md`.
+
 ---
 
 ## 7. Licensing
