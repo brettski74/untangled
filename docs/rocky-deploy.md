@@ -126,8 +126,9 @@ Automatic deploy never runs migrate/seed. Operators run those deliberately when 
 | SSH / SCP failure | Key, known_hosts, host/port/user |
 | Make / Compose missing | Install GNU Make and Podman Compose |
 | `ERROR [pull]` | GHCR visibility or host registry login |
-| `ERROR [up]` | Compose, `.env`/secrets, ports; ensure `--no-build` path (no source tree on host) |
+| `ERROR [up]` | Compose, `.env`/secrets, ports; ensure `--no-build` path (no source tree on host). On Rocky Podman: short image names can fail non-interactively — postgres must stay fully qualified (`docker.io/library/…`) |
 | `ERROR [health]` | `compose exec` logs for api/web |
+| `short-name resolution enforced but cannot prompt without a TTY` | Unqualified image in Compose (e.g. `postgres:…`); use `docker.io/library/postgres:…` |
 
 ### Re-run / rollback
 
