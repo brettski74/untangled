@@ -58,6 +58,12 @@ Local day-to-day development still uses Compose `build:` (`make up`). Published 
 
 GHCR publish is a **build artefact channel only** — not environment promotion, validation, or rollback. Published images alone do not start Postgres, apply migrations, or promote an environment.
 
+Teammate shared Rocky hosts may pull pinned `sha-…` images after publish via the
+`deploy-rocky9` job. That job SCPs root `Makefile` + `compose.yaml` + `.env` and
+runs `make deploy-pull` (`up --no-build`). GitHub Environments are secret/wiring
+scopes for those hosts — not the product customer promotion model. See
+[rocky-deploy.md](./rocky-deploy.md).
+
 ## Package visibility and auth
 
 Packages are intended to be **public** (anonymous `docker pull` without GHCR login), consistent with a public AGPL repository.

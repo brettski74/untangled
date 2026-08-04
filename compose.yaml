@@ -1,14 +1,15 @@
-# Local Compose runtime: PostgreSQL + API + web.
-# make up / make down drive the full stack; make db-up starts postgres only.
+# Compose runtime: PostgreSQL + API + web.
+# Local: make up (build:). Rocky/GHCR: make deploy-pull (image pins + --no-build).
+# Variable defaults preserve local-dev behaviour when no .env is present.
 services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_USER: untangled
-      POSTGRES_PASSWORD: untangled
-      POSTGRES_DB: untangled
+      POSTGRES_USER: ${POSTGRES_USER:-untangled}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-untangled}
+      POSTGRES_DB: ${POSTGRES_DB:-untangled}
     ports:
-      - "5432:5432"
+      - "${UNTANGLED_POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U untangled -d untangled"]
       interval: 2s
@@ -20,16 +21,17 @@ services:
       - untangled_pgdata:/var/lib/postgresql
 
   api:
+    image: ${UNTANGLED_API_IMAGE:-untangled-api:local}
     build:
       context: ./backend
     environment:
-      DATABASE_URL: postgresql://untangled:untangled@postgres:5432/untangled
-      # Local-dev only — replace in real environments.
-      UNTANGLED_JWT_SECRET: local-dev-only-change-me-untangled-jwt-secret
-      UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: "900"
-      UNTANGLED_REFRESH_TOKEN_TTL_SECONDS: "604800"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://untangled:untangled@postgres:5432/untangled}
+      # Local-dev default — override via .env / Environment secrets for Rocky.
+      UNTANGLED_JWT_SECRET: ${UNTANGLED_JWT_SECRET:-local-dev-only-change-me-untangled-jwt-secret}
+      UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}
+      UNTANGLED_REFRESH_TOKEN_TTL_SECONDS: ${UNTANGLED_REFRESH_TOKEN_TTL_SECONDS:-604800}
     ports:
-      - "8000:8000"
+      - "${UNTANGLED_API_HOST_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,21 +43,22 @@ services:
       start_period: 10s
 
   web:
+    image: ${UNTANGLED_WEB_IMAGE:-untangled-web:local}
     build:
       context: .
       dockerfile: frontend/Dockerfile
     environment:
       # Server-side / in-network API base (Compose DNS). Authenticated browser
       # traffic stays on the web tier (SSR loaders/actions); see ADR 002.
-      UNTANGLED_API_BASE_URL: http://api:8000
-      # Required — no in-code default. Local-dev only; replace in real envs.
-      UNTANGLED_SESSION_SECRET: local-dev-only-change-me-untangled-session-secret
+      UNTANGLED_API_BASE_URL: ${UNTANGLED_API_BASE_URL:-http://api:8000}
+      # Required at runtime — local-dev default; override for Rocky.
+      UNTANGLED_SESSION_SECRET: ${UNTANGLED_SESSION_SECRET:-local-dev-only-change-me-untangled-session-secret}
       # Plain HTTP on localhost — must opt out; unset defaults to Secure cookies.
-      UNTANGLED_COOKIE_SECURE: "false"
+      UNTANGLED_COOKIE_SECURE: ${UNTANGLED_COOKIE_SECURE:-false}
       PORT: "3000"
     ports:
-      # Local familiarity: host 5173. Production should expose 3000 (container listen port).
-      - "5173:3000"
+      # Local default host 5173. Rocky / reverse-proxy hosts typically use 3000.
+      - "${UNTANGLED_WEB_HOST_PORT:-5173}:3000"
     depends_on:
       api:
         condition: service_healthy

@@ -146,3 +146,133 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # Teammate shared Rocky wiring only — not customer environment promotion.
+  # Environment `rocky9` scopes host secrets; a future `deploy-rocky10` can mirror this job.
+  # Each run SSHs and provisions Makefile + compose.yaml + .env; no pre-placed host files required.
+  deploy-rocky9:
+    name: deploy rocky9
+    needs: [publish-api, publish-web]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: rocky9
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve immutable image pins
+        id: pins
+        run: |
+          short_sha="${GITHUB_SHA:0:7}"
+          owner="${{ github.repository_owner }}"
+          {
+            echo "api_image=ghcr.io/${owner}/untangled-api:sha-${short_sha}"
+            echo "web_image=ghcr.io/${owner}/untangled-web:sha-${short_sha}"
+            echo "sha_tag=sha-${short_sha}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Deploy pin: sha-${short_sha}"
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          if [ -z "${DEPLOY_SSH_KEY}" ]; then
+            echo "DEPLOY_SSH_KEY is not set on Environment rocky9" >&2
+            exit 1
+          fi
+          if [ -z "${DEPLOY_KNOWN_HOSTS}" ]; then
+            echo "DEPLOY_KNOWN_HOSTS is not set on Environment rocky9" >&2
+            exit 1
+          fi
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Write runtime .env from Environment secrets
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          UNTANGLED_JWT_SECRET: ${{ secrets.UNTANGLED_JWT_SECRET }}
+          UNTANGLED_SESSION_SECRET: ${{ secrets.UNTANGLED_SESSION_SECRET }}
+          UNTANGLED_COOKIE_SECURE: ${{ secrets.UNTANGLED_COOKIE_SECURE }}
+          UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${{ secrets.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS }}
+          UNTANGLED_REFRESH_TOKEN_TTL_SECONDS: ${{ secrets.UNTANGLED_REFRESH_TOKEN_TTL_SECONDS }}
+        run: |
+          # Do not echo secret values. Fail closed when required secrets are missing.
+          if [ -z "${POSTGRES_PASSWORD}" ]; then
+            echo "POSTGRES_PASSWORD is not set on Environment rocky9" >&2
+            exit 1
+          fi
+          if [ -z "${UNTANGLED_JWT_SECRET}" ]; then
+            echo "UNTANGLED_JWT_SECRET is not set on Environment rocky9" >&2
+            exit 1
+          fi
+          if [ -z "${UNTANGLED_SESSION_SECRET}" ]; then
+            echo "UNTANGLED_SESSION_SECRET is not set on Environment rocky9" >&2
+            exit 1
+          fi
+          pg_user="${POSTGRES_USER:-untangled}"
+          pg_db="${POSTGRES_DB:-untangled}"
+          if [ -z "${DATABASE_URL}" ]; then
+            DATABASE_URL="postgresql://${pg_user}:${POSTGRES_PASSWORD}@postgres:5432/${pg_db}"
+          fi
+          umask 077
+          {
+            printf 'POSTGRES_USER=%s\n' "${pg_user}"
+            printf 'POSTGRES_PASSWORD=%s\n' "${POSTGRES_PASSWORD}"
+            printf 'POSTGRES_DB=%s\n' "${pg_db}"
+            printf 'DATABASE_URL=%s\n' "${DATABASE_URL}"
+            printf 'UNTANGLED_JWT_SECRET=%s\n' "${UNTANGLED_JWT_SECRET}"
+            printf 'UNTANGLED_SESSION_SECRET=%s\n' "${UNTANGLED_SESSION_SECRET}"
+            printf 'UNTANGLED_COOKIE_SECURE=%s\n' "${UNTANGLED_COOKIE_SECURE:-true}"
+            printf 'UNTANGLED_ACCESS_TOKEN_TTL_SECONDS=%s\n' "${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}"
+            printf 'UNTANGLED_REFRESH_TOKEN_TTL_SECONDS=%s\n' "${UNTANGLED_REFRESH_TOKEN_TTL_SECONDS:-604800}"
+            printf 'UNTANGLED_API_BASE_URL=%s\n' "http://api:8000"
+            printf 'UNTANGLED_WEB_HOST_PORT=%s\n' "3000"
+          } > "${RUNNER_TEMP}/untangled-rocky.env"
+          echo "Wrote runtime env file for remote sync (values not logged)"
+
+      - name: Sync contract files and deploy over SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          API_IMAGE: ${{ steps.pins.outputs.api_image }}
+          WEB_IMAGE: ${{ steps.pins.outputs.web_image }}
+        run: |
+          if [ -z "${DEPLOY_HOST}" ] || [ -z "${DEPLOY_PORT}" ] || [ -z "${DEPLOY_USER}" ]; then
+            echo "DEPLOY_HOST, DEPLOY_PORT, and DEPLOY_USER must be set on Environment rocky9" >&2
+            exit 1
+          fi
+          ssh_base=(
+            -i "${HOME}/.ssh/deploy_key"
+            -o "UserKnownHostsFile=${HOME}/.ssh/known_hosts"
+            -o IdentitiesOnly=yes
+            -o BatchMode=yes
+          )
+          remote="${DEPLOY_USER}@${DEPLOY_HOST}"
+          echo "SSH deploy as ${remote} port ${DEPLOY_PORT}"
+          echo "Pinned api=${API_IMAGE}"
+          echo "Pinned web=${WEB_IMAGE}"
+          echo "Provisioning ~/untangled/ on host from this commit (no pre-placed files required)"
+          ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
+            "mkdir -p ~/untangled && chmod 700 ~/untangled"
+          scp "${ssh_base[@]}" -P "${DEPLOY_PORT}" \
+            Makefile \
+            compose.yaml \
+            "${remote}:untangled/"
+          scp "${ssh_base[@]}" -P "${DEPLOY_PORT}" \
+            "${RUNNER_TEMP}/untangled-rocky.env" \
+            "${remote}:untangled/.env"
+          ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
+            "chmod 600 ~/untangled/.env"
+          ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
+            "cd ~/untangled && make deploy-pull UNTANGLED_API_IMAGE=$(printf %q "$API_IMAGE") UNTANGLED_WEB_IMAGE=$(printf %q "$WEB_IMAGE")"
