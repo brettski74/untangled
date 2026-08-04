@@ -61,7 +61,7 @@ deploy. Postgres data stays in the Compose named volume across deploys.
 | `DEPLOY_HOST` | `dataphobe.com` |
 | `DEPLOY_PORT` | `2201` |
 | `DEPLOY_USER` | `deploy` |
-| `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -p 2201 dataphobe.com` |
+| `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -p 2201 dataphobe.com` (prefer pinning this). If unset, the workflow temporarily falls back to runtime `ssh-keyscan` (trust-on-first-use) — remove that fallback once this secret is configured. |
 
 ### Runtime (written to remote `.env` each deploy)
 

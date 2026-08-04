@@ -178,20 +178,36 @@ jobs:
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           if [ -z "${DEPLOY_SSH_KEY}" ]; then
             echo "DEPLOY_SSH_KEY is not set on Environment rocky9" >&2
             exit 1
           fi
-          if [ -z "${DEPLOY_KNOWN_HOSTS}" ]; then
-            echo "DEPLOY_KNOWN_HOSTS is not set on Environment rocky9" >&2
-            exit 1
-          fi
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # Prefer pinned known_hosts from Environment. Temporary fallback: ssh-keyscan
+          # (trust-on-first-use) when DEPLOY_KNOWN_HOSTS is unset — remove once the owner
+          # configures the Environment secret.
+          if [ -n "${DEPLOY_KNOWN_HOSTS}" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            if [ -z "${DEPLOY_HOST}" ]; then
+              echo "DEPLOY_KNOWN_HOSTS is unset and DEPLOY_HOST is missing; cannot ssh-keyscan" >&2
+              exit 1
+            fi
+            port="${DEPLOY_PORT:-22}"
+            echo "DEPLOY_KNOWN_HOSTS unset; falling back to ssh-keyscan ${DEPLOY_HOST}:${port} (TOFU)"
+            if ! ssh-keyscan -p "${port}" "${DEPLOY_HOST}" > ~/.ssh/known_hosts 2>/dev/null \
+              || ! grep -q -v '^#' ~/.ssh/known_hosts; then
+              echo "ssh-keyscan failed; set DEPLOY_KNOWN_HOSTS on Environment rocky9 instead" >&2
+              exit 1
+            fi
+          fi
           chmod 644 ~/.ssh/known_hosts
 
       - name: Write runtime .env from Environment secrets
