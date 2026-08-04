@@ -25,7 +25,7 @@ jobs:
       SKIP_DB_UP: "1"
     services:
       postgres:
-        image: postgres:18-alpine
+        image: docker.io/library/postgres:18-alpine
         env:
           POSTGRES_USER: untangled
           POSTGRES_PASSWORD: untangled

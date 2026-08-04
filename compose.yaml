@@ -3,7 +3,9 @@
 # Variable defaults preserve local-dev behaviour when no .env is present.
 services:
   postgres:
-    image: postgres:18-alpine
+    # Fully-qualified registry path: Rocky Podman short-name mode cannot prompt
+    # in non-interactive Actions SSH (`short-name resolution enforced…`).
+    image: docker.io/library/postgres:18-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-untangled}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-untangled}
