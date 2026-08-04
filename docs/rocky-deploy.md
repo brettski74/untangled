@@ -5,7 +5,7 @@ Teammate-operated **demo / shared** Rocky hosts only. GitHub Environments such a
 customer environment-promotion model.
 
 Merge/push to `main` runs product CI, publishes `untangled-api` / `untangled-web`
-to GHCR, then (when Environment secrets are configured) SSHs to Rocky 9, **provisions
+to GHCR, then (when Environment connection variables + secrets are configured) SSHs to Rocky 9, **provisions
 `Makefile` + root `compose.yaml` + `.env` from this commit**, and runs
 `make deploy-pull` with **immutable `sha-…` image pins**.
 
@@ -43,7 +43,7 @@ Rocky 10 can mirror later without redesign.
 ## Infra-owner handoff
 
 1. Dedicated ed25519 Actions keypair; public key in `deploy` `authorized_keys`.
-2. GitHub Environment `rocky9` secrets (SSH + runtime below).
+2. GitHub Environment `rocky9` variables (SSH connection) + secrets (key + runtime) below.
 3. Host has GNU Make + Compose for `deploy` (Podman-first).
 4. If GHCR packages are private: host `podman login ghcr.io`.
 5. Reverse proxy / DNS as you already operate.
@@ -51,22 +51,24 @@ Rocky 10 can mirror later without redesign.
 No manual copy of repo files onto the host. Actions provisions `~/untangled/` each
 deploy. Postgres data stays in the Compose named volume across deploys.
 
-## GitHub Environment secrets (`rocky9`)
+## GitHub Environment `rocky9`
 
-### SSH / connection
+### SSH / connection (Environment variables)
 
-| Secret | Example / notes |
-| ------ | ---------------- |
-| `DEPLOY_SSH_KEY` | Private key only (Actions) |
+Non-secret connection wiring — set as **variables** (`vars.*`), not secrets.
+
+| Variable | Example / notes |
+| -------- | ---------------- |
 | `DEPLOY_HOST` | `dataphobe.com` |
 | `DEPLOY_PORT` | `2201` |
 | `DEPLOY_USER` | `deploy` |
-| `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -p 2201 dataphobe.com` (prefer pinning this). If unset, the workflow temporarily falls back to runtime `ssh-keyscan` (trust-on-first-use) — remove that fallback once this secret is configured. |
+| `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -p 2201 dataphobe.com` (prefer pinning this). If unset, the workflow temporarily falls back to runtime `ssh-keyscan` (trust-on-first-use) — remove that fallback once this variable is configured. |
 
-### Runtime (written to remote `.env` each deploy)
+### SSH key + runtime (Environment secrets)
 
 | Secret | Required | Notes |
 | ------ | -------- | ----- |
+| `DEPLOY_SSH_KEY` | yes | Private key only (Actions) |
 | `POSTGRES_PASSWORD` | yes | Also used for default `DATABASE_URL` |
 | `UNTANGLED_JWT_SECRET` | yes | |
 | `UNTANGLED_SESSION_SECRET` | yes | |
@@ -119,7 +121,7 @@ Automatic deploy never runs migrate/seed. Operators run those deliberately when 
 
 | Symptom | Where to look |
 | ------- | -------------- |
-| Job fails before SSH | Missing Environment secrets; publish failed |
+| Job fails before SSH | Missing Environment variables/secrets; publish failed |
 | Red `deploy-rocky9` after green validate/publish | Infra/host deploy — not a product test regression |
 | SSH / SCP failure | Key, known_hosts, host/port/user |
 | Make / Compose missing | Install GNU Make and Podman Compose |
