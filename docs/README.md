@@ -16,5 +16,7 @@ See [local-development.md](./local-development.md) for setup, PostgreSQL (`make 
 smoke tests, intentional `make migrate` / `make seed`, and auth/`/docs` Authorize.
 See [container-images.md](./container-images.md) for GitHub Actions product CI,
 GHCR image names/tags, and how publish relates to Compose.
+See [rocky-deploy.md](./rocky-deploy.md) for teammate shared Rocky host deploy
+(Actions → SSH → pinned GHCR images; not customer environment promotion).
 See [class-definitions.md](./class-definitions.md) for YAML class definitions,
 `make models` (Pydantic / Zod codegen), and diff-based migrate / persistence.

@@ -38,7 +38,7 @@ export COMPOSE
 export COMPOSE_WAIT_FLAG
 export COMPOSE_SUPPORTS_WAIT
 
-.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
+.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait deploy-pull backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -105,6 +105,39 @@ db-wait: ## Wait until PostgreSQL accepts connections
 	done; \
 	echo "PostgreSQL did not become ready in time"; \
 	exit 1
+
+# Shared Rocky / GHCR pin path on root compose.yaml (image pins + --no-build).
+# Requires UNTANGLED_API_IMAGE and UNTANGLED_WEB_IMAGE. Does not migrate or seed.
+# Expects a .env beside compose.yaml (Actions writes it; local deploy-pull uses one too).
+deploy-pull: ## Pull pinned GHCR images and up stack without build (no migrate/seed)
+	@test -n "$(UNTANGLED_API_IMAGE)" || (echo "UNTANGLED_API_IMAGE is required (e.g. ghcr.io/owner/untangled-api:sha-...)" >&2; exit 1)
+	@test -n "$(UNTANGLED_WEB_IMAGE)" || (echo "UNTANGLED_WEB_IMAGE is required (e.g. ghcr.io/owner/untangled-web:sha-...)" >&2; exit 1)
+	@test -f compose.yaml || (echo "compose.yaml missing" >&2; exit 1)
+	@test -f .env || (echo ".env missing (see .env.example)" >&2; exit 1)
+	@echo "deploy-pull: api=$(UNTANGLED_API_IMAGE)"
+	@echo "deploy-pull: web=$(UNTANGLED_WEB_IMAGE)"
+	@echo "deploy-pull: compose=$(COMPOSE)"
+	@echo "step: pull images"
+	@UNTANGLED_API_IMAGE="$(UNTANGLED_API_IMAGE)" UNTANGLED_WEB_IMAGE="$(UNTANGLED_WEB_IMAGE)" \
+		$(COMPOSE) pull api web || (echo "deploy-pull ERROR [pull]: image pull failed" >&2; exit 1)
+	@echo "step: up stack (no build, no migrate/seed)"
+	@UNTANGLED_API_IMAGE="$(UNTANGLED_API_IMAGE)" UNTANGLED_WEB_IMAGE="$(UNTANGLED_WEB_IMAGE)" \
+		$(COMPOSE) up -d --no-build $(COMPOSE_WAIT_FLAG) || (echo "deploy-pull ERROR [up]: compose up --no-build failed" >&2; exit 1)
+	@echo "step: health check (unauthenticated alive only)"
+	@ok=0; \
+	for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36; do \
+		if $(COMPOSE) exec -T api curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 \
+			&& $(COMPOSE) exec -T web wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1; then \
+			ok=1; \
+			break; \
+		fi; \
+		sleep 5; \
+	done; \
+	if [ "$$ok" -ne 1 ]; then \
+		echo "deploy-pull ERROR [health]: stack did not become healthy (api /health or web /)" >&2; \
+		exit 1; \
+	fi
+	@echo "deploy-pull: success"
 
 backend-dev: backend-install ## Run the FastAPI dev server in the foreground (host hot-reload)
 	$(BACKEND_VENV)/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
