@@ -41,6 +41,7 @@ import {
   create_schema_for_class,
   create_schema_keys,
 } from "../records/create_schema_registry";
+import { format_api_error_detail } from "../records/api_error_detail";
 import { record_detail_path } from "../records/record_paths";
 import { is_json_object } from "../records/update.server";
 import {
@@ -239,16 +240,7 @@ export async function action({
         if (text.length > 0) {
           try {
             const json: unknown = JSON.parse(text);
-            if (
-              json != null &&
-              typeof json === "object" &&
-              "detail" in json &&
-              typeof (json as { detail: unknown }).detail === "string"
-            ) {
-              detail = (json as { detail: string }).detail;
-            } else {
-              detail = text;
-            }
+            detail = format_api_error_detail(json, text);
           } catch {
             detail = text;
           }

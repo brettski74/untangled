@@ -7,6 +7,10 @@ from pydantic import BaseModel
 
 from untangled.auth.dependencies import DbConn
 from untangled.rbac.dependencies import require_class_operation
+from untangled.records.change_request_schedule import (
+    effective_schedule_pair,
+    raise_if_schedule_end_not_after_start,
+)
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
 from untangled.records.read_protocol import (
     V1SearchResponse,
@@ -51,6 +55,11 @@ def build_class_router(
                 dict[str, Any], Depends(require_class_operation(class_kebab, "create"))
             ],
         ) -> Any:
+            if class_kebab == "change-request":
+                raise_if_schedule_end_not_after_start(
+                    getattr(body, "scheduled_start", None),
+                    getattr(body, "scheduled_end", None),
+                )
             store = record_store(conn, class_kebab, actor_id=user["id"])
             return store.create(body.model_dump())
 
@@ -188,6 +197,9 @@ def build_class_router(
             definition = class_definition(class_kebab)
             store = record_store(conn, class_kebab, actor_id=user["id"])
             existing = fetch_by_locator(store, definition, locator)
+            if class_kebab == "change-request":
+                start, end = effective_schedule_pair(existing, body)
+                raise_if_schedule_end_not_after_start(start, end)
             try:
                 return store.update(existing.id, body.model_dump(exclude_unset=True))
             except KeyError as exc:

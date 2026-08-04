@@ -111,6 +111,160 @@ def test_change_request_create_requires_schedule(tickets_client: TestClient) -> 
     assert body["created_at"].endswith("Z")
 
 
+def _schedule_error(detail: object) -> dict:
+    assert isinstance(detail, list)
+    matches = []
+    for err in detail:
+        if not isinstance(err, dict):
+            continue
+        if "scheduled_end" not in err.get("loc", ()):
+            continue
+        msg = err.get("msg")
+        if msg == "must be greater than scheduled_start":
+            matches.append(err)
+        elif (
+            isinstance(msg, str)
+            and msg.endswith("must be greater than scheduled_start")
+        ):
+            matches.append(err)
+    assert matches, detail
+    return matches[0]
+
+
+def test_change_request_create_end_before_start_is_422(
+    tickets_client: TestClient,
+) -> None:
+    headers = _headers(tickets_client, "admin")
+    admin = next(s for s in SEED_USERS if s.username == "admin")
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    start = (now + timedelta(days=1, hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = (now + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    created = tickets_client.post(
+        "/change-requests",
+        headers=headers,
+        json={
+            "summary": "Bad window",
+            "status": "draft",
+            "scheduled_start": start,
+            "scheduled_end": end,
+            "requested_by": str(admin.id),
+        },
+    )
+    assert created.status_code == 422, created.text
+    _schedule_error(created.json()["detail"])
+
+
+def test_change_request_create_end_equal_start_is_422(
+    tickets_client: TestClient,
+) -> None:
+    headers = _headers(tickets_client, "admin")
+    admin = next(s for s in SEED_USERS if s.username == "admin")
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    when = (now + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    created = tickets_client.post(
+        "/change-requests",
+        headers=headers,
+        json={
+            "summary": "Zero length",
+            "status": "draft",
+            "scheduled_start": when,
+            "scheduled_end": when,
+            "requested_by": str(admin.id),
+        },
+    )
+    assert created.status_code == 422, created.text
+    _schedule_error(created.json()["detail"])
+
+
+def test_change_request_update_schedule_ordering(tickets_client: TestClient) -> None:
+    headers = _headers(tickets_client, "admin")
+    admin = next(s for s in SEED_USERS if s.username == "admin")
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    start = (now + timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = (now + timedelta(days=2, hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    created = tickets_client.post(
+        "/change-requests",
+        headers=headers,
+        json={
+            "summary": "Patch schedule",
+            "status": "draft",
+            "scheduled_start": start,
+            "scheduled_end": end,
+            "requested_by": str(admin.id),
+        },
+    )
+    assert created.status_code == 201, created.text
+    number = created.json()["number"]
+
+    both_bad = tickets_client.patch(
+        f"/change-requests/{number}",
+        headers=headers,
+        json={
+            "scheduled_start": end,
+            "scheduled_end": start,
+        },
+    )
+    assert both_bad.status_code == 422, both_bad.text
+    _schedule_error(both_bad.json()["detail"])
+
+    equal = tickets_client.patch(
+        f"/change-requests/{number}",
+        headers=headers,
+        json={"scheduled_end": start},
+    )
+    assert equal.status_code == 422, equal.text
+    _schedule_error(equal.json()["detail"])
+
+    ok = tickets_client.patch(
+        f"/change-requests/{number}",
+        headers=headers,
+        json={"summary": "Still valid schedule"},
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["summary"] == "Still valid schedule"
+
+
+def test_change_request_update_non_schedule_on_invalid_pair_is_422(
+    tickets_client: TestClient,
+    db_conn: Connection,
+) -> None:
+    """Fix-on-next-write: summary-only patch fails when stored schedule is invalid."""
+    headers = _headers(tickets_client, "admin")
+    admin = next(s for s in SEED_USERS if s.username == "admin")
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    start = now + timedelta(days=3)
+    end = start + timedelta(hours=1)
+    created = tickets_client.post(
+        "/change-requests",
+        headers=headers,
+        json={
+            "summary": "Corrupt me",
+            "status": "draft",
+            "scheduled_start": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "scheduled_end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "requested_by": str(admin.id),
+        },
+    )
+    assert created.status_code == 201, created.text
+    row_id = created.json()["id"]
+    number = created.json()["number"]
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "UPDATE change_request SET scheduled_end = scheduled_start WHERE id = %s",
+            (row_id,),
+        )
+    db_conn.commit()
+
+    blocked = tickets_client.patch(
+        f"/change-requests/{number}",
+        headers=headers,
+        json={"summary": "Cannot save while schedule invalid"},
+    )
+    assert blocked.status_code == 422, blocked.text
+    _schedule_error(blocked.json()["detail"])
+
+
 def test_junk_locator_is_422(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "readonly")
     for locator in ("not-a-locator", "256"):

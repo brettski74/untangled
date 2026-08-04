@@ -5,7 +5,6 @@
 import type { z } from "zod";
 
 import {
-  ChangeRequestCreateSchema,
   DemoItemCreateSchema,
   DemoLinkCreateSchema,
   IncidentCreateSchema,
@@ -16,11 +15,14 @@ import {
   UserRoleCreateSchema,
   UserCreateSchema,
 } from "../generated";
+import { ChangeRequestCreateWithScheduleSchema } from "./change_request_schedule";
+import { zod_object_shape_keys } from "./zod_schema_keys";
 
 export type CreateZodSchema = z.ZodType<Record<string, unknown>>;
 
 const CREATE_SCHEMAS: Readonly<Record<string, CreateZodSchema>> = {
-  "change-request": ChangeRequestCreateSchema,
+  "change-request":
+    ChangeRequestCreateWithScheduleSchema as unknown as CreateZodSchema,
   "demo-item": DemoItemCreateSchema,
   "demo-link": DemoLinkCreateSchema,
   incident: IncidentCreateSchema,
@@ -43,8 +45,5 @@ export function create_schema_for_class(
 
 /** Known keys on a Zod object schema (for unrecognized-attribute checks). */
 export function create_schema_keys(schema: CreateZodSchema): ReadonlySet<string> {
-  if (!("shape" in schema) || schema.shape == null) {
-    return new Set();
-  }
-  return new Set(Object.keys(schema.shape as Record<string, unknown>));
+  return zod_object_shape_keys(schema);
 }

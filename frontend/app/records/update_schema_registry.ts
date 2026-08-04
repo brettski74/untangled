@@ -5,7 +5,6 @@
 import type { z } from "zod";
 
 import {
-  ChangeRequestUpdateSchema,
   DemoItemUpdateSchema,
   DemoLinkUpdateSchema,
   IncidentUpdateSchema,
@@ -16,11 +15,14 @@ import {
   UserRoleUpdateSchema,
   UserUpdateSchema,
 } from "../generated";
+import { ChangeRequestUpdateWithScheduleSchema } from "./change_request_schedule";
+import { zod_object_shape_keys } from "./zod_schema_keys";
 
 export type UpdateZodSchema = z.ZodType<Record<string, unknown>>;
 
 const UPDATE_SCHEMAS: Readonly<Record<string, UpdateZodSchema>> = {
-  "change-request": ChangeRequestUpdateSchema,
+  "change-request":
+    ChangeRequestUpdateWithScheduleSchema as unknown as UpdateZodSchema,
   "demo-item": DemoItemUpdateSchema,
   "demo-link": DemoLinkUpdateSchema,
   incident: IncidentUpdateSchema,
@@ -43,8 +45,5 @@ export function update_schema_for_class(
 
 /** Known keys on a Zod object schema (for unrecognized-attribute checks). */
 export function update_schema_keys(schema: UpdateZodSchema): ReadonlySet<string> {
-  if (!("shape" in schema) || schema.shape == null) {
-    return new Set();
-  }
-  return new Set(Object.keys(schema.shape as Record<string, unknown>));
+  return zod_object_shape_keys(schema);
 }

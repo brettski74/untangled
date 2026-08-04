@@ -28,6 +28,7 @@ import {
   update_schema_for_class,
   update_schema_keys,
 } from "../records/update_schema_registry";
+import { format_api_error_detail } from "../records/api_error_detail";
 import {
   zod_error_detail,
   zod_error_http_status,
@@ -225,16 +226,7 @@ export async function action({
         if (text.length > 0) {
           try {
             const json: unknown = JSON.parse(text);
-            if (
-              json != null &&
-              typeof json === "object" &&
-              "detail" in json &&
-              typeof (json as { detail: unknown }).detail === "string"
-            ) {
-              detail = (json as { detail: string }).detail;
-            } else {
-              detail = text;
-            }
+            detail = format_api_error_detail(json, text);
           } catch {
             detail = text;
           }
