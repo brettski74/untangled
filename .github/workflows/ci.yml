@@ -177,9 +177,9 @@ jobs:
       - name: Configure SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
@@ -190,9 +190,9 @@ jobs:
           fi
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # Prefer pinned known_hosts from Environment. Temporary fallback: ssh-keyscan
-          # (trust-on-first-use) when DEPLOY_KNOWN_HOSTS is unset — remove once the owner
-          # configures the Environment secret.
+          # Prefer pinned known_hosts from Environment variables. Temporary fallback:
+          # ssh-keyscan (trust-on-first-use) when DEPLOY_KNOWN_HOSTS is unset — remove
+          # once the owner configures the Environment variable.
           if [ -n "${DEPLOY_KNOWN_HOSTS}" ]; then
             printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           else
@@ -258,14 +258,14 @@ jobs:
 
       - name: Sync contract files and deploy over SSH
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           API_IMAGE: ${{ steps.pins.outputs.api_image }}
           WEB_IMAGE: ${{ steps.pins.outputs.web_image }}
         run: |
           if [ -z "${DEPLOY_HOST}" ] || [ -z "${DEPLOY_PORT}" ] || [ -z "${DEPLOY_USER}" ]; then
-            echo "DEPLOY_HOST, DEPLOY_PORT, and DEPLOY_USER must be set on Environment rocky9" >&2
+            echo "DEPLOY_HOST, DEPLOY_PORT, and DEPLOY_USER must be set as Environment rocky9 variables" >&2
             exit 1
           fi
           ssh_base=(
