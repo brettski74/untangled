@@ -17,10 +17,11 @@ Generated models (gitignored) land in `src/untangled/generated/` after `make mod
 See [docs/class-definitions.md](../docs/class-definitions.md) and
 [docs/local-development.md](../docs/local-development.md).
 
-Audit stamps on non-HTTP paths use `STUB_ACTOR_ID` (aligned with the seeded admin
-user). Migrate may insert that stub row when applying audit FKs; `make seed` still
-sets real local passwords. HTTP handlers should use the current-user dependency
-when domain writes land.
+Audit stamps on non-HTTP paths use `SYSTEM_USER_ID` (the platform attribution
+principal, username `system`). It cannot log in and has no roles. Migrate always
+ensures that row (including no-op schema plans) and upserts it before audit FKs.
+`make seed` still sets local login passwords for demo users. HTTP handlers should
+use the current-user dependency when domain writes land.
 
 ## Schema migrate
 

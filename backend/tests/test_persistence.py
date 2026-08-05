@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from untangled.mapping.definition import ClassDefinition
-from untangled.persistence.actor import STUB_ACTOR_ID
+from untangled.persistence.actor import SYSTEM_USER_ID
 from untangled.persistence.ids import new_uuid7
 from untangled.persistence.sql_types import YAML_TO_POSTGRES
 from untangled.persistence.store import RecordStore
@@ -83,8 +83,8 @@ def test_create_fetch_update_round_trip(
 
     created = store.create(_user_fields())
     assert created.id.version == 7
-    assert created.created_by == STUB_ACTOR_ID
-    assert created.updated_by == STUB_ACTOR_ID
+    assert created.created_by == SYSTEM_USER_ID
+    assert created.updated_by == SYSTEM_USER_ID
     assert created.created_at.tzinfo is not None
     assert created.created_at.utcoffset() == timedelta(0)
     assert created.updated_at == created.created_at
@@ -109,7 +109,7 @@ def test_create_fetch_update_round_trip(
     assert updated.summary is None
     assert updated.created_at == created_at
     assert updated.created_by == created_by
-    assert updated.updated_by == STUB_ACTOR_ID
+    assert updated.updated_by == SYSTEM_USER_ID
     assert updated.updated_at >= before_update
     assert updated.updated_at.utcoffset() == timedelta(0)
 

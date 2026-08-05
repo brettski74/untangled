@@ -156,15 +156,15 @@ def test_migrate_transaction_rolls_back_on_failure(
     assert exists is None
 
 
-def test_migrate_ensures_stub_actor_before_audit_fks(
+def test_migrate_ensures_system_user_before_audit_fks(
     db_conn: Connection,
     repo_definitions: Path,
 ) -> None:
-    """Orphan STUB_ACTOR_ID stamps must not block ADD FOREIGN KEY on upgrade."""
+    """Orphan SYSTEM_USER_ID stamps must not block ADD FOREIGN KEY on upgrade."""
     from datetime import datetime, timezone
     from decimal import Decimal
 
-    from untangled.persistence.actor import STUB_ACTOR_ID
+    from untangled.persistence.actor import SYSTEM_USER_ID
     from untangled.persistence.ids import new_uuid7
 
     _drop_managed(db_conn, repo_definitions)
@@ -200,8 +200,8 @@ def test_migrate_ensures_stub_actor_before_audit_fks(
             item_id,
             now,
             now,
-            STUB_ACTOR_ID,
-            STUB_ACTOR_ID,
+            SYSTEM_USER_ID,
+            SYSTEM_USER_ID,
             "orphan-audit-row",
             None,
             True,
@@ -219,20 +219,20 @@ def test_migrate_ensures_stub_actor_before_audit_fks(
     messages: list[str] = []
     result = migrate(db_conn, repo_definitions, progress=messages.append)
     assert result.applied
-    assert any("ensure stub actor" in m for m in messages)
+    assert any("ensure system user" in m for m in messages)
     assert any("ADD FOREIGN KEY" in m for m in messages)
 
-    stub = db_conn.execute(
+    system_user = db_conn.execute(
         'SELECT id FROM "user" WHERE id = %s',
-        (STUB_ACTOR_ID,),
+        (SYSTEM_USER_ID,),
     ).fetchone()
-    assert stub is not None
+    assert system_user is not None
     assert (
         db_conn.execute(
             "SELECT created_by FROM demo_item WHERE id = %s",
             (item_id,),
         ).fetchone()[0]
-        == STUB_ACTOR_ID
+        == SYSTEM_USER_ID
     )
 
 

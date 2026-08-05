@@ -1,4 +1,4 @@
-"""Stable seed user identities for local development (and FK-safe stub actor)."""
+"""Stable seed user identities for local development."""
 
 from __future__ import annotations
 
@@ -6,10 +6,7 @@ import os
 from dataclasses import dataclass
 from uuid import UUID
 
-from untangled.persistence.actor import STUB_ACTOR_ID
-
-# Stable UUIDs — admin matches STUB_ACTOR_ID for audit FK safety.
-SEED_ADMIN_ID = STUB_ACTOR_ID
+SEED_ADMIN_ID = UUID("01900000-0000-7000-8000-000000000001")
 SEED_READONLY_ID = UUID("01900000-0000-7000-8000-000000000002")
 SEED_READWRITE_ID = UUID("01900000-0000-7000-8000-000000000003")
 SEED_CHANGE_ID = UUID("01900000-0000-7000-8000-000000000004")

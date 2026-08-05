@@ -197,8 +197,12 @@ models only (not on the full/read model). Omit either key independently; reject
 YAML string values that opt into substitution may contain `${kebab-name}` tokens
 resolved from a single catalog (`untangled.mapping.well_known`).
 
-- **Names** are kebab-case. Registered now: `${system-config-id}` (stable
-  singleton UUID `01900000-0000-7000-8000-000000000050`).
+- **Names** are kebab-case. Registered now:
+  - `${system-config-id}` (stable singleton UUID
+    `01900000-0000-7000-8000-000000000050`)
+  - `${system-user-id}` (platform attribution principal UUID
+    `01900000-0000-7000-8000-000000000006`; not available in substitution
+    contexts yet)
 - **Resolution is per context**, not per variable. Each context declares which
   names are available and when evaluation runs.
   - `check-constraint`: available `${system-config-id}`; evaluate at definition
@@ -222,13 +226,16 @@ classes** with their own UUID primary keys and `references:` foreign keys (see
 is not expressible in YAML today; seeds and application logic keep pairs
 idempotent via stable row ids.
 
-`created_by` / `updated_by` may still be stamped with `STUB_ACTOR_ID`
-(`untangled.persistence.actor`) on non-HTTP library paths; that constant matches
-the seeded **admin** user id so audit FKs stay valid. When migrate adds audit
-FKs that reference `user`, it upserts that stub row first (inside the migrate
-transaction) so existing `STUB_ACTOR_ID` stamps do not block `ADD FOREIGN KEY`.
-Full local credentials still come from **`make seed`**. Protected domain APIs
-should pass the authenticated principal once they land.
+Non-HTTP writes stamp `created_by` / `updated_by` with `SYSTEM_USER_ID`
+(`${system-user-id}` / `untangled.mapping.well_known`). That is a **platform
+attribution principal**, not a login account and not the seeded admin. Migrate
+always ensures the `system` user row (including no-op schema plans): inactive,
+unusable password verifier, no roles. It also upserts before audit `ADD FOREIGN
+KEY` so existing system-actor stamps do not block the constraint. Do not
+activate this principal; future user-admin UI must not treat it as a
+reactivatable deactivated human. `#155` bootstrap of `system-config` must use
+this id. Full local **login** credentials still come from **`make seed`**.
+Protected domain APIs should pass the authenticated principal.
 
 ## Naming conventions
 
