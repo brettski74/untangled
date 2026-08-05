@@ -61,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  pydantic   → {args.pydantic_out}")
     print(f"  zod        → {args.zod_out}")
     print(f"  field meta → {result.field_meta_path}")
+    print(f"  well-known → {result.well_known_python_path}")
+    print(f"  well-known → {result.well_known_ts_path}")
     return 0
 
 

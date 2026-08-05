@@ -7,7 +7,16 @@ from collections.abc import Iterable, Sequence
 
 from psycopg import Connection
 
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SchemaIR, SequenceIR, TableIR
+from untangled.schema.checks import normalize_check_expression
+from untangled.schema.ir import (
+    CheckIR,
+    ColumnIR,
+    ForeignKeyIR,
+    IndexIR,
+    SchemaIR,
+    SequenceIR,
+    TableIR,
+)
 from untangled.schema.types import ir_type_from_postgres
 
 
@@ -61,13 +70,14 @@ def _introspect_table(conn: Connection, schema_name: str, table_name: str) -> Ta
     primary_key = tuple(_introspect_primary_key(conn, schema_name, table_name))
     foreign_keys = tuple(_introspect_foreign_keys(conn, schema_name, table_name))
     indexes = tuple(_introspect_indexes(conn, schema_name, table_name))
+    checks = tuple(_introspect_checks(conn, schema_name, table_name))
     return TableIR(
         name=table_name,
         columns=columns,
         primary_key=primary_key,
         foreign_keys=foreign_keys,
         indexes=indexes,
-        checks=(),
+        checks=checks,
     )
 
 
@@ -195,6 +205,29 @@ def _introspect_indexes(
             name=index_name,
             columns=tuple(p[1] for p in parts),
             unique=parts[0][2],
+        )
+
+
+def _introspect_checks(
+    conn: Connection, schema_name: str, table_name: str
+) -> Iterable[CheckIR]:
+    rows = conn.execute(
+        """
+        SELECT con.conname, pg_get_constraintdef(con.oid, true)
+        FROM pg_constraint AS con
+        JOIN pg_class AS cl ON cl.oid = con.conrelid
+        JOIN pg_namespace AS ns ON ns.oid = cl.relnamespace
+        WHERE con.contype = 'c'
+          AND ns.nspname = %s
+          AND cl.relname = %s
+        ORDER BY con.conname
+        """,
+        (schema_name, table_name),
+    ).fetchall()
+    for constraint_name, definition in rows:
+        yield CheckIR(
+            name=constraint_name,
+            expression=normalize_check_expression(definition),
         )
 
 

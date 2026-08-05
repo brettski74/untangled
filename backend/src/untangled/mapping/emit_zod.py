@@ -80,7 +80,7 @@ def emit_zod_module(definition: ClassDefinition) -> str:
 
     lines.append(f"export const {pascal}CreateSchema = z.object({{")
     for attr in writable:
-        lines.append(f"  {_zod_field_line(attr)},")
+        lines.append(f"  {_zod_field_line(attr, constrained=True)},")
     lines.append("});")
     lines.append("")
     lines.append(f"export type {pascal}Create = z.infer<typeof {pascal}CreateSchema>;")
@@ -88,7 +88,7 @@ def emit_zod_module(definition: ClassDefinition) -> str:
 
     lines.append(f"export const {pascal}UpdateSchema = z.object({{")
     for attr in writable:
-        expr = _ZOD_TYPE[attr.type_name]
+        expr = _zod_write_expr(attr)
         lines.append(f"  {attr.name_snake}: {expr}.optional().nullable(),")
     lines.append("});")
     lines.append("")
@@ -97,8 +97,38 @@ def emit_zod_module(definition: ClassDefinition) -> str:
     return "\n".join(lines)
 
 
-def _zod_field_line(attr: AttributeDefinition) -> str:
+def _zod_write_expr(attr: AttributeDefinition) -> str:
     expr = _ZOD_TYPE[attr.type_name]
+    if attr.type_name == "integer":
+        if attr.min_value is not None:
+            expr += f".min({int(attr.min_value)})"
+        if attr.max_value is not None:
+            expr += f".max({int(attr.max_value)})"
+        return expr
+    if attr.type_name == "float":
+        if attr.min_value is not None:
+            expr += f".min({float(attr.min_value)})"
+        if attr.max_value is not None:
+            expr += f".max({float(attr.max_value)})"
+        return expr
+    if attr.type_name == "decimal" and (
+        attr.min_value is not None or attr.max_value is not None
+    ):
+        checks: list[str] = ["Number.isFinite(n)"]
+        if attr.min_value is not None:
+            checks.append(f"n >= {float(attr.min_value)}")
+        if attr.max_value is not None:
+            checks.append(f"n <= {float(attr.max_value)}")
+        cond = " && ".join(checks)
+        return (
+            f"{expr}.refine((v) => {{ const n = Number(v); return {cond}; }}, "
+            f'"out of range")'
+        )
+    return expr
+
+
+def _zod_field_line(attr: AttributeDefinition, *, constrained: bool = False) -> str:
+    expr = _zod_write_expr(attr) if constrained else _ZOD_TYPE[attr.type_name]
     if attr.required:
         return f"{attr.name_snake}: {expr}"
     return f"{attr.name_snake}: {expr}.optional().nullable()"

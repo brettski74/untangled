@@ -6,6 +6,7 @@ from collections import deque
 
 from untangled.schema.ir import SchemaIR, TableIR
 from untangled.schema.plan import (
+    AddCheck,
     AddColumn,
     AddForeignKey,
     AlterColumnNullability,
@@ -13,6 +14,7 @@ from untangled.schema.plan import (
     CreateIndex,
     CreateSequence,
     CreateTable,
+    DropCheck,
     DropColumn,
     DropForeignKey,
     DropIndex,
@@ -67,6 +69,20 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
         for idx in current_by_name[name].indexes:
             ops.append(DropIndex(index_name=idx.name))
 
+    # 1c. Drop checks that will be removed or changed.
+    for name in sorted(shared_names):
+        desired_checks = {c.name: c for c in desired_by_name[name].checks}
+        current_checks = {c.name: c for c in current_by_name[name].checks}
+        for chk_name in sorted(current_checks.keys() - desired_checks.keys()):
+            ops.append(DropCheck(table_name=name, constraint_name=chk_name))
+        for chk_name in sorted(desired_checks.keys() & current_checks.keys()):
+            if desired_checks[chk_name] != current_checks[chk_name]:
+                ops.append(DropCheck(table_name=name, constraint_name=chk_name))
+
+    for name in sorted(drop_names):
+        for chk in current_by_name[name].checks:
+            ops.append(DropCheck(table_name=name, constraint_name=chk.name))
+
     # 2. Column drops / alters on shared tables (before table drops).
     for name in sorted(shared_names):
         ops.extend(_diff_columns(desired_by_name[name], current_by_name[name]))
@@ -84,7 +100,7 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
     # 4. Create tables (dependencies before dependents); FKs/indexes added later.
     for name in _topo_sort(create_names, desired_by_name, reverse=False):
         table = desired_by_name[name]
-        ops.append(CreateTable(table=_table_without_fks_or_indexes(table)))
+        ops.append(CreateTable(table=_table_without_fks_indexes_or_checks(table)))
 
     # 5. Add columns on shared tables.
     for name in sorted(shared_names):
@@ -123,17 +139,29 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
             if existing is None or existing != fk:
                 ops.append(AddForeignKey(table_name=name, foreign_key=fk))
 
+    # 8. Add checks (new tables + shared tables missing/changed checks).
+    for name in sorted(desired_names):
+        desired_table = desired_by_name[name]
+        current_table = current_by_name.get(name)
+        current_checks = (
+            {chk.name: chk for chk in current_table.checks} if current_table else {}
+        )
+        for chk in sorted(desired_table.checks, key=lambda item: item.name):
+            existing = current_checks.get(chk.name)
+            if existing is None or existing != chk:
+                ops.append(AddCheck(table_name=name, check=chk))
+
     return MigrationPlan(ops=tuple(ops))
 
 
-def _table_without_fks_or_indexes(table: TableIR) -> TableIR:
+def _table_without_fks_indexes_or_checks(table: TableIR) -> TableIR:
     return TableIR(
         name=table.name,
         columns=table.columns,
         primary_key=table.primary_key,
         foreign_keys=(),
         indexes=(),
-        checks=table.checks,
+        checks=(),
     )
 
 

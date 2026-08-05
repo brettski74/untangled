@@ -43,3 +43,21 @@ def permission_grants(effective: frozenset[str] | set[str], required: str) -> bo
     if ADMIN_PERMISSION_KEY in effective:
         return True
     return required in effective
+
+
+def class_operation_granted(
+    effective: frozenset[str] | set[str],
+    class_kebab: str,
+    operation: str,
+    *,
+    public: bool = False,
+) -> bool:
+    """Return True if ``effective`` may perform ``operation`` on ``class_kebab``.
+
+    ``public`` grants authenticated **read** without ``{class}:read``. Callers
+    must still require an authenticated principal. Prefer
+    ``require_class_operation``, which loads ``public`` from class metadata.
+    """
+    if operation == "read" and public:
+        return True
+    return permission_grants(effective, class_operation_key(class_kebab, operation))

@@ -305,3 +305,114 @@ def test_create_default_forbidden_on_friendly_id(tmp_path: Path) -> None:
     )
     with pytest.raises(DefinitionError, match="create-default"):
         load_definition(path)
+
+
+def test_class_flags_default_false(repo_definitions: Path) -> None:
+    demo = load_definition(repo_definitions / "demo-item.yaml")
+    assert demo.public is False
+    assert demo.suppress_create is False
+    assert demo.suppress_delete is False
+    assert demo.suppress_search is False
+    assert demo.check_constraints == ()
+
+
+def test_public_and_suppress_and_check_constraint(tmp_path: Path) -> None:
+    path = tmp_path / "bounded.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: bounded-item",
+                "display-name: Bounded",
+                "description: Flags and check constraint.",
+                "public: true",
+                "suppress-create: true",
+                "suppress-delete: true",
+                "suppress-search: true",
+                "check-constraint: \"id = '${system-config-id}'::uuid\"",
+                "attributes:",
+                "  quantity:",
+                "    type: integer",
+                "    required: true",
+                "    min-value: 1",
+                "    max-value: 10",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    defn = load_definition(path)
+    assert defn.public is True
+    assert defn.suppress_create is True
+    assert defn.suppress_delete is True
+    assert defn.suppress_search is True
+    assert defn.check_constraints == (
+        "id = '01900000-0000-7000-8000-000000000050'::uuid",
+    )
+    attr = defn.attributes[0]
+    assert attr.min_value == 1
+    assert attr.max_value == 10
+
+
+def test_min_max_rejects_non_numeric_and_inverted(tmp_path: Path) -> None:
+    bad_type = tmp_path / "text-bound.yaml"
+    bad_type.write_text(
+        "\n".join(
+            [
+                "name: text-bound",
+                "display-name: Text",
+                "description: Bounds on text.",
+                "attributes:",
+                "  title:",
+                "    type: compact-text",
+                "    required: true",
+                "    min-value: 1",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="min-value/max-value"):
+        load_definition(bad_type)
+
+    inverted = tmp_path / "inverted.yaml"
+    inverted.write_text(
+        "\n".join(
+            [
+                "name: inverted",
+                "display-name: Inverted",
+                "description: min greater than max.",
+                "attributes:",
+                "  quantity:",
+                "    type: integer",
+                "    required: true",
+                "    min-value: 10",
+                "    max-value: 1",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="min-value must be <= max-value"):
+        load_definition(inverted)
+
+
+def test_check_constraint_undefined_substitution(tmp_path: Path) -> None:
+    path = tmp_path / "bad-check.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: bad-check",
+                "display-name: Bad",
+                "description: Unknown token.",
+                "check-constraint: \"id = '${current-user}'::uuid\"",
+                "attributes:",
+                "  title:",
+                "    type: compact-text",
+                "    required: true",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="undefined substitution"):
+        load_definition(path)

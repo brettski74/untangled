@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   filter_nav_by_permissions,
   can_create_class,
+  can_read_class,
   can_update_class,
 } from "./nav_filter";
 import { default_landing_path } from "./nav_landing";
@@ -180,6 +181,16 @@ describe("filter_nav_by_permissions", () => {
     expect(visible[0]?.options.every((o) => o.option_type === "list")).toBe(
       true,
     );
+  });
+});
+
+describe("can_read_class", () => {
+  it("allows admin, class:read, and public metadata", () => {
+    expect(can_read_class(["admin"], "incident")).toBe(true);
+    expect(can_read_class(["incident:read"], "incident")).toBe(true);
+    expect(can_read_class([], "incident")).toBe(false);
+    expect(can_read_class([], "public-item", { public: true })).toBe(true);
+    expect(can_read_class(["change-request:read"], "incident")).toBe(false);
   });
 });
 

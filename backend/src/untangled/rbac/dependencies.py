@@ -10,7 +10,12 @@ from fastapi import Depends, HTTPException, status
 from psycopg import Connection
 
 from untangled.auth.dependencies import CurrentUser, DbConn
-from untangled.rbac.keys import class_operation_key, permission_grants
+from untangled.mapping.registry import class_definition
+from untangled.rbac.keys import (
+    class_operation_granted,
+    class_operation_key,
+    permission_grants,
+)
 from untangled.rbac.store import fetch_effective_permission_keys, user_has_permission
 
 
@@ -47,8 +52,23 @@ def require_class_operation(
     class_kebab: str,
     operation: str,
 ) -> Callable[..., dict[str, Any]]:
-    """Dependency factory: require ``{class}:{operation}`` (or ``admin``)."""
-    return require_permission(class_operation_key(class_kebab, operation))
+    """Dependency factory: require ``{class}:{operation}`` (or ``admin`` / ``public`` read)."""
+
+    def _dependency(
+        user: CurrentUser,
+        permissions: EffectivePermissions,
+    ) -> dict[str, Any]:
+        public = False
+        if operation == "read":
+            public = class_definition(class_kebab).public
+        if not class_operation_granted(
+            permissions, class_kebab, operation, public=public
+        ):
+            required = class_operation_key(class_kebab, operation)
+            raise _forbidden(f"Missing permission: {required}")
+        return user
+
+    return _dependency
 
 
 def assert_permission(

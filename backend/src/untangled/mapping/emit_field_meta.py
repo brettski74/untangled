@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 
 from untangled.mapping.definition import AttributeDefinition, ClassDefinition
@@ -31,6 +32,8 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
         "  order: number;",
         "  /** Create-form default when declared; omit key when no default. */",
         "  create_default?: string | number | boolean;",
+        "  min_value?: number | string;",
+        "  max_value?: number | string;",
         "};",
         "",
         "export type ClassFieldMeta = {",
@@ -45,6 +48,11 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
         "  /** Snake_case display-attribute name, if any",
         "   * (exact compact-text). */",
         "  display_attribute: string | null;",
+        "  /** Authenticated read without ``{class}:read``. */",
+        "  public: boolean;",
+        "  suppress_create: boolean;",
+        "  suppress_delete: boolean;",
+        "  suppress_search: boolean;",
         "};",
         "",
         "export const CLASS_FIELD_META: Readonly<Record<string, ClassFieldMeta>> = {",
@@ -69,6 +77,10 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
             "null" if display_attr is None else _ts_string(display_attr.name_snake)
         )
         lines.append(f"    display_attribute: {display_snake},")
+        lines.append(f"    public: {_ts_bool(definition.public)},")
+        lines.append(f"    suppress_create: {_ts_bool(definition.suppress_create)},")
+        lines.append(f"    suppress_delete: {_ts_bool(definition.suppress_delete)},")
+        lines.append(f"    suppress_search: {_ts_bool(definition.suppress_search)},")
         lines.append("  },")
 
     lines.append("};")
@@ -107,6 +119,10 @@ def _attribute_literal(attr: AttributeDefinition, order: int) -> str:
     ]
     if attr.create_default is not None:
         parts.append(f"create_default: {_ts_json(attr.create_default)}")
+    if attr.min_value is not None:
+        parts.append(f"min_value: {_bound_json(attr.min_value)}")
+    if attr.max_value is not None:
+        parts.append(f"max_value: {_bound_json(attr.max_value)}")
     return "{ " + ", ".join(parts) + " }"
 
 
@@ -116,3 +132,15 @@ def _ts_string(value: str) -> str:
 
 def _ts_json(value: str | int | float | bool) -> str:
     return json.dumps(value, ensure_ascii=False)
+
+
+def _ts_bool(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def _bound_json(value: str | int | float | bool | object) -> str:
+    if isinstance(value, Decimal):
+        return json.dumps(format(value, "f"), ensure_ascii=False)
+    if isinstance(value, (str, int, float, bool)):
+        return _ts_json(value)
+    return json.dumps(str(value), ensure_ascii=False)

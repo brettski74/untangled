@@ -10,6 +10,7 @@ from untangled.rbac.dependencies import (
 from untangled.rbac.keys import (
     ADMIN_PERMISSION_KEY,
     OPERATIONS,
+    class_operation_granted,
     class_operation_key,
     parse_permission_key,
     permission_grants,
@@ -20,6 +21,7 @@ __all__ = [
     "OPERATIONS",
     "EffectivePermissions",
     "assert_permission",
+    "class_operation_granted",
     "class_operation_key",
     "get_effective_permissions",
     "parse_permission_key",

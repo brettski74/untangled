@@ -7,6 +7,7 @@ import pytest
 from untangled.rbac.dependencies import require_class_operation, require_permission
 from untangled.rbac.keys import (
     ADMIN_PERMISSION_KEY,
+    class_operation_granted,
     class_operation_key,
     parse_permission_key,
     permission_grants,
@@ -85,3 +86,32 @@ def test_require_permission_admin_allows_any() -> None:
     dep = require_permission("incident:delete")
     user = {"id": "u"}
     assert dep(user=user, permissions=frozenset({ADMIN_PERMISSION_KEY})) is user
+
+
+def test_class_operation_granted_public_read_only() -> None:
+    empty = frozenset()
+    assert class_operation_granted(empty, "system-config", "read", public=True)
+    assert not class_operation_granted(empty, "system-config", "update", public=True)
+    assert not class_operation_granted(empty, "incident", "read", public=False)
+
+
+def test_require_class_operation_public_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from untangled.rbac import dependencies as rbac_deps
+
+    monkeypatch.setattr(
+        rbac_deps,
+        "class_definition",
+        lambda name: SimpleNamespace(public=name == "public-item"),
+    )
+    user = {"id": "u"}
+    public_dep = require_class_operation("public-item", "read")
+    assert public_dep(user=user, permissions=frozenset()) is user
+
+    private_dep = require_class_operation("incident", "read")
+    with pytest.raises(HTTPException) as exc_info:
+        private_dep(user=user, permissions=frozenset())
+    assert exc_info.value.status_code == 403

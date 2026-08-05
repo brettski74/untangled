@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SequenceIR, TableIR
+from untangled.schema.ir import CheckIR, ColumnIR, ForeignKeyIR, IndexIR, SequenceIR, TableIR
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +198,36 @@ class DropSequence:
         return f"DROP SEQUENCE {self.sequence_name}"
 
 
+@dataclass(frozen=True, slots=True)
+class AddCheck:
+    """Add a table CHECK constraint."""
+
+    table_name: str
+    check: CheckIR
+
+    @property
+    def destructive(self) -> bool:
+        return False
+
+    def describe(self) -> str:
+        return f"ADD CHECK {self.check.name} on {self.table_name}"
+
+
+@dataclass(frozen=True, slots=True)
+class DropCheck:
+    """Drop a table CHECK constraint (does not destroy row data)."""
+
+    table_name: str
+    constraint_name: str
+
+    @property
+    def destructive(self) -> bool:
+        return False
+
+    def describe(self) -> str:
+        return f"DROP CHECK {self.table_name}.{self.constraint_name}"
+
+
 MigrationOp = (
     CreateTable
     | DropTable
@@ -211,6 +241,8 @@ MigrationOp = (
     | DropIndex
     | CreateSequence
     | DropSequence
+    | AddCheck
+    | DropCheck
 )
 
 

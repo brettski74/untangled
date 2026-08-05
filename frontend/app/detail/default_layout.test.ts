@@ -17,6 +17,10 @@ function sample_meta(
     attributes,
     friendly_id_attr,
     display_attribute: null,
+    public: false,
+    suppress_create: false,
+    suppress_delete: false,
+    suppress_search: false,
   };
 }
 

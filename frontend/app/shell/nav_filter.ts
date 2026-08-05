@@ -2,6 +2,7 @@
  * Presentation-only nav filtering from effective permission keys.
  * API RBAC remains authoritative when #13/#14 wire create/list/search.
  */
+import { class_field_meta } from "../generated/field_meta";
 import type { NavBarView, NavSectionView } from "./nav_schema";
 
 function has_admin(permissions: readonly string[]): boolean {
@@ -19,12 +20,28 @@ function has_class_permission(
   return permissions.some((key) => key.startsWith(prefix));
 }
 
-function can_read_class(
+export type ClassReadMeta = { public?: boolean };
+
+export function can_read_class(
+  permissions: readonly string[],
+  class_name: string,
+  meta: ClassReadMeta | undefined = class_field_meta(class_name),
+): boolean {
+  if (meta?.public) {
+    return true;
+  }
+  return (
+    has_admin(permissions) || permissions.includes(`${class_name}:read`)
+  );
+}
+
+function has_class_access(
   permissions: readonly string[],
   class_name: string,
 ): boolean {
   return (
-    has_admin(permissions) || permissions.includes(`${class_name}:read`)
+    has_class_permission(permissions, class_name) ||
+    can_read_class(permissions, class_name)
   );
 }
 
@@ -53,7 +70,7 @@ export function filter_nav_by_permissions(
   const sections: NavSectionView[] = [];
 
   for (const section of nav) {
-    if (!has_class_permission(permissions, section.class_name)) {
+    if (!has_class_access(permissions, section.class_name)) {
       continue;
     }
 

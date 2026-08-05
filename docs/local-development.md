@@ -95,6 +95,7 @@ Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_R
 
 - Class+operation: `{class}:{operation}` where `class` is the YAML class `name` (kebab-case) and `operation` is one of `create`, `read`, `update`, `delete`. Example: `demo-item:read`.
 - For M1, `read` covers list, fetch-by-id, and search.
+- Class YAML `public: true` grants **authenticated read** without `{class}:read` (standard class-access model via `require_class_operation` / `can_read_class`). Unauthenticated callers are still denied. Writes are unchanged.
 - Non-class key in M1: `admin` — grants all access in enforcement helpers.
 - Seeded catalog includes full CRUD keys for `demo-item`, `incident`, and `change-request` (including `:delete` rows). Pre-seeding `incident` / `change-request` permission **rows** does not create those domain tables.
 - Effective permissions are the **union** across all roles assigned to a user. Resolution is from the database per request (not JWT claims).
@@ -345,6 +346,12 @@ After a fresh migrate + seed, sample rows use **stable UUIDs** (safe for docs / 
 | ----- | ---------------- | ---------------------------------- |
 | Incident | `01900000-0000-7000-8000-000000000021` … `026` | `INC00000001` … |
 | Change Request | `01900000-0000-7000-8000-000000000031` … `039`, `040` … `044` | `CHG00000001` … |
+
+Well-known catalog id (not a seed row until a later ticket mounts/bootstraps the class):
+
+| Name | UUID | Constant |
+| ---- | ---- | -------- |
+| `${system-config-id}` | `01900000-0000-7000-8000-000000000050` | `SYSTEM_CONFIG_ID` in generated well-known modules |
 
 Six incident rows and fourteen change-request rows are seeded; full stable UUID constants live in `backend/src/untangled/seed/tickets.py`.
 

@@ -17,8 +17,8 @@ from untangled.schema import (
 )
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import diff_schemas
-from untangled.schema.ir import ColumnIR, SchemaIR, TableIR
-from untangled.schema.plan import CreateTable
+from untangled.schema.ir import CheckIR, ColumnIR, SchemaIR, TableIR
+from untangled.schema.plan import AddCheck, CreateTable
 from untangled.schema.versions import (
     class_hashes_for_version,
     current_version_row,
@@ -234,3 +234,26 @@ def test_migrate_ensures_stub_actor_before_audit_fks(
         ).fetchone()[0]
         == STUB_ACTOR_ID
     )
+
+
+def test_check_constraint_ddl_introspect_round_trip(db_conn: Connection) -> None:
+    db_conn.execute("DROP TABLE IF EXISTS check_rt CASCADE")
+    db_conn.execute(
+        "CREATE TABLE check_rt (id uuid PRIMARY KEY, quantity integer NOT NULL)"
+    )
+    expression = "id = '01900000-0000-7000-8000-000000000050'::uuid"
+    db_conn.execute(
+        compile_op(
+            AddCheck(
+                table_name="check_rt",
+                check=CheckIR(name="check_rt_check_1", expression=expression),
+            )
+        )
+    )
+    db_conn.commit()
+    current = introspect_schema(db_conn, ["check_rt"])
+    assert current.tables[0].checks == (
+        CheckIR(name="check_rt_check_1", expression=expression),
+    )
+    db_conn.execute("DROP TABLE IF EXISTS check_rt CASCADE")
+    db_conn.commit()
