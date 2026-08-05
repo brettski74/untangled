@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 from psycopg import Connection, sql
 
 from untangled.main import app
-from untangled.seed.users import SEED_USERS, password_for
 from untangled.seed import SYSTEM_USER_PASSWORD_HASH
+from untangled.seed.users import SEED_USERS, password_for
 
 
 @pytest.fixture

@@ -8,6 +8,7 @@ from uuid import UUID
 from psycopg import Connection, sql
 
 from untangled.mapping.datetime_utc import utc_now
+from untangled.mapping.well_known import SYSTEM_USER_ID
 from untangled.seed.rbac_catalog import (
     SEED_PERMISSIONS,
     SEED_PERMISSIONS_BY_KEY,
@@ -15,7 +16,6 @@ from untangled.seed.rbac_catalog import (
     SEED_ROLES,
     SEED_USER_ROLES,
 )
-from untangled.mapping.well_known import SYSTEM_USER_ID
 
 
 def seed_rbac(conn: Connection) -> dict[str, int]:
