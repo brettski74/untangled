@@ -24,7 +24,7 @@ from untangled.schema.versions import (
     record_schema_version,
     restore_point_name_for,
 )
-from untangled.seed import upsert_stub_actor
+from untangled.seed import upsert_system_user
 
 ProgressFn = Callable[[str], None]
 
@@ -82,6 +82,8 @@ def migrate(
 
     if plan.is_empty:
         log("migrate: no changes (no-op)")
+        log("migrate: ensure system user (platform attribution principal)")
+        upsert_system_user(conn)
         conn.commit()
         return MigrateResult(
             definitions=tuple(definitions),
@@ -103,18 +105,23 @@ def migrate(
     create_restore_point(conn, rp_name)
 
     try:
-        stub_actor_ensured = False
+        system_user_ensured = False
         for op in plan.ops:
             if (
-                not stub_actor_ensured
+                not system_user_ensured
                 and isinstance(op, AddForeignKey)
                 and op.foreign_key.referenced_table == AUDIT_USER_TABLE
             ):
-                log(f"migrate: ensure stub actor on {AUDIT_USER_TABLE} for audit FKs")
-                upsert_stub_actor(conn)
-                stub_actor_ensured = True
+                log(
+                    "migrate: ensure system user "
+                    f"on {AUDIT_USER_TABLE} for audit FKs"
+                )
+                upsert_system_user(conn)
+                system_user_ensured = True
             log(f"migrate: {op.describe()}")
             conn.execute(compile_op(op))
+        log("migrate: ensure system user (platform attribution principal)")
+        upsert_system_user(conn)
         record_schema_version(
             conn,
             version_id=version_id,

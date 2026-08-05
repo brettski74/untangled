@@ -10,10 +10,12 @@ import re
 from uuid import UUID
 
 SYSTEM_CONFIG_ID = UUID("01900000-0000-7000-8000-000000000050")
+SYSTEM_USER_ID = UUID("01900000-0000-7000-8000-000000000006")
 
 # kebab-case name → substituted literal (string form).
 WELL_KNOWN: dict[str, str] = {
     "system-config-id": str(SYSTEM_CONFIG_ID),
+    "system-user-id": str(SYSTEM_USER_ID),
 }
 
 # Context → names available in that context. Timing is documented with each

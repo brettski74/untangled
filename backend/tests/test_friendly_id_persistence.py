@@ -8,7 +8,7 @@ import pytest
 from psycopg import Connection
 
 from untangled.mapping.definition import ClassDefinition, load_definition
-from untangled.persistence.actor import STUB_ACTOR_ID
+from untangled.persistence.actor import SYSTEM_USER_ID
 from untangled.persistence.connection import connect
 from untangled.persistence.store import RecordStore
 from untangled.records.deps import model
@@ -30,7 +30,7 @@ def incident_store(
         db_conn,
         incident_definition,
         model("incident"),
-        actor_id=STUB_ACTOR_ID,
+        actor_id=SYSTEM_USER_ID,
     )
 
 
@@ -77,7 +77,7 @@ def test_concurrent_friendly_ids_unique(demo_schema, incident_definition: ClassD
                 conn,
                 incident_definition,
                 model("incident"),
-                actor_id=STUB_ACTOR_ID,
+                actor_id=SYSTEM_USER_ID,
             )
             row = store.create(
                 {

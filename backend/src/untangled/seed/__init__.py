@@ -7,13 +7,84 @@ from psycopg import Connection, sql
 from untangled.auth.passwords import hash_password
 from untangled.auth.store import normalize_username
 from untangled.mapping.datetime_utc import utc_now
-from untangled.persistence.actor import STUB_ACTOR_ID
+from untangled.mapping.well_known import SYSTEM_USER_ID
 from untangled.seed.rbac import seed_rbac
 from untangled.seed.tickets import seed_tickets
-from untangled.seed.users import SEED_ADMIN_ID, SEED_USERS, password_for
+from untangled.seed.users import SEED_USERS, password_for
 
-# Placeholder hash only for migrate FK safety; ``make seed`` overwrites with real creds.
-_MIGRATE_STUB_PASSWORD = "migrate-stub-not-for-login"
+SYSTEM_USER_USERNAME = "system"
+SYSTEM_USER_DISPLAY_NAME = "System"
+# Not an Argon2 hash — verify_password always fails (InvalidHashError).
+SYSTEM_USER_PASSWORD_HASH = "untangled-system-not-a-password-hash"
+
+
+def _relation_exists(conn: Connection, name: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def upsert_system_user(conn: Connection) -> None:
+    """Ensure the platform system principal exists in non-login shape.
+
+    Does not commit. No-op when ``user`` is absent. When ``user_role`` exists,
+    removes any role attachments for this principal.
+    """
+    if not _relation_exists(conn, "user"):
+        return
+
+    now = utc_now()
+    username = normalize_username(SYSTEM_USER_USERNAME)
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "INSERT INTO {} ("
+                "id, created_at, updated_at, created_by, updated_by, "
+                "username, password_hash, display_name, is_active"
+                ") VALUES ("
+                "{}, {}, {}, {}, {}, {}, {}, {}, {}"
+                ") ON CONFLICT (id) DO UPDATE SET "
+                "username = EXCLUDED.username, "
+                "password_hash = EXCLUDED.password_hash, "
+                "display_name = EXCLUDED.display_name, "
+                "is_active = EXCLUDED.is_active, "
+                "updated_at = EXCLUDED.updated_at, "
+                "updated_by = EXCLUDED.updated_by"
+            ).format(
+                sql.Identifier("user"),
+                *[sql.Placeholder() for _ in range(9)],
+            ),
+            (
+                SYSTEM_USER_ID,
+                now,
+                now,
+                SYSTEM_USER_ID,
+                SYSTEM_USER_ID,
+                username,
+                SYSTEM_USER_PASSWORD_HASH,
+                SYSTEM_USER_DISPLAY_NAME,
+                False,
+            ),
+        )
+
+    if not _relation_exists(conn, "user_role"):
+        return
+
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("DELETE FROM {} WHERE {} = {}").format(
+                sql.Identifier("user_role"),
+                sql.Identifier("user_id"),
+                sql.Placeholder(),
+            ),
+            (SYSTEM_USER_ID,),
+        )
 
 
 def seed_users(conn: Connection) -> list[str]:
@@ -61,48 +132,13 @@ def seed_users(conn: Connection) -> list[str]:
 
 def seed_all(conn: Connection) -> dict[str, object]:
     """Upsert seed users, RBAC, then sample tickets. Returns a summary dict."""
+    upsert_system_user(conn)
     usernames = seed_users(conn)
     rbac_counts = seed_rbac(conn)
+    upsert_system_user(conn)
+    conn.commit()
     tickets = seed_tickets(conn)
     return {"users": usernames, "rbac": rbac_counts, "tickets": tickets}
-
-
-def upsert_stub_actor(conn: Connection) -> None:
-    """Insert ``STUB_ACTOR_ID`` if missing so audit FKs can apply. Does not commit.
-
-    Used by migrate before ``AddForeignKey`` ops that reference ``user``. Leaves
-    an existing row untouched (including passwords set by ``seed_users``).
-    """
-    assert SEED_ADMIN_ID == STUB_ACTOR_ID
-    admin = SEED_USERS[0]
-    now = utc_now()
-    username = normalize_username(admin.username)
-    password_hash = hash_password(_MIGRATE_STUB_PASSWORD)
-    with conn.cursor() as cur:
-        cur.execute(
-            sql.SQL(
-                "INSERT INTO {} ("
-                "id, created_at, updated_at, created_by, updated_by, "
-                "username, password_hash, display_name, is_active"
-                ") VALUES ("
-                "{}, {}, {}, {}, {}, {}, {}, {}, {}"
-                ") ON CONFLICT (id) DO NOTHING"
-            ).format(
-                sql.Identifier("user"),
-                *[sql.Placeholder() for _ in range(9)],
-            ),
-            (
-                admin.id,
-                now,
-                now,
-                admin.id,
-                admin.id,
-                username,
-                password_hash,
-                admin.display_name,
-                True,
-            ),
-        )
 
 
 def ensure_stub_actor_user(conn: Connection) -> None:

@@ -10,6 +10,7 @@ from psycopg import Connection, sql
 
 from untangled.main import app
 from untangled.seed.users import SEED_USERS, password_for
+from untangled.seed import SYSTEM_USER_PASSWORD_HASH
 
 
 @pytest.fixture
@@ -48,6 +49,13 @@ def test_login_invalid_credentials_generic_401(auth_client: TestClient) -> None:
     missing = _login(auth_client, "no-such-user", "anything")
     assert missing.status_code == 401
     assert missing.json()["detail"] == "Invalid username or password"
+
+
+def test_system_user_cannot_log_in(auth_client: TestClient) -> None:
+    for password in ("admin-change-me", SYSTEM_USER_PASSWORD_HASH, "system"):
+        response = _login(auth_client, "system", password)
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid username or password"
 
 
 def test_me_requires_bearer_and_returns_profile(auth_client: TestClient) -> None:

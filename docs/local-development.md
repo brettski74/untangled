@@ -91,6 +91,8 @@ Seed users (usernames are case-normalized to lowercase):
 
 Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_READWRITE_PASSWORD`, `SEED_CHANGE_PASSWORD`, `SEED_INCIDENT_PASSWORD` when running `make seed`.
 
+`make migrate` also ensures username `system` (`${system-user-id}`) as a non-login platform attribution principal. It has no password, no roles, and must not be activated. Sample ticket rows are still attributed to seeded `admin`.
+
 ### Permission keys
 
 - Class+operation: `{class}:{operation}` where `class` is the YAML class `name` (kebab-case) and `operation` is one of `create`, `read`, `update`, `delete`. Example: `demo-item:read`.
@@ -347,11 +349,12 @@ After a fresh migrate + seed, sample rows use **stable UUIDs** (safe for docs / 
 | Incident | `01900000-0000-7000-8000-000000000021` … `026` | `INC00000001` … |
 | Change Request | `01900000-0000-7000-8000-000000000031` … `039`, `040` … `044` | `CHG00000001` … |
 
-Well-known catalog id (not a seed row until a later ticket mounts/bootstraps the class):
+Well-known catalog ids:
 
-| Name | UUID | Constant |
-| ---- | ---- | -------- |
-| `${system-config-id}` | `01900000-0000-7000-8000-000000000050` | `SYSTEM_CONFIG_ID` in generated well-known modules |
+| Name | UUID | Constant | Notes |
+| ---- | ---- | -------- | ----- |
+| `${system-config-id}` | `01900000-0000-7000-8000-000000000050` | `SYSTEM_CONFIG_ID` | Singleton row comes in a later ticket |
+| `${system-user-id}` | `01900000-0000-7000-8000-000000000006` | `SYSTEM_USER_ID` | Platform attribution principal (`system`); migrate inserts it; **cannot log in**; not a seed login user |
 
 Six incident rows and fourteen change-request rows are seeded; full stable UUID constants live in `backend/src/untangled/seed/tickets.py`.
 
@@ -437,7 +440,7 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |
 | Persistence (`untangled.persistence`) | Thin SQL create/fetch/update/delete + friendly-id assign | Domain routes stamp authenticated actor |
-| Actor stub (`STUB_ACTOR_ID`) | Matches seeded admin UUID for FK-safe tests | Prefer current-user dependency on HTTP writes |
+| System principal (`SYSTEM_USER_ID`) | Distinct non-login actor for migrate/bootstrap/non-HTTP stamps | HTTP writes use the authenticated user; `#155` bootstrap uses this id |
 | Frontend SSR login + shell chrome | Real `/login`, httpOnly access JWT cookie, header/nav/context chrome | YAML nav (#66), refresh (#14) |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |
 | `frontend/package-lock.json` | Pinned deps | Regenerate when `package.json` changes |

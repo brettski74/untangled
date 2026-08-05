@@ -15,7 +15,7 @@ from untangled.mapping.datetime_utc import format_utc_iso_z, utc_now
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
 from untangled.mapping.types import format_friendly_id, friendly_id_sequence_name
-from untangled.persistence.actor import STUB_ACTOR_ID
+from untangled.persistence.actor import SYSTEM_USER_ID
 from untangled.persistence.fk_enrichment import (
     RelatedIdentity,
     build_enriched_read_plan,
@@ -34,7 +34,7 @@ class RecordStore[T: BaseModel]:
         definition: ClassDefinition,
         model_cls: type[T],
         *,
-        actor_id: UUID = STUB_ACTOR_ID,
+        actor_id: UUID = SYSTEM_USER_ID,
         definitions_by_kebab: Mapping[str, ClassDefinition] | None = None,
     ) -> None:
         self._conn = conn

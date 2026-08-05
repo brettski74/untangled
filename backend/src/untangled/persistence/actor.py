@@ -1,12 +1,7 @@
-"""Temporary identity for audit stamps until HTTP handlers pass a real principal.
-
-Aligned with the seeded admin user UUID so audit FKs to ``user.id`` remain valid
-for library/test paths that are not yet HTTP-authenticated.
-"""
+"""Non-interactive audit identity for writes without an HTTP principal."""
 
 from __future__ import annotations
 
-from uuid import UUID
+from untangled.mapping.well_known import SYSTEM_USER_ID
 
-# Well-known UUIDv7-shaped constant — same as seed admin (`untangled.seed.users`).
-STUB_ACTOR_ID = UUID("01900000-0000-7000-8000-000000000001")
+__all__ = ["SYSTEM_USER_ID"]

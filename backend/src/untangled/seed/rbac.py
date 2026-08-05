@@ -15,13 +15,13 @@ from untangled.seed.rbac_catalog import (
     SEED_ROLES,
     SEED_USER_ROLES,
 )
-from untangled.seed.users import SEED_ADMIN_ID
+from untangled.mapping.well_known import SYSTEM_USER_ID
 
 
 def seed_rbac(conn: Connection) -> dict[str, int]:
     """Upsert roles, permissions, and joins. Returns counts touched per kind."""
     now = utc_now()
-    actor = SEED_ADMIN_ID
+    actor = SYSTEM_USER_ID
     _upsert_roles(conn, now=now, actor=actor)
     _upsert_permissions(conn, now=now, actor=actor)
     _upsert_role_permissions(conn, now=now, actor=actor)
