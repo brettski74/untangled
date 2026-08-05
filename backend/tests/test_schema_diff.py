@@ -7,12 +7,14 @@ from pathlib import Path
 from untangled.mapping.types import TEXT_STORAGE_FAMILY
 from untangled.persistence.sql_types import postgres_type
 from untangled.schema.diff import diff_schemas
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, SchemaIR, TableIR
+from untangled.schema.ir import CheckIR, ColumnIR, ForeignKeyIR, SchemaIR, TableIR
 from untangled.schema.plan import (
+    AddCheck,
     AddColumn,
     AddForeignKey,
     AlterColumnType,
     CreateTable,
+    DropCheck,
     DropColumn,
     DropForeignKey,
     DropTable,
@@ -125,6 +127,26 @@ def test_diff_drop_table_drops_fk_first() -> None:
     assert isinstance(plan.ops[0], DropForeignKey)
     assert isinstance(plan.ops[1], DropTable)
     assert plan.ops[1].table_name == "demo_link"
+
+
+def test_diff_add_and_drop_check_is_not_destructive() -> None:
+    base_cols = (ColumnIR("id", "uuid", False), ColumnIR("title", "text", False))
+    without = TableIR(name="demo_item", columns=base_cols, primary_key=("id",))
+    with_check = TableIR(
+        name="demo_item",
+        columns=base_cols,
+        primary_key=("id",),
+        checks=(CheckIR(name="demo_item_check_1", expression="quantity >= 1"),),
+    )
+    add_plan = diff_schemas(SchemaIR(tables=(with_check,)), SchemaIR(tables=(without,)))
+    assert [type(op).__name__ for op in add_plan.ops] == ["AddCheck"]
+    assert isinstance(add_plan.ops[0], AddCheck)
+    assert not add_plan.destructive_ops
+
+    drop_plan = diff_schemas(SchemaIR(tables=(without,)), SchemaIR(tables=(with_check,)))
+    assert [type(op).__name__ for op in drop_plan.ops] == ["DropCheck"]
+    assert isinstance(drop_plan.ops[0], DropCheck)
+    assert not drop_plan.destructive_ops
 
 
 def test_text_storage_family_maps_to_text() -> None:

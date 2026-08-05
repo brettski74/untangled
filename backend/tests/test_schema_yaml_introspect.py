@@ -32,6 +32,27 @@ _MANAGED = {
 }
 
 
+def test_desired_schema_includes_yaml_check_constraints(repo_definitions: Path) -> None:
+    from dataclasses import replace
+
+    from untangled.mapping.definition import load_definitions
+    from untangled.schema.from_yaml import desired_schema_from_classes
+    from untangled.schema.ir import CheckIR
+
+    definitions = load_definitions(repo_definitions)
+    patched = [
+        replace(defn, check_constraints=("quantity >= 1",))
+        if defn.name_kebab == "demo-item"
+        else defn
+        for defn in definitions
+    ]
+    desired = desired_schema_from_classes(patched)
+    demo = next(table for table in desired.tables if table.name == "demo_item")
+    assert demo.checks == (
+        CheckIR(name="demo_item_check_1", expression="quantity >= 1"),
+    )
+
+
 def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
     desired = desired_schema_from_definitions(repo_definitions)
     by_table = {t.name: t for t in desired.tables}

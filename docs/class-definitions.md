@@ -35,6 +35,9 @@ Each file declares at least:
 | `display-name` | Human-readable **class label** (not a table/column identifier; not related-record display identity) |
 | `description` | Purpose and other details configurers/users should know |
 | `display-attribute` | Optional. Kebab-case attribute name used as limited related-record display identity (see below) |
+| `public` | Optional boolean, default `false`. When `true`, every **authenticated** caller may **read** without `{class}:read`. Writes still use `{class}:{op}` / `admin`. Unauthenticated callers still have no access. This is standard class-access behaviour, not a seed permission grant. |
+| `suppress-create` / `suppress-delete` / `suppress-search` | Optional booleans, default `false`. When `true`, the shared router factory omits that operation (search suppression applies to legacy and v1). Fetch and update are not suppressible here. |
+| `check-constraint` | Optional SQL CHECK expression (string) or list of expressions. Snake_case SQL identifiers. `${kebab-name}` literals are substituted at definition load. |
 | `attributes` | Map of attribute name → `{ type, required, … }` |
 
 Attribute names in YAML are kebab-case. They map mechanically to snake_case in
@@ -183,6 +186,33 @@ bootstrap. Audit foreign keys always target `user`.
 
 Optional attribute flag: `unique: true` adds a unique index on that column
 (e.g. `user.username`).
+
+Optional numeric bounds: `min-value` / `max-value` on `integer`, `float`, or
+`decimal` attributes. Enforced on generated Pydantic/Zod **create and update**
+models only (not on the full/read model). Omit either key independently; reject
+`min-value` > `max-value` at definition load.
+
+### Well-known substitution (`${…}`)
+
+YAML string values that opt into substitution may contain `${kebab-name}` tokens
+resolved from a single catalog (`untangled.mapping.well_known`).
+
+- **Names** are kebab-case. Registered now: `${system-config-id}` (stable
+  singleton UUID `01900000-0000-7000-8000-000000000050`).
+- **Resolution is per context**, not per variable. Each context declares which
+  names are available and when evaluation runs.
+  - `check-constraint`: available `${system-config-id}`; evaluate at definition
+    load (before Schema IR / migrate DDL).
+  - `nav-bar`: available `${system-config-id}`; evaluate when nav YAML is loaded
+    (wired by a later ticket).
+- **Fail closed:** unknown name, unknown context, or a name not available in that
+  context is an error. Tokens are never left unsubstituted.
+- Generated constants (`make models`): `untangled.generated.well_known` and
+  `frontend/app/generated/well_known.ts`. Application code must import those (or
+  substitute through the catalog)—do not copy the UUID literal.
+
+SQL check expressions stay snake_case identifiers with `${…}` only for literals,
+for example `id = '${system-config-id}'::uuid`.
 
 ### Many-to-many joins
 

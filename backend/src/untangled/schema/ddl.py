@@ -6,6 +6,7 @@ from psycopg import sql
 
 from untangled.schema.ir import ColumnIR, TableIR
 from untangled.schema.plan import (
+    AddCheck,
     AddColumn,
     AddForeignKey,
     AlterColumnNullability,
@@ -13,6 +14,7 @@ from untangled.schema.plan import (
     CreateIndex,
     CreateSequence,
     CreateTable,
+    DropCheck,
     DropColumn,
     DropForeignKey,
     DropIndex,
@@ -92,6 +94,17 @@ def compile_op(op: MigrationOp) -> sql.Composed:
         )
     if isinstance(op, DropSequence):
         return sql.SQL("DROP SEQUENCE {}").format(sql.Identifier(op.sequence_name))
+    if isinstance(op, AddCheck):
+        return sql.SQL("ALTER TABLE {} ADD CONSTRAINT {} CHECK ({})").format(
+            sql.Identifier(op.table_name),
+            sql.Identifier(op.check.name),
+            sql.SQL(op.check.expression),
+        )
+    if isinstance(op, DropCheck):
+        return sql.SQL("ALTER TABLE {} DROP CONSTRAINT {}").format(
+            sql.Identifier(op.table_name),
+            sql.Identifier(op.constraint_name),
+        )
     raise TypeError(f"unsupported migration op: {type(op)!r}")
 
 

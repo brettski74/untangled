@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -13,31 +12,19 @@ from psycopg import Connection
 from pydantic import BaseModel
 
 import untangled
-from untangled.mapping.definition import (
-    ClassDefinition,
-    load_definitions,
-    validate_platform_definitions,
-)
+from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.generate import generate_models
 from untangled.mapping.naming import snake_to_pascal
+from untangled.mapping import registry as class_registry
 from untangled.persistence.store import RecordStore
 from untangled.records.locator import classify_locator
 
-DEFINITIONS_DIR_ENV = "UNTANGLED_DEFINITIONS_DIR"
+DEFINITIONS_DIR_ENV = class_registry.DEFINITIONS_DIR_ENV
 
 
 def _source_tree_definitions(*, records_file: Path | None = None) -> Path | None:
-    """Return class-definitions when running from ``backend/src/untangled/records``."""
-    path = (records_file or Path(__file__)).resolve()
-    parts = path.parts
-    if len(parts) < 4:
-        return None
-    if parts[-3:] != ("untangled", "records", path.name):
-        return None
-    if parts[-4] != "src":
-        return None
-    candidate = path.parents[3] / "class-definitions"
-    return candidate if candidate.is_dir() else None
+    """Return class-definitions when running from ``backend/src/untangled/…``."""
+    return class_registry._source_tree_definitions(start_file=records_file)
 
 
 def resolve_definitions_dir(
@@ -47,39 +34,16 @@ def resolve_definitions_dir(
     environ: dict[str, str] | None = None,
 ) -> Path:
     """Locate YAML class-definitions for runtime (src tree, Compose ``/app``, or env)."""
-    env_map = os.environ if environ is None else environ
-    raw = env_map.get(DEFINITIONS_DIR_ENV)
-    tried: list[Path] = []
-    if raw:
-        env_path = Path(raw).expanduser().resolve()
-        if env_path.is_dir():
-            return env_path
-        tried.append(env_path)
-
-    source = _source_tree_definitions(records_file=records_file)
-    if source is not None:
-        return source.resolve()
-    if records_file is not None:
-        # Still record the would-be source path for error messages when probing.
-        probe = records_file.resolve().parents[3] / "class-definitions"
-        tried.append(probe)
-
-    cwd_path = (cwd if cwd is not None else Path.cwd()) / "class-definitions"
-    tried.append(cwd_path)
-    if cwd_path.is_dir():
-        return cwd_path.resolve()
-
-    tried_msg = ", ".join(str(p) for p in tried) if tried else "(none)"
-    raise RuntimeError(
-        "class-definitions directory not found. "
-        f"Tried: {tried_msg}. "
-        f"Set {DEFINITIONS_DIR_ENV} for unusual layouts."
+    return class_registry.resolve_definitions_dir(
+        records_file=records_file,
+        cwd=cwd,
+        environ=environ,
     )
 
 
 def definitions_dir() -> Path:
     """Return the class-definitions directory used by record routers and seeds."""
-    return resolve_definitions_dir()
+    return class_registry.definitions_dir()
 
 
 def resolve_pydantic_out(*, package_root: Path | None = None) -> Path:
@@ -117,19 +81,22 @@ def ensure_generated_package() -> None:
     generate_models(resolve_definitions_dir(), out, zod_tmp)
 
 
-@lru_cache(maxsize=1)
-def _definitions_by_kebab() -> dict[str, ClassDefinition]:
-    definitions = load_definitions(definitions_dir())
-    validate_platform_definitions(definitions)
-    return {d.name_kebab: d for d in definitions}
+class _DefinitionsByKebab:
+    """Callable cache proxy so tests can ``cache_clear`` the shared registry."""
+
+    def __call__(self) -> dict[str, ClassDefinition]:
+        return class_registry.definitions_by_kebab()
+
+    def cache_clear(self) -> None:
+        class_registry.clear_definition_caches()
+
+
+_definitions_by_kebab = _DefinitionsByKebab()
 
 
 def class_definition(class_kebab: str) -> ClassDefinition:
     """Return the loaded class definition for ``class_kebab``."""
-    try:
-        return _definitions_by_kebab()[class_kebab]
-    except KeyError as exc:
-        raise RuntimeError(f"unknown class definition: {class_kebab}") from exc
+    return class_registry.class_definition(class_kebab)
 
 
 def model(class_kebab: str, suffix: str = "") -> type[BaseModel]:

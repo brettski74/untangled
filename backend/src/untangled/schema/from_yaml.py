@@ -12,7 +12,16 @@ from untangled.mapping.definition import (
 from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.system_fields import AUDIT_USER_TABLE, SYSTEM_FIELDS
 from untangled.mapping.types import friendly_id_sequence_name
-from untangled.schema.ir import ColumnIR, ForeignKeyIR, IndexIR, SchemaIR, SequenceIR, TableIR
+from untangled.schema.checks import check_constraint_name, normalize_check_expression
+from untangled.schema.ir import (
+    CheckIR,
+    ColumnIR,
+    ForeignKeyIR,
+    IndexIR,
+    SchemaIR,
+    SequenceIR,
+    TableIR,
+)
 from untangled.schema.types import ir_type_from_yaml
 
 
@@ -115,11 +124,19 @@ def _table_from_definition(definition: ClassDefinition) -> TableIR:
                 )
             )
 
+    checks = tuple(
+        CheckIR(
+            name=check_constraint_name(definition.name_snake, index),
+            expression=normalize_check_expression(expr),
+        )
+        for index, expr in enumerate(definition.check_constraints, start=1)
+    )
+
     return TableIR(
         name=definition.name_snake,
         columns=tuple(columns),
         primary_key=primary_key,
         foreign_keys=tuple(foreign_keys),
         indexes=tuple(indexes),
-        checks=(),
+        checks=checks,
     )

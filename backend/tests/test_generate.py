@@ -19,6 +19,11 @@ from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
 from untangled.seed.users import SEED_ADMIN_ID
 
 
+def _load_module_from_source(path: Path, module_name: str, source: str):
+    path.write_text(source, encoding="utf-8")
+    return _load_module(path, module_name)
+
+
 def _load_module(path: Path, module_name: str):
     spec = importlib.util.spec_from_file_location(module_name, path)
     assert spec is not None and spec.loader is not None
@@ -245,3 +250,60 @@ def test_field_meta_order_and_create_defaults(
     assert 'create_default: "new"' in source
     assert f'create_default: "{SEED_ADMIN_ID}"' in source
     assert "create_default: null" not in source
+
+
+def test_min_max_on_create_update_not_full_model(tmp_path: Path) -> None:
+    from pydantic import ValidationError
+
+    from untangled.mapping.definition import load_definition
+    from untangled.mapping.emit_field_meta import emit_field_meta_module
+    from untangled.mapping.emit_pydantic import emit_pydantic_module
+
+    path = tmp_path / "bounded-item.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: bounded-item",
+                "display-name: Bounded Item",
+                "description: Numeric bounds.",
+                "attributes:",
+                "  quantity:",
+                "    type: integer",
+                "    required: true",
+                "    min-value: 1",
+                "    max-value: 10",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    defn = load_definition(path)
+    module = _load_module_from_source(
+        tmp_path / "bounded_item.py",
+        "gen_bounded_item",
+        emit_pydantic_module(defn),
+    )
+    module.BoundedItemCreate.model_validate({"quantity": 5})
+    with pytest.raises(ValidationError):
+        module.BoundedItemCreate.model_validate({"quantity": 0})
+    with pytest.raises(ValidationError):
+        module.BoundedItemCreate.model_validate({"quantity": 11})
+    module.BoundedItemUpdate.model_validate({"quantity": 3})
+    with pytest.raises(ValidationError):
+        module.BoundedItemUpdate.model_validate({"quantity": 99})
+    module.BoundedItemUpdate.model_validate({})
+
+    full = {
+        "id": "01901234-5678-7abc-89ab-cdef01234567",
+        "created_at": datetime(2026, 7, 18, 12, 0, tzinfo=timezone.utc),
+        "updated_at": datetime(2026, 7, 18, 12, 30, tzinfo=timezone.utc),
+        "created_by": "01901234-5678-7abc-89ab-cdef01234568",
+        "updated_by": "01901234-5678-7abc-89ab-cdef01234569",
+        "quantity": 0,
+    }
+    assert module.BoundedItem.model_validate(full).quantity == 0
+
+    meta = emit_field_meta_module([defn])
+    assert "min_value: 1" in meta
+    assert "max_value: 10" in meta
+    assert "public: false" in meta

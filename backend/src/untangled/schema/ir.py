@@ -35,7 +35,7 @@ class IndexIR:
 
 @dataclass(frozen=True, slots=True)
 class CheckIR:
-    """Check-constraint extension point; not fully exercised in the IR baseline."""
+    """Table CHECK constraint (name + SQL expression)."""
 
     name: str
     expression: str

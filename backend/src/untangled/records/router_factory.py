@@ -37,11 +37,12 @@ def build_class_router(
     """
     create_cls: type[BaseModel] = model(class_kebab, "Create")
     update_cls: type[BaseModel] = model(class_kebab, "Update")
+    definition = class_definition(class_kebab)
     router = APIRouter(prefix=prefix, tags=tags)
     enrich = surface == "v1"
     deprecated = surface == "legacy"
 
-    if surface == "legacy":
+    if surface == "legacy" and not definition.suppress_create:
 
         @router.post("", status_code=status.HTTP_201_CREATED)
         def create_record(
@@ -74,65 +75,67 @@ def build_class_router(
         )
     )
 
-    @router.post(
-        "/search",
-        response_model=search_response_model,
-        summary=search_summary,
-        description=search_description,
-        deprecated=search_deprecated,
-        operation_id=f"{class_kebab.replace('-', '_')}_{surface}_search",
-    )
-    def search_records(
-        body: SearchRequest,
-        conn: DbConn,
-        user: Annotated[
-            dict[str, Any], Depends(require_class_operation(class_kebab, "read"))
-        ],
-    ) -> SearchResponse | V1SearchResponse:
-        store = record_store(conn, class_kebab, actor_id=user["id"])
-        sort_keys = (
-            [
-                (
-                    spec.attribute,
-                    "asc" if spec.direction is None else spec.direction,
-                )
-                for spec in body.sort
-            ]
-            if body.sort is not None
-            else None
+    if not definition.suppress_search:
+
+        @router.post(
+            "/search",
+            response_model=search_response_model,
+            summary=search_summary,
+            description=search_description,
+            deprecated=search_deprecated,
+            operation_id=f"{class_kebab.replace('-', '_')}_{surface}_search",
         )
-        try:
-            result = store.search(
-                predicate=body.predicate,
-                sort=sort_keys,
-                attributes=body.attributes,
-                limit=body.limit,
-                offset=body.offset,
-                enrich_fk_identity=enrich,
+        def search_records(
+            body: SearchRequest,
+            conn: DbConn,
+            user: Annotated[
+                dict[str, Any], Depends(require_class_operation(class_kebab, "read"))
+            ],
+        ) -> SearchResponse | V1SearchResponse:
+            store = record_store(conn, class_kebab, actor_id=user["id"])
+            sort_keys = (
+                [
+                    (
+                        spec.attribute,
+                        "asc" if spec.direction is None else spec.direction,
+                    )
+                    for spec in body.sort
+                ]
+                if body.sort is not None
+                else None
             )
-        except SearchStructuralError as exc:
-            # Structural taxonomy aligned with request_validation (issue #56).
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except SearchValidationError as exc:
-            # Semantic/value/domain failures (limit/offset range, unknown
-            # attribute/op, invalid typed values, nesting guardrails, …).
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=str(exc),
-            ) from exc
-        items = (
-            serialize_v1_search_items(result.items) if enrich else result.items
-        )
-        response_cls = V1SearchResponse if enrich else SearchResponse
-        return response_cls(
-            items=items,
-            limit=result.limit,
-            offset=result.offset,
-            total=result.total,
-        )
+            try:
+                result = store.search(
+                    predicate=body.predicate,
+                    sort=sort_keys,
+                    attributes=body.attributes,
+                    limit=body.limit,
+                    offset=body.offset,
+                    enrich_fk_identity=enrich,
+                )
+            except SearchStructuralError as exc:
+                # Structural taxonomy aligned with request_validation (issue #56).
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(exc),
+                ) from exc
+            except SearchValidationError as exc:
+                # Semantic/value/domain failures (limit/offset range, unknown
+                # attribute/op, invalid typed values, nesting guardrails, …).
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=str(exc),
+                ) from exc
+            items = (
+                serialize_v1_search_items(result.items) if enrich else result.items
+            )
+            response_cls = V1SearchResponse if enrich else SearchResponse
+            return response_cls(
+                items=items,
+                limit=result.limit,
+                offset=result.offset,
+                total=result.total,
+            )
 
     fetch_summary = (
         "Fetch one record (legacy scalar FK responses)"
@@ -196,22 +199,25 @@ def build_class_router(
                     detail=f"{class_kebab} not found",
                 ) from exc
 
-        @router.delete("/{locator}", status_code=status.HTTP_204_NO_CONTENT)
-        def delete_record(
-            locator: str,
-            conn: DbConn,
-            user: Annotated[
-                dict[str, Any], Depends(require_class_operation(class_kebab, "delete"))
-            ],
-        ) -> Response:
-            definition = class_definition(class_kebab)
-            store = record_store(conn, class_kebab, actor_id=user["id"])
-            existing = fetch_by_locator(store, definition, locator)
-            if not store.delete(existing.id):
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"{class_kebab} not found",
-                )
-            return Response(status_code=status.HTTP_204_NO_CONTENT)
+        if not definition.suppress_delete:
+
+            @router.delete("/{locator}", status_code=status.HTTP_204_NO_CONTENT)
+            def delete_record(
+                locator: str,
+                conn: DbConn,
+                user: Annotated[
+                    dict[str, Any],
+                    Depends(require_class_operation(class_kebab, "delete")),
+                ],
+            ) -> Response:
+                record_def = class_definition(class_kebab)
+                store = record_store(conn, class_kebab, actor_id=user["id"])
+                existing = fetch_by_locator(store, record_def, locator)
+                if not store.delete(existing.id):
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"{class_kebab} not found",
+                    )
+                return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router

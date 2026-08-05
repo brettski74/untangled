@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 
 from untangled.mapping.definition import AttributeDefinition, ClassDefinition
@@ -19,7 +20,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, PlainSerializer, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer, field_validator
 
 from untangled.mapping.datetime_utc import format_utc_iso_z, require_utc_seconds
 
@@ -83,7 +84,7 @@ def _emit_full_model(definition: ClassDefinition, class_name: str) -> list[str]:
         lines.append(f"    {field.name}: {py_type}  # {field.description}")
 
     for attr in definition.attributes:
-        lines.append(f"    {_field_line(attr)}")
+        lines.append(f"    {_field_line(attr, constrained=False)}")
 
     lines.extend(_datetime_validator(definition, include_system=True))
     return lines
@@ -111,8 +112,7 @@ def _emit_write_model(
 
     for attr in writable:
         if variant == "Update":
-            py_type = _PYDANTIC_TYPE[attr.type_name]
-            lines.append(f"    {attr.name_snake}: {py_type} | None = None")
+            lines.append(f"    {_field_line(attr, optional=True)}")
         else:
             lines.append(f"    {_field_line(attr)}")
 
@@ -148,11 +148,38 @@ def _datetime_validator(definition: ClassDefinition, *, include_system: bool) ->
     return lines
 
 
-def _field_line(attr: AttributeDefinition) -> str:
+def _field_constraints(attr: AttributeDefinition) -> str:
+    parts: list[str] = []
+    if attr.min_value is not None:
+        parts.append(f"ge={_literal(attr.min_value)}")
+    if attr.max_value is not None:
+        parts.append(f"le={_literal(attr.max_value)}")
+    return ", ".join(parts)
+
+
+def _literal(value: object) -> str:
+    if isinstance(value, Decimal):
+        return f'Decimal("{format(value, "f")}")'
+    return repr(value)
+
+
+def _field_line(
+    attr: AttributeDefinition,
+    *,
+    optional: bool = False,
+    constrained: bool = True,
+) -> str:
     py_type = _PYDANTIC_TYPE[attr.type_name]
-    if attr.required:
-        return f"{attr.name_snake}: {py_type}"
-    return f"{attr.name_snake}: {py_type} | None = None"
+    constraints = _field_constraints(attr) if constrained else ""
+    if optional or not attr.required:
+        if constraints:
+            return (
+                f"{attr.name_snake}: {py_type} | None = Field(default=None, {constraints})"
+            )
+        return f"{attr.name_snake}: {py_type} | None = None"
+    if constraints:
+        return f"{attr.name_snake}: {py_type} = Field({constraints})"
+    return f"{attr.name_snake}: {py_type}"
 
 
 def _python_class_docstring(definition: ClassDefinition) -> list[str]:

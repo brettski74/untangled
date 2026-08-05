@@ -18,6 +18,7 @@ from untangled.mapping.types import (
     SUPPORTED_TYPES,
     TEXT_STORAGE_FAMILY,
 )
+from untangled.mapping.well_known import SubstitutionError, substitute
 
 
 class DefinitionError(ValueError):
@@ -54,6 +55,8 @@ class AttributeDefinition:
     unique: bool = False
     # Create-form UX default (JSON-serializable scalar); not a DB column DEFAULT.
     create_default: str | int | float | bool | None = None
+    min_value: int | float | Decimal | None = None
+    max_value: int | float | Decimal | None = None
     # friendly-id only:
     prefix: str | None = None
     pad_width: int = DEFAULT_FRIENDLY_ID_PAD_WIDTH
@@ -72,6 +75,12 @@ class ClassDefinition:
     source_path: Path
     # Class-scoped display identity attribute (exact compact-text), or None.
     display_attribute: AttributeDefinition | None = None
+    public: bool = False
+    suppress_create: bool = False
+    suppress_delete: bool = False
+    suppress_search: bool = False
+    # Resolved SQL check expressions (``${…}`` already substituted).
+    check_constraints: tuple[str, ...] = ()
 
     def friendly_id_attr(self) -> AttributeDefinition | None:
         """Return the sole friendly-id attribute, if any."""
@@ -221,6 +230,11 @@ def load_definition(path: Path) -> ClassDefinition:
                 path, attr_kebab, type_name, spec.get("create-default")
             )
 
+        min_value: int | float | Decimal | None = None
+        max_value: int | float | Decimal | None = None
+        if "min-value" in spec or "max-value" in spec:
+            min_value, max_value = _parse_min_max(path, attr_kebab, type_name, spec)
+
         prefix: str | None = None
         pad_width = DEFAULT_FRIENDLY_ID_PAD_WIDTH
         start_at: int | None = None
@@ -286,7 +300,15 @@ def load_definition(path: Path) -> ClassDefinition:
                     f"{path}: attribute '{attr_kebab}' has friendly-id-only keys "
                     f"(prefix/pad-width/start-at) but type is {type_name!r}"
                 )
-            allowed = {"type", "required", "references", "unique", "create-default"}
+            allowed = {
+                "type",
+                "required",
+                "references",
+                "unique",
+                "create-default",
+                "min-value",
+                "max-value",
+            }
 
         unknown = set(spec) - allowed
         if unknown:
@@ -303,6 +325,8 @@ def load_definition(path: Path) -> ClassDefinition:
                 references=references,
                 unique=unique,
                 create_default=create_default,
+                min_value=min_value,
+                max_value=max_value,
                 prefix=prefix,
                 pad_width=pad_width,
                 start_at=start_at,
@@ -315,6 +339,11 @@ def load_definition(path: Path) -> ClassDefinition:
         "description",
         "attributes",
         "display-attribute",
+        "public",
+        "suppress-create",
+        "suppress-delete",
+        "suppress-search",
+        "check-constraint",
     }
     if unknown_top:
         raise DefinitionError(f"{path}: unknown top-level keys: {sorted(unknown_top)}")
@@ -322,6 +351,11 @@ def load_definition(path: Path) -> ClassDefinition:
     display_attribute = _resolve_display_attribute(
         path, name, attributes, raw.get("display-attribute", _DISPLAY_ATTRIBUTE_OMITTED)
     )
+    public = _parse_optional_bool(path, "public", raw)
+    suppress_create = _parse_optional_bool(path, "suppress-create", raw)
+    suppress_delete = _parse_optional_bool(path, "suppress-delete", raw)
+    suppress_search = _parse_optional_bool(path, "suppress-search", raw)
+    check_constraints = _parse_check_constraints(path, raw)
 
     return ClassDefinition(
         name_kebab=name,
@@ -331,6 +365,11 @@ def load_definition(path: Path) -> ClassDefinition:
         attributes=tuple(attributes),
         source_path=path,
         display_attribute=display_attribute,
+        public=public,
+        suppress_create=suppress_create,
+        suppress_delete=suppress_delete,
+        suppress_search=suppress_search,
+        check_constraints=check_constraints,
     )
 
 
@@ -414,6 +453,100 @@ def _validate_friendly_id_prefixes(definitions: list[ClassDefinition]) -> None:
                     f"case-insensitive)"
                 )
             seen[key] = (defn.source_path, attr.prefix)
+
+
+def _parse_optional_bool(path: Path, key: str, raw: dict[object, object]) -> bool:
+    if key not in raw:
+        return False
+    value = raw[key]
+    if not isinstance(value, bool):
+        raise DefinitionError(f"{path}: '{key}' must be a boolean")
+    return value
+
+
+def _parse_check_constraints(path: Path, raw: dict[object, object]) -> tuple[str, ...]:
+    if "check-constraint" not in raw:
+        return ()
+    value = raw["check-constraint"]
+    expressions: list[str]
+    if isinstance(value, str):
+        expressions = [value]
+    elif isinstance(value, list):
+        expressions = list(value)
+    else:
+        raise DefinitionError(
+            f"{path}: 'check-constraint' must be a string or a list of strings"
+        )
+    if not expressions:
+        raise DefinitionError(f"{path}: 'check-constraint' must not be empty")
+    resolved: list[str] = []
+    for index, expr in enumerate(expressions, start=1):
+        if not isinstance(expr, str) or not expr.strip():
+            raise DefinitionError(
+                f"{path}: 'check-constraint' entry {index} must be a non-empty string"
+            )
+        try:
+            resolved.append(substitute(expr.strip(), "check-constraint"))
+        except SubstitutionError as exc:
+            raise DefinitionError(f"{path}: {exc}") from exc
+    return tuple(resolved)
+
+
+_NUMERIC_BOUND_TYPES = frozenset({"integer", "float", "decimal"})
+
+
+def _parse_min_max(
+    path: Path,
+    attr_kebab: str,
+    type_name: str,
+    spec: dict[object, object],
+) -> tuple[int | float | Decimal | None, int | float | Decimal | None]:
+    if type_name not in _NUMERIC_BOUND_TYPES:
+        raise DefinitionError(
+            f"{path}: attribute '{attr_kebab}' min-value/max-value are only valid "
+            f"for integer, float, or decimal (got {type_name!r})"
+        )
+    min_value = (
+        _parse_numeric_bound(path, attr_kebab, type_name, "min-value", spec["min-value"])
+        if "min-value" in spec
+        else None
+    )
+    max_value = (
+        _parse_numeric_bound(path, attr_kebab, type_name, "max-value", spec["max-value"])
+        if "max-value" in spec
+        else None
+    )
+    if min_value is not None and max_value is not None and min_value > max_value:
+        raise DefinitionError(
+            f"{path}: attribute '{attr_kebab}' min-value must be <= max-value"
+        )
+    return min_value, max_value
+
+
+def _parse_numeric_bound(
+    path: Path,
+    attr_kebab: str,
+    type_name: str,
+    key: str,
+    raw: object,
+) -> int | float | Decimal:
+    label = f"{path}: attribute '{attr_kebab}'.{key}"
+    if raw is None:
+        raise DefinitionError(f"{label} must not be null; omit the key instead")
+    if type_name == "integer":
+        if not isinstance(raw, int) or isinstance(raw, bool):
+            raise DefinitionError(f"{label} must be an integer")
+        return raw
+    if type_name == "float":
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise DefinitionError(f"{label} must be a number")
+        return float(raw)
+    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+        raise DefinitionError(f"{label} must be a decimal string or number")
+    try:
+        return Decimal(str(raw))
+    except (InvalidOperation, ValueError) as exc:
+        raise DefinitionError(f"{label} is not a valid decimal") from exc
 
 
 def _parse_create_default(
