@@ -12,10 +12,10 @@ from psycopg import Connection
 from pydantic import BaseModel
 
 import untangled
+from untangled.mapping import registry as class_registry
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.generate import generate_models
 from untangled.mapping.naming import snake_to_pascal
-from untangled.mapping import registry as class_registry
 from untangled.persistence.store import RecordStore
 from untangled.records.locator import classify_locator
 
