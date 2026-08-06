@@ -11,7 +11,9 @@ from psycopg import Connection, sql
 
 from untangled.main import app
 from untangled.mapping.definition import load_definition
+from untangled.mapping.registry import class_definition
 from untangled.mapping.well_known import SYSTEM_CONFIG_ID, SYSTEM_USER_ID
+from untangled.records.deps import model
 from untangled.schema.migrate import migrate
 from untangled.seed.users import SEED_USERS, password_for
 from untangled.system_config import (
@@ -22,8 +24,6 @@ from untangled.system_config import (
     get_system_config,
     load_system_config,
 )
-from untangled.mapping.registry import class_definition
-from untangled.records.deps import model
 from untangled.system_config.helpers import clamp_system_config
 
 
@@ -168,8 +168,9 @@ def test_check_constraint_rejects_extra_system_config_id(
     db_conn: Connection,
 ) -> None:
     assert demo_schema
-    from untangled.persistence.ids import new_uuid7
     from datetime import datetime, timezone
+
+    from untangled.persistence.ids import new_uuid7
 
     now = datetime.now(timezone.utc)
     other_id = new_uuid7()
