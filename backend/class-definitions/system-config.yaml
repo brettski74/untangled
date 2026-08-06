@@ -1,0 +1,45 @@
+# System Configuration — environment-local, non-sensitive runtime parameters.
+# Future class tier: system (#116). Tier field not invented here.
+name: system-config
+display-name: System Configuration
+description: >
+  Singleton holding general system settings operators may tune per deployment
+  without a Git promote cycle. Safe for authenticated read (public: true).
+  Search-limit attributes are the initial contents; the class is expected to
+  grow. Secrets must not live here.
+public: true
+suppress-create: true
+suppress-delete: true
+suppress-search: true
+check-constraint: "id = '${system-config-id}'::uuid"
+attributes:
+  max-search-nesting-depth:
+    type: integer
+    required: true
+    create-default: 3
+    min-value: 1
+    max-value: 10
+  max-search-nesting-length:
+    type: integer
+    required: true
+    create-default: 20
+    min-value: 1
+    max-value: 100
+  max-search-total-predicates:
+    type: integer
+    required: true
+    create-default: 50
+    min-value: 1
+    max-value: 500
+  max-search-total-regexp:
+    type: integer
+    required: true
+    create-default: 3
+    min-value: 0
+    max-value: 20
+  system-config-cache-ttl-seconds:
+    type: integer
+    required: true
+    create-default: 900
+    min-value: 1
+    max-value: 86400

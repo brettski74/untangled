@@ -26,6 +26,7 @@ def test_load_demo_item(repo_definitions: Path) -> None:
         "refresh-token",
         "role",
         "role-permission",
+        "system-config",
         "user",
         "user-role",
     }

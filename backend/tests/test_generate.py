@@ -65,6 +65,7 @@ def test_generate_demo_pydantic_accepts_and_rejects(
         "refresh_token",
         "role",
         "role_permission",
+        "system_config",
         "user",
         "user_role",
     }

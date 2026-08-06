@@ -318,7 +318,9 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 | `max-search-nesting-depth` | 3 | Root at depth 1; children of logical nodes increment depth. Exceed → **422**. |
 | `max-search-nesting-length` | 50 | Max children in any one `predicates` array. Exceed → **422**. |
 
-Configurable system parameters for these limits are deferred.
+These remain hard-coded in the search API for now. The `system-config` singleton
+already stores live defaults (nesting-length **20**, plus total-predicate and
+total-regexp caps); wiring search validation to those helpers is #157.
 
 Search client-input failures: container shape, unexpected keys, missing required fields/children, and JSON parse failures → **400**; values, ranges, enums, typed-field mismatches, and domain rules → **422**. Framework (FastAPI/Pydantic) validation is reclassified at the app level using the same taxonomy.
 
@@ -353,7 +355,7 @@ Well-known catalog ids:
 
 | Name | UUID | Constant | Notes |
 | ---- | ---- | -------- | ----- |
-| `${system-config-id}` | `01900000-0000-7000-8000-000000000050` | `SYSTEM_CONFIG_ID` | Singleton row comes in a later ticket |
+| `${system-config-id}` | `01900000-0000-7000-8000-000000000050` | `SYSTEM_CONFIG_ID` | Singleton row; migrate insert-once; `public` authenticated fetch; update = admin among seed roles |
 | `${system-user-id}` | `01900000-0000-7000-8000-000000000006` | `SYSTEM_USER_ID` | Platform attribution principal (`system`); migrate inserts it; **cannot log in**; not a seed login user |
 
 Six incident rows and fourteen change-request rows are seeded; full stable UUID constants live in `backend/src/untangled/seed/tickets.py`.

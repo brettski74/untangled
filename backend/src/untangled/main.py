@@ -12,6 +12,8 @@ from untangled.records import (
     change_requests_v1_router,
     incidents_router,
     incidents_v1_router,
+    system_configs_router,
+    system_configs_v1_router,
 )
 from untangled.request_validation import register_request_validation_handlers
 
@@ -19,10 +21,11 @@ app = FastAPI(
     title="Untangled ITSM",
     description=(
         "Backend API for Milestone 1. Public domain read contracts that change "
-        "use path versions under /api/v{major}. Unversioned /incidents and "
-        "/change-requests fetch/search routes are pre-versioning legacy "
-        "compatibility surfaces (removal tracked by GitHub issue #117). "
-        "Create/update/delete remain unversioned until deliberately versioned."
+        "use path versions under /api/v{major}. Unversioned /incidents, "
+        "/change-requests, and /system-configs fetch/search routes are "
+        "pre-versioning legacy compatibility surfaces (removal tracked by "
+        "GitHub issue #117). Create/update/delete remain unversioned until "
+        "deliberately versioned."
     ),
     version="0.1.0",
 )
@@ -30,8 +33,10 @@ register_request_validation_handlers(app)
 app.include_router(auth_router)
 app.include_router(incidents_router)
 app.include_router(change_requests_router)
+app.include_router(system_configs_router)
 app.include_router(incidents_v1_router)
 app.include_router(change_requests_v1_router)
+app.include_router(system_configs_v1_router)
 
 
 @app.get("/health")

@@ -358,6 +358,7 @@ AI agents must:
 * never use raw git commands for operations covered by the git-ai skill and its scripts
 * always use git-ai scripts when they provide what is needed
 * never chain gi-ai scripts with other commands
+* Before claiming Python work done (implement or verify), ensure `ruff` import order is clean (`I001`): CI runs `backend-lint` via `make test-ci`, and `make test` alone does not. Sorted imports make missing/duplicate imports easier to spot; run `ruff check` (or `ruff check --fix`) on touched backend paths rather than discovering failures only at end-of-verify merge readiness.
 
 ### 6.1 Architecture intent store
 

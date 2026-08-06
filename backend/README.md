@@ -20,8 +20,11 @@ See [docs/class-definitions.md](../docs/class-definitions.md) and
 Audit stamps on non-HTTP paths use `SYSTEM_USER_ID` (the platform attribution
 principal, username `system`). It cannot log in and has no roles. Migrate always
 ensures that row (including no-op schema plans) and upserts it before audit FKs.
-`make seed` still sets local login passwords for demo users. HTTP handlers should
-use the current-user dependency when domain writes land.
+Migrate also insert-once ensures the `system-config` singleton (same principal;
+never clobbers operator updates). `make seed` still sets local login passwords
+for demo users. HTTP handlers should use the current-user dependency when domain
+writes land. In-process `system-config` reads use `untangled.system_config`
+(fail closed + clamp; TTL cache; see class-definitions docs).
 
 ## Schema migrate
 

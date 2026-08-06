@@ -25,6 +25,7 @@ from untangled.schema.versions import (
     restore_point_name_for,
 )
 from untangled.seed import upsert_system_user
+from untangled.system_config.bootstrap import ensure_system_config_row
 
 ProgressFn = Callable[[str], None]
 
@@ -84,6 +85,8 @@ def migrate(
         log("migrate: no changes (no-op)")
         log("migrate: ensure system user (platform attribution principal)")
         upsert_system_user(conn)
+        log("migrate: ensure system-config singleton")
+        ensure_system_config_row(conn)
         conn.commit()
         return MigrateResult(
             definitions=tuple(definitions),
@@ -122,6 +125,8 @@ def migrate(
             conn.execute(compile_op(op))
         log("migrate: ensure system user (platform attribution principal)")
         upsert_system_user(conn)
+        log("migrate: ensure system-config singleton")
+        ensure_system_config_row(conn)
         record_schema_version(
             conn,
             version_id=version_id,
