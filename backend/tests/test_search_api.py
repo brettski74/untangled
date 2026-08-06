@@ -609,23 +609,62 @@ def test_search_unauthenticated_401(tickets_client: TestClient) -> None:
 
 
 def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> None:
+    # Depth: seeded max_search_nesting_depth = 3 (root depth 1).
     deep = {"op": "eq", "attribute": "status", "value": "new"}
     for _ in range(3):
         deep = {"op": "not", "predicate": deep}
     # depth: root=1, three nots → depth 4 at leaf → exceed max 3
     deep = {"op": "not", "predicate": deep}
-    assert _search(tickets_client, "/incidents/search", {"predicate": deep}).status_code == 422
+    deep_resp = _search(tickets_client, "/incidents/search", {"predicate": deep})
+    assert deep_resp.status_code == 422
+    assert "max_search_nesting_depth" in deep_resp.json()["detail"]
 
+    # Length: seeded max_search_nesting_length = 20 (was hard-coded 50).
     too_wide = {
         "op": "and",
         "predicates": [
-            {"op": "eq", "attribute": "status", "value": "new"} for _ in range(51)
+            {"op": "eq", "attribute": "status", "value": "new"} for _ in range(21)
         ],
     }
-    assert (
-        _search(tickets_client, "/incidents/search", {"predicate": too_wide}).status_code
-        == 422
+    wide_resp = _search(tickets_client, "/incidents/search", {"predicate": too_wide})
+    assert wide_resp.status_code == 422
+    assert "max_search_nesting_length" in wide_resp.json()["detail"]
+
+    # Total predicates: seeded max_search_total_predicates = 50.
+    # Stay within length (20) and depth (3): or of 17 ands × 3 eqs → 69 nodes.
+    too_many = {
+        "op": "or",
+        "predicates": [
+            {
+                "op": "and",
+                "predicates": [
+                    {"op": "eq", "attribute": "status", "value": "new"},
+                    {"op": "eq", "attribute": "status", "value": "new"},
+                    {"op": "eq", "attribute": "status", "value": "new"},
+                ],
+            }
+            for _ in range(17)
+        ],
+    }
+    many_resp = _search(tickets_client, "/incidents/search", {"predicate": too_many})
+    assert many_resp.status_code == 422
+    assert "max_search_total_predicates" in many_resp.json()["detail"]
+
+    # Total regexp: seeded max_search_total_regexp = 3.
+    too_regexp = {
+        "op": "or",
+        "predicates": [
+            {"op": "regexp", "attribute": "summary", "value": "a"},
+            {"op": "regexp", "attribute": "summary", "value": "b"},
+            {"op": "regexp", "attribute": "summary", "value": "c"},
+            {"op": "regexp", "attribute": "summary", "value": "d"},
+        ],
+    }
+    regexp_resp = _search(
+        tickets_client, "/incidents/search", {"predicate": too_regexp}
     )
+    assert regexp_resp.status_code == 422
+    assert "max_search_total_regexp" in regexp_resp.json()["detail"]
 
     # Search compiler semantic/value failures → 422.
     semantic_cases = [
@@ -677,3 +716,22 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         {"limit": "twenty"},
     )
     assert bad_limit_type.status_code == 422, bad_limit_type.text
+
+
+def test_search_unreadable_system_config_503(
+    tickets_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from untangled.system_config import SystemConfigUnreadableError
+
+    def _boom(_conn, *, cache=None):
+        raise SystemConfigUnreadableError("system-config singleton could not be read")
+
+    monkeypatch.setattr(
+        "untangled.records.router_factory.get_system_config",
+        _boom,
+    )
+    response = _search(tickets_client, "/incidents/search", {})
+    assert response.status_code == 503, response.text
+    detail = response.json()["detail"].lower()
+    assert "system configuration" in detail
+    assert "search cannot run" in detail

@@ -23,9 +23,6 @@ from untangled.persistence.fk_enrichment import (
     qualify_source_column,
 )
 
-# Hard-coded M1 guardrails (not system-configurable yet).
-MAX_SEARCH_NESTING_DEPTH = 3
-MAX_SEARCH_NESTING_LENGTH = 50
 DEFAULT_SEARCH_LIMIT = 20
 MAX_SEARCH_LIMIT = 200
 
@@ -134,6 +131,47 @@ class SearchResult:
     total: int
 
 
+@dataclass(frozen=True, slots=True)
+class SearchNestingLimits:
+    """Search tree budgets supplied by the caller (from system-config).
+
+    Persistence enforces only; it does not load or invent these values.
+
+    Counting: every node with an ``op`` counts toward ``max_total_predicates``;
+    each ``regexp`` node also counts toward ``max_total_regexp``. Depth uses
+    root depth 1; length is children in one ``and``/``or`` ``predicates`` array.
+    """
+
+    max_depth: int
+    max_length: int
+    max_total_predicates: int
+    max_total_regexp: int
+
+
+@dataclass(slots=True)
+class _CompileBudget:
+    limits: SearchNestingLimits
+    total_predicates: int = 0
+    total_regexp: int = 0
+
+    def count_node(self, op: str) -> None:
+        self.total_predicates += 1
+        if self.total_predicates > self.limits.max_total_predicates:
+            raise SearchSemanticError(
+                "predicate tree exceeds maximum of "
+                f"{self.limits.max_total_predicates} total predicates "
+                f"(max_search_total_predicates)"
+            )
+        if op == "regexp":
+            self.total_regexp += 1
+            if self.total_regexp > self.limits.max_total_regexp:
+                raise SearchSemanticError(
+                    "predicate tree exceeds maximum of "
+                    f"{self.limits.max_total_regexp} regexp predicates "
+                    f"(max_search_total_regexp)"
+                )
+
+
 def searchable_attributes(definition: ClassDefinition) -> dict[str, SearchableAttribute]:
     """All mapped attributes for a class, including injected system fields."""
     attrs: dict[str, SearchableAttribute] = {
@@ -149,6 +187,7 @@ def execute_search(
     conn: Connection,
     definition: ClassDefinition,
     *,
+    limits: SearchNestingLimits,
     predicate: dict[str, Any] | None = None,
     sort: list[tuple[str, SortDirection]] | None = None,
     attributes: list[str] | None = None,
@@ -159,7 +198,8 @@ def execute_search(
 ) -> SearchResult:
     """Validate request, run COUNT + SELECT, return projected items.
 
-    When ``enrich_fk_identity`` is true, the SELECT uses bounded LEFT JOINs for
+    ``limits`` are required (caller loads from system-config). When
+    ``enrich_fk_identity`` is true, the SELECT uses bounded LEFT JOINs for
     projected FK fields and items may contain ``RelatedIdentity`` values.
     COUNT remains unjoined. Predicates and sorts still use source columns.
     """
@@ -171,7 +211,7 @@ def execute_search(
 
     # COUNT never joins; compile an unqualified WHERE for it.
     count_where, count_params = _compile_predicate_root(
-        predicate, attrs, qualify_source=False
+        predicate, attrs, limits=limits, qualify_source=False
     )
     table = sql.Identifier(definition.name_snake)
     count_query = sql.SQL("SELECT COUNT(*) FROM {} WHERE {}").format(
@@ -179,7 +219,7 @@ def execute_search(
     )
 
     select_where, select_params_base = _compile_predicate_root(
-        predicate, attrs, qualify_source=enrich_fk_identity
+        predicate, attrs, limits=limits, qualify_source=enrich_fk_identity
     )
 
     if enrich_fk_identity:
@@ -330,6 +370,7 @@ def _compile_predicate_root(
     predicate: dict[str, Any] | None,
     attrs: dict[str, SearchableAttribute],
     *,
+    limits: SearchNestingLimits,
     qualify_source: bool = False,
 ) -> tuple[sql.Composable, list[Any]]:
     if predicate is None:
@@ -337,8 +378,14 @@ def _compile_predicate_root(
     if not isinstance(predicate, dict):
         raise SearchStructuralError("predicate must be an object or null")
     params: list[Any] = []
+    budget = _CompileBudget(limits=limits)
     compiled = _compile_predicate(
-        predicate, attrs, depth=1, params=params, qualify_source=qualify_source
+        predicate,
+        attrs,
+        depth=1,
+        params=params,
+        budget=budget,
+        qualify_source=qualify_source,
     )
     return compiled, params
 
@@ -349,11 +396,13 @@ def _compile_predicate(
     *,
     depth: int,
     params: list[Any],
+    budget: _CompileBudget,
     qualify_source: bool,
 ) -> sql.Composable:
-    if depth > MAX_SEARCH_NESTING_DEPTH:
+    if depth > budget.limits.max_depth:
         raise SearchSemanticError(
-            f"predicate nesting depth exceeds maximum of {MAX_SEARCH_NESTING_DEPTH}"
+            "predicate nesting depth exceeds maximum of "
+            f"{budget.limits.max_depth} (max_search_nesting_depth)"
         )
     if not isinstance(node, dict):
         raise SearchStructuralError("each predicate node must be an object")
@@ -365,13 +414,26 @@ def _compile_predicate(
     if op not in IMPLEMENTED_OPS:
         raise SearchSemanticError(f"unknown operator: {op!r}")
 
+    budget.count_node(op)
+
     if op in {"and", "or"}:
         return _compile_logical_list(
-            op, node, attrs, depth=depth, params=params, qualify_source=qualify_source
+            op,
+            node,
+            attrs,
+            depth=depth,
+            params=params,
+            budget=budget,
+            qualify_source=qualify_source,
         )
     if op == "not":
         return _compile_not(
-            node, attrs, depth=depth, params=params, qualify_source=qualify_source
+            node,
+            attrs,
+            depth=depth,
+            params=params,
+            budget=budget,
+            qualify_source=qualify_source,
         )
     if op in _VALUE_OPS:
         return _compile_comparison(
@@ -409,6 +471,7 @@ def _compile_logical_list(
     *,
     depth: int,
     params: list[Any],
+    budget: _CompileBudget,
     qualify_source: bool,
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "predicates"})
@@ -423,14 +486,20 @@ def _compile_logical_list(
         raise SearchStructuralError(
             f"{op!r} requires a non-empty 'predicates' array"
         )
-    if len(children) > MAX_SEARCH_NESTING_LENGTH:
+    if len(children) > budget.limits.max_length:
         raise SearchSemanticError(
             f"{op!r} 'predicates' length exceeds maximum of "
-            f"{MAX_SEARCH_NESTING_LENGTH} (got {len(children)})"
+            f"{budget.limits.max_length} (max_search_nesting_length; "
+            f"got {len(children)})"
         )
     parts = [
         _compile_predicate(
-            child, attrs, depth=depth + 1, params=params, qualify_source=qualify_source
+            child,
+            attrs,
+            depth=depth + 1,
+            params=params,
+            budget=budget,
+            qualify_source=qualify_source,
         )
         for child in children
     ]
@@ -444,6 +513,7 @@ def _compile_not(
     *,
     depth: int,
     params: list[Any],
+    budget: _CompileBudget,
     qualify_source: bool,
 ) -> sql.Composable:
     _unexpected_keys(node, {"op", "predicate"})
@@ -454,6 +524,7 @@ def _compile_not(
         attrs,
         depth=depth + 1,
         params=params,
+        budget=budget,
         qualify_source=qualify_source,
     )
     return sql.SQL("NOT ({})").format(child)

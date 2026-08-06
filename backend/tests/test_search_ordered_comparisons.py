@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 from psycopg import sql
@@ -12,11 +13,24 @@ from psycopg import sql
 from untangled.mapping.definition import load_definition
 from untangled.persistence.search import (
     SearchableAttribute,
+    SearchNestingLimits,
     SearchSemanticError,
     SearchStructuralError,
     _compile_predicate_root,
     searchable_attributes,
 )
+
+# Seeded system-config defaults — explicit for unit compiles (no DB).
+_LIMITS = SearchNestingLimits(
+    max_depth=3,
+    max_length=20,
+    max_total_predicates=50,
+    max_total_regexp=3,
+)
+
+
+def _compile(predicate: dict[str, Any] | None, attrs: dict[str, SearchableAttribute]):
+    return _compile_predicate_root(predicate, attrs, limits=_LIMITS)
 
 
 @pytest.fixture
@@ -52,7 +66,7 @@ def test_ordered_ops_compile_on_applicable_types(
     ]
     for attrs, attribute, value in cases:
         for op in ("gt", "gte", "lt", "lte"):
-            _where, params = _compile_predicate_root(
+            _where, params = _compile(
                 {"op": op, "attribute": attribute, "value": value},
                 attrs,
             )
@@ -66,9 +80,9 @@ def test_ordered_ops_accept_numeric_and_decimal_via_type_gate() -> None:
         "rate": SearchableAttribute("rate", "float"),
         "amount": SearchableAttribute("amount", "decimal"),
     }
-    _compile_predicate_root({"op": "gt", "attribute": "qty", "value": 1}, attrs)
-    _compile_predicate_root({"op": "gte", "attribute": "rate", "value": 1.5}, attrs)
-    _where, params = _compile_predicate_root(
+    _compile({"op": "gt", "attribute": "qty", "value": 1}, attrs)
+    _compile({"op": "gte", "attribute": "rate", "value": 1.5}, attrs)
+    _where, params = _compile(
         {"op": "lt", "attribute": "amount", "value": "10.50"},
         attrs,
     )
@@ -78,7 +92,7 @@ def test_ordered_ops_accept_numeric_and_decimal_via_type_gate() -> None:
 def test_text_ordered_ops_emit_collate_c(
     incident_attrs: dict[str, SearchableAttribute],
 ) -> None:
-    where, _params = _compile_predicate_root(
+    where, _params = _compile(
         {"op": "gt", "attribute": "summary", "value": "a"},
         incident_attrs,
     )
@@ -86,7 +100,7 @@ def test_text_ordered_ops_emit_collate_c(
     assert 'COLLATE "C"' in rendered
     assert ">" in rendered
 
-    where_dt, _ = _compile_predicate_root(
+    where_dt, _ = _compile(
         {
             "op": "gt",
             "attribute": "created_at",
@@ -103,7 +117,7 @@ def test_ordered_ops_type_rejection(
     for attribute in ("id", "assigned_user_id", "major_incident"):
         for op in ("gt", "gte", "lt", "lte"):
             with pytest.raises(SearchSemanticError, match="not applicable"):
-                _compile_predicate_root(
+                _compile(
                     {"op": op, "attribute": attribute, "value": "x"},
                     incident_attrs,
                 )
@@ -111,7 +125,7 @@ def test_ordered_ops_type_rejection(
     # boolean without a real column still rejected by the type gate
     attrs = {**incident_attrs, "flag": SearchableAttribute("flag", "boolean")}
     with pytest.raises(SearchSemanticError, match="not applicable"):
-        _compile_predicate_root(
+        _compile(
             {"op": "gt", "attribute": "flag", "value": True},
             attrs,
         )
@@ -121,12 +135,12 @@ def test_ordered_ops_structural_and_value_errors(
     incident_attrs: dict[str, SearchableAttribute],
 ) -> None:
     with pytest.raises(SearchStructuralError, match="requires 'value'"):
-        _compile_predicate_root(
+        _compile(
             {"op": "gt", "attribute": "summary"},
             incident_attrs,
         )
     with pytest.raises(SearchStructuralError, match="unexpected"):
-        _compile_predicate_root(
+        _compile(
             {
                 "op": "gt",
                 "attribute": "summary",
@@ -136,17 +150,17 @@ def test_ordered_ops_structural_and_value_errors(
             incident_attrs,
         )
     with pytest.raises(SearchSemanticError, match="null"):
-        _compile_predicate_root(
+        _compile(
             {"op": "gt", "attribute": "summary", "value": None},
             incident_attrs,
         )
     with pytest.raises(SearchSemanticError, match="invalid"):
-        _compile_predicate_root(
+        _compile(
             {"op": "gt", "attribute": "summary", "value": ["not", "a", "string"]},
             incident_attrs,
         )
     with pytest.raises(SearchSemanticError, match="invalid"):
-        _compile_predicate_root(
+        _compile(
             {
                 "op": "gt",
                 "attribute": "created_at",
@@ -154,3 +168,23 @@ def test_ordered_ops_structural_and_value_errors(
             },
             incident_attrs,
         )
+
+
+def test_total_predicates_limit_enforced(incident_attrs: dict[str, SearchableAttribute]) -> None:
+    tight = SearchNestingLimits(
+        max_depth=10,
+        max_length=100,
+        max_total_predicates=3,
+        max_total_regexp=3,
+    )
+    # and + two children = 3 nodes (ok); third child → 4th node exceeds.
+    tree = {
+        "op": "and",
+        "predicates": [
+            {"op": "eq", "attribute": "status", "value": "new"},
+            {"op": "eq", "attribute": "status", "value": "new"},
+            {"op": "eq", "attribute": "status", "value": "new"},
+        ],
+    }
+    with pytest.raises(SearchSemanticError, match="max_search_total_predicates"):
+        _compile_predicate_root(tree, incident_attrs, limits=tight)

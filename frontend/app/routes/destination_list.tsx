@@ -277,6 +277,7 @@ export default function DestinationListPage({
   const [warning, set_warning] = useState<string | null>(
     initial.quick_filter.warning,
   );
+  const [search_failed, set_search_failed] = useState(false);
   const [layout_notice, set_layout_notice] = useState<string | null>(null);
   const [sort, set_sort] = useState<ListSortSpec[]>([]);
   const [column_layout, set_column_layout] = useState<ColumnLayoutSession>(
@@ -312,6 +313,7 @@ export default function DestinationListPage({
     set_selected_name(synced.quick_filter.selected_name);
     set_values(synced.quick_filter.values);
     set_warning(synced.quick_filter.warning);
+    set_search_failed(false);
     set_layout_notice(null);
     set_sort([]);
     const seeded = seed_column_layout(loaderData.columns);
@@ -408,6 +410,16 @@ export default function DestinationListPage({
     if (!result.ok) {
       clamp_inflight_ref.current = false;
       set_warning(result.detail);
+      set_search_failed(true);
+      set_search((current) => ({
+        rows: [],
+        total: 0,
+        limit: current.limit,
+        offset: 0,
+        // Keep last-good applied filter — failed body must not become effective.
+        effective_predicate: current.effective_predicate,
+      }));
+      paging_ref.current = { limit: paging_ref.current.limit, offset: 0 };
       return;
     }
     // Refresh/sort (or any keep-start search) may land past the last page when
@@ -430,6 +442,7 @@ export default function DestinationListPage({
       return;
     }
     clamp_inflight_ref.current = false;
+    set_search_failed(false);
     effective_ref.current = result.effective_predicate;
     paging_ref.current = { limit: result.limit, offset: result.offset };
     set_search({
@@ -560,6 +573,7 @@ export default function DestinationListPage({
         widths={column_layout.widths}
         sort={sort}
         rows={search.rows}
+        empty_mode={search_failed ? "failed" : "match"}
         on_sort_click={on_sort_click}
         on_reorder={on_reorder}
         on_resize_commit={on_resize_commit}

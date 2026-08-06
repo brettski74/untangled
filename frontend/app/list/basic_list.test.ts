@@ -1,6 +1,24 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
+describe("basic_list empty states", () => {
+  it("distinguishes match-empty from failed-empty copy and tone", async () => {
+    const source = await readFile(
+      new URL("./basic_list.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/export type BasicListEmptyMode = "match" \| "failed"/);
+    expect(source).toMatch(/empty_mode\?: BasicListEmptyMode/);
+    expect(source).toMatch(/No records match this list\./);
+    expect(source).toMatch(
+      /This search could not be run\. Previous results were cleared\./,
+    );
+    expect(source).toMatch(/empty_mode === "failed"/);
+    expect(source).toMatch(/text-red-800/);
+    expect(source).toMatch(/role=\{failed_empty \? "alert" : undefined\}/);
+  });
+});
+
 describe("basic_list header interactions", () => {
   it("exposes grip reorder, primary-only sort icons, and resize separator", async () => {
     const source = await readFile(

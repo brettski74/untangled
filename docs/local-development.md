@@ -311,16 +311,21 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 
 `total` is the match count before limit/offset. Each item always includes `id`; other fields only if requested via `attributes`.
 
-#### Hard-coded nesting guardrails (M1)
+#### Search nesting / budget guardrails (system-config)
 
-| Constant | Value | Effect |
-| -------- | ----- | ------ |
+Limits come from the `system-config` singleton via in-process helpers (clamped to
+YAML min/max). Seeded defaults:
+
+| Attribute | Default | Effect |
+| --------- | ------- | ------ |
 | `max-search-nesting-depth` | 3 | Root at depth 1; children of logical nodes increment depth. Exceed → **422**. |
-| `max-search-nesting-length` | 50 | Max children in any one `predicates` array. Exceed → **422**. |
+| `max-search-nesting-length` | **20** | Max children in any one `predicates` array. Exceed → **422**. |
+| `max-search-total-predicates` | 50 | Max predicate nodes in the tree (every `op` node, counted recursively). Exceed → **422**. |
+| `max-search-total-regexp` | 3 | Max `regexp` predicates in the tree. Exceed → **422**. |
 
-These remain hard-coded in the search API for now. The `system-config` singleton
-already stores live defaults (nesting-length **20**, plus total-predicate and
-total-regexp caps); wiring search validation to those helpers is #157.
+Nesting-length default is **20** (stricter than the former hard-coded **50**).
+If system-config cannot be read, search refuses to run (**503**); limits are
+never invented on the search path.
 
 Search client-input failures: container shape, unexpected keys, missing required fields/children, and JSON parse failures → **400**; values, ranges, enums, typed-field mismatches, and domain rules → **422**. Framework (FastAPI/Pydantic) validation is reclassified at the app level using the same taxonomy.
 
@@ -437,7 +442,7 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
 | Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI refresh (#14); hardening #33 / security review #67 |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly-id locator | — |
-| Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not-empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); configurable nesting limits |
+| Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not-empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |

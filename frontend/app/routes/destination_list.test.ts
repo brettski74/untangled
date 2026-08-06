@@ -508,6 +508,25 @@ describe("destination_list context bar destination identity", () => {
   });
 });
 
+describe("destination_list soft search failure", () => {
+  it("clears rows on soft failure without adopting the failed predicate", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./destination_list.tsx", import.meta.url),
+      "utf8",
+    );
+    // Soft failure: warn + clear displayed results; keep last-good effective_predicate.
+    expect(source).toMatch(
+      /if \(!result\.ok\) \{[\s\S]*?set_warning\(result\.detail\)[\s\S]*?set_search_failed\(true\)[\s\S]*?set_search\(\([\s\S]*?rows: \[\][\s\S]*?total: 0[\s\S]*?offset: 0[\s\S]*?effective_predicate: current\.effective_predicate[\s\S]*?\)[\s\S]*?return;/,
+    );
+    // Success clears failed mode and replaces rows as before.
+    expect(source).toMatch(/set_search_failed\(false\)/);
+    expect(source).toMatch(/empty_mode=\{search_failed \? "failed" : "match"\}/);
+    // Destination change resets failed mode with the rest of list chrome.
+    expect(source).toMatch(/set_search_failed\(false\)/);
+  });
+});
+
 describe("destination_list header interactions", () => {
   it("wires BasicList sort, reorder, and resize callbacks", async () => {
     const { readFile } = await import("node:fs/promises");

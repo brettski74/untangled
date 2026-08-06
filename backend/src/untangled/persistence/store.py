@@ -22,7 +22,12 @@ from untangled.persistence.fk_enrichment import (
     map_enriched_row,
 )
 from untangled.persistence.ids import new_uuid7
-from untangled.persistence.search import SearchResult, SortDirection, execute_search
+from untangled.persistence.search import (
+    SearchNestingLimits,
+    SearchResult,
+    SortDirection,
+    execute_search,
+)
 
 
 class RecordStore[T: BaseModel]:
@@ -193,6 +198,7 @@ class RecordStore[T: BaseModel]:
     def search(
         self,
         *,
+        limits: SearchNestingLimits,
         predicate: Mapping[str, Any] | None = None,
         sort: list[tuple[str, SortDirection]] | None = None,
         attributes: list[str] | None = None,
@@ -205,6 +211,7 @@ class RecordStore[T: BaseModel]:
         return execute_search(
             self._conn,
             self._definition,
+            limits=limits,
             predicate=pred,
             sort=sort,
             attributes=attributes,

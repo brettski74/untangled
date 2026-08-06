@@ -268,15 +268,18 @@ numeric attributes into YAML min/max from class-definition metadata. HTTP fetch
 returns stored values as-is (out-of-bounds HTTP read policy is #151). Helpers
 cache the full object; expiry uses the clamped TTL from that object; call
 `invalidate()` to clear for a future flush broadcast (no flush bus yet —
-workers may serve stale values until TTL). Search API consumption of these
-helpers is #157. The product nav includes a top-level **System Configuration**
+workers may serve stale values until TTL). Search API validation consumes these
+helpers for the four nesting/budget attributes (depth, length, total predicates,
+total regexp): breach → **422**; unreadable config → search refuses (**503**).
+Search-editor progressive limit UX remains #152. The product nav includes a
+top-level **System Configuration**
 `section-type: object` entry with a real detail href to the singleton
 (`${system-config-id}`), visible when the user can read the class (`public` /
 `{class}:read` / `admin`). Default post-login landing remains list-oriented and
 does not treat object sections as a home route.
 
 Relevant follow-ups: #117 (legacy read removal), #139 (audit), #146 (auto-mount),
-#150 (kebab/snake), #151 (HTTP OOB reads), #152 (search-editor UX), #157,
+#150 (kebab/snake), #151 (HTTP OOB reads), #152 (search-editor UX),
 #167 (lazy FE Zod registry loading).
 
 ## Naming conventions
