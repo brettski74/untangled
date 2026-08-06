@@ -6,7 +6,11 @@ import json
 from pathlib import Path
 from uuid import UUID
 
-from untangled.mapping.well_known import WELL_KNOWN, constant_name
+from untangled.mapping.well_known import (
+    SUBSTITUTION_CONTEXTS,
+    WELL_KNOWN,
+    constant_name,
+)
 
 _PY_HEADER = '''\
 """Generated well-known constants. Do not edit by hand; run `make models`."""
@@ -17,7 +21,8 @@ from uuid import UUID
 
 _TS_HEADER = """\
 /**
- * Generated well-known constants. Do not edit by hand; run `make models`.
+ * Generated well-known constants and substitution catalog. Do not edit by hand;
+ * run `make models`.
  */
 
 """
@@ -40,12 +45,30 @@ def emit_python_well_known() -> str:
 
 
 def emit_ts_well_known() -> str:
-    """Return TypeScript source for catalog constants."""
+    """Return TypeScript source for catalog constants, map, and contexts."""
     lines = [_TS_HEADER.rstrip(), ""]
     for name in sorted(WELL_KNOWN):
         value = WELL_KNOWN[name]
         const = constant_name(name)
         lines.append(f"export const {const} = {json.dumps(value)};")
+    lines.append("")
+    lines.append(
+        "export const WELL_KNOWN: Readonly<Record<string, string>> = {"
+    )
+    for name in sorted(WELL_KNOWN):
+        const = constant_name(name)
+        lines.append(f"  {json.dumps(name)}: {const},")
+    lines.append("};")
+    lines.append("")
+    lines.append(
+        "export const SUBSTITUTION_CONTEXTS: "
+        "Readonly<Record<string, readonly string[]>> = {"
+    )
+    for context in sorted(SUBSTITUTION_CONTEXTS):
+        names = sorted(SUBSTITUTION_CONTEXTS[context])
+        names_js = ", ".join(json.dumps(n) for n in names)
+        lines.append(f"  {json.dumps(context)}: [{names_js}],")
+    lines.append("};")
     lines.append("")
     return "\n".join(lines)
 

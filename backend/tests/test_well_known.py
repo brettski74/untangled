@@ -10,8 +10,10 @@ import pytest
 from untangled.mapping.emit_well_known import emit_python_well_known, emit_ts_well_known
 from untangled.mapping.generate import generate_models
 from untangled.mapping.well_known import (
+    SUBSTITUTION_CONTEXTS,
     SYSTEM_CONFIG_ID,
     SYSTEM_USER_ID,
+    WELL_KNOWN,
     SubstitutionError,
     substitute,
 )
@@ -67,5 +69,16 @@ def test_generated_constants_match_catalog(
     assert f'SYSTEM_USER_ID = UUID("{SYSTEM_USER_ID}")' in py_src
     assert f'export const SYSTEM_CONFIG_ID = "{SYSTEM_CONFIG_ID}";' in ts_src
     assert f'export const SYSTEM_USER_ID = "{SYSTEM_USER_ID}";' in ts_src
+    for name in sorted(WELL_KNOWN):
+        assert f'  "{name}": {name.upper().replace("-", "_")},' in ts_src
+    for context in sorted(SUBSTITUTION_CONTEXTS):
+        assert f'  "{context}":' in ts_src
+        for name in sorted(SUBSTITUTION_CONTEXTS[context]):
+            assert f'"{name}"' in ts_src
+    assert '"nav-bar": ["system-config-id"]' in ts_src
     assert emit_python_well_known() == py_src
     assert emit_ts_well_known() == ts_src
+
+
+def test_substitute_nav_bar_system_config_id() -> None:
+    assert substitute("${system-config-id}", "nav-bar") == str(SYSTEM_CONFIG_ID)

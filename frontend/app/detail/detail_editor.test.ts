@@ -168,6 +168,7 @@ describe("update_schema_registry", () => {
   it("R1: known classes resolve", () => {
     expect(update_schema_for_class("incident")).not.toBeNull();
     expect(update_schema_for_class("change-request")).not.toBeNull();
+    expect(update_schema_for_class("system-config")).not.toBeNull();
   });
 
   it("R2: unknown class is observable miss", () => {

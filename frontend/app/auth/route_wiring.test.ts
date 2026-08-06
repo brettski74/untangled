@@ -85,7 +85,7 @@ describe("route wiring", () => {
       },
     });
     expect(result.data.nav?.map((s: { class_name: string }) => s.class_name)).toEqual(
-      ["change-request", "incident"],
+      ["change-request", "incident", "system-config"],
     );
     expect(result.init?.headers).toMatchObject({
       "Cache-Control": "private, no-store",

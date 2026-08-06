@@ -10,7 +10,11 @@ import {
   read_nav_prefs,
   write_nav_prefs,
 } from "./nav_prefs";
-import { open_class_for_path, option_path } from "./nav_paths";
+import {
+  object_section_path,
+  open_class_for_path,
+  option_path,
+} from "./nav_paths";
 import type { NavBarView } from "./nav_schema";
 
 export type ShellNavRailProps = {
@@ -123,10 +127,32 @@ export function ShellNavRail({ nav }: ShellNavRailProps) {
         ) : (
           <ul className="space-y-1">
             {nav.map((section) => {
+              if (section.section_type === "object") {
+                const path = object_section_path(section);
+                if (path == null) {
+                  return null;
+                }
+                return (
+                  <li key={`object:${section.class_name}:${section.id}`}>
+                    <NavLink
+                      to={path}
+                      className={({ isActive }) =>
+                        [
+                          "flex w-full items-center rounded px-2 py-1.5 text-left font-medium text-[var(--color-shell-chrome-fg)] hover:bg-white/10",
+                          isActive ? "bg-white/15" : "",
+                        ].join(" ")
+                      }
+                    >
+                      {section.display_name}
+                    </NavLink>
+                  </li>
+                );
+              }
+
               const section_id = `nav-section-${section.class_name}`;
               const expanded = open_class === section.class_name;
               return (
-                <li key={section.class_name}>
+                <li key={`class:${section.class_name}`}>
                   <button
                     type="button"
                     aria-expanded={expanded}

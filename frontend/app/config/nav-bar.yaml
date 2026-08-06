@@ -1,5 +1,6 @@
-# Default product nav-bar (M1). Only `class` section type is supported.
+# Default product nav-bar (M1). Supported section types: `class` and `object`.
 # Option identity for routes is the kebab-case display-name (renames are breaking).
+# Object sections use a real detail href; `id` may use `${…}` (resolved at nav load).
 #
 # Deferred (do not invent syntax yet):
 # - Assigned to Me / Created by Me (need bind variables)
@@ -87,3 +88,8 @@ nav-bar:
             - op: eq
               attribute: status
               value: cancelled
+
+  - display-name: System Configuration
+    section-type: object
+    class: system-config
+    id: "${system-config-id}"

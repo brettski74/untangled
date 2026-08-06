@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { SYSTEM_CONFIG_ID } from "../generated/well_known";
 import {
   filter_nav_by_permissions,
   can_create_class,
@@ -11,11 +12,16 @@ import {
   display_name_to_slug,
   find_match_for_path,
   find_list_option,
+  object_section_path,
   open_class_for_path,
   option_path,
 } from "./nav_paths";
 import { load_default_nav, reset_default_nav_cache_for_tests } from "./nav_config.server";
 import { nav_bar_document_schema, to_nav_bar_view } from "./nav_schema";
+import {
+  SubstitutionError,
+  substitute,
+} from "./well_known_substitute";
 
 const ADMIN = ["admin"];
 const READONLY = [
@@ -37,27 +43,44 @@ const READWRITE = [
 const INCIDENT_ONLY_READ = ["incident:read"];
 
 describe("default nav YAML", () => {
-  it("loads Change Requests then Incidents with expected options", () => {
+  it("loads class sections then System Configuration object", () => {
     reset_default_nav_cache_for_tests();
     const nav = load_default_nav();
     expect(nav.map((s) => s.class_name)).toEqual([
       "change-request",
       "incident",
+      "system-config",
     ]);
-    expect(nav[0]?.options.map((o) => o.display_name)).toEqual([
+    const change = nav[0];
+    const incident = nav[1];
+    const system_config = nav[2];
+    expect(change?.section_type).toBe("class");
+    expect(incident?.section_type).toBe("class");
+    expect(system_config?.section_type).toBe("object");
+    if (change?.section_type !== "class" || incident?.section_type !== "class") {
+      throw new Error("expected class sections");
+    }
+    if (system_config?.section_type !== "object") {
+      throw new Error("expected object section");
+    }
+    expect(change.options.map((o) => o.display_name)).toEqual([
       "New",
       "All",
       "Open",
       "In Progress",
       "Scheduled",
     ]);
-    expect(nav[1]?.options.map((o) => o.display_name)).toEqual([
+    expect(incident.options.map((o) => o.display_name)).toEqual([
       "New",
       "All",
       "Open",
       "Closed",
     ]);
-    const open = nav[0]?.options.find((o) => o.display_name === "Open");
+    expect(system_config.id).toBe(SYSTEM_CONFIG_ID);
+    expect(object_section_path(system_config)).toBe(
+      `/system-configs/${SYSTEM_CONFIG_ID}`,
+    );
+    const open = change.options.find((o) => o.display_name === "Open");
     expect(open?.option_type).toBe("list");
     expect(open && "predicate" in open ? open.predicate?.op : null).toBe("and");
   });
@@ -75,6 +98,44 @@ describe("default nav YAML", () => {
         ],
       }),
     ).toThrow();
+  });
+
+  it("accepts object sections via Zod", () => {
+    const parsed = nav_bar_document_schema.parse({
+      "nav-bar": [
+        {
+          "display-name": "System Configuration",
+          "section-type": "object",
+          class: "system-config",
+          id: "${system-config-id}",
+        },
+      ],
+    });
+    expect(parsed["nav-bar"][0]?.["section-type"]).toBe("object");
+  });
+});
+
+describe("well_known_substitute", () => {
+  it("resolves system-config-id in nav-bar context", () => {
+    expect(substitute("${system-config-id}", "nav-bar")).toBe(SYSTEM_CONFIG_ID);
+  });
+
+  it("fails closed on undefined name", () => {
+    expect(() => substitute("${no-such-name}", "nav-bar")).toThrow(
+      SubstitutionError,
+    );
+  });
+
+  it("fails closed on wrong-context name", () => {
+    expect(() => substitute("${system-user-id}", "nav-bar")).toThrow(
+      SubstitutionError,
+    );
+  });
+
+  it("fails closed on unknown context", () => {
+    expect(() => substitute("${system-config-id}", "create-default")).toThrow(
+      SubstitutionError,
+    );
   });
 });
 
@@ -97,6 +158,10 @@ describe("nav paths", () => {
       })["nav-bar"],
     );
     const section = nav[0]!;
+    expect(section.section_type).toBe("class");
+    if (section.section_type !== "class") {
+      throw new Error("expected class section");
+    }
     expect(option_path(section, section.options[0]!)).toBe(
       "/change-requests/new",
     );
@@ -133,10 +198,20 @@ describe("nav paths", () => {
     );
   });
 
+  it("open_class_for_path ignores object sections (link active state only)", () => {
+    reset_default_nav_cache_for_tests();
+    const nav = load_default_nav();
+    expect(
+      open_class_for_path(nav, `/system-configs/${SYSTEM_CONFIG_ID}`),
+    ).toBeNull();
+  });
+
   it("open_class_for_path returns null when collection or section is unknown", () => {
     reset_default_nav_cache_for_tests();
     const full = load_default_nav();
-    const incident_only = full.filter((s) => s.class_name === "incident");
+    const incident_only = full.filter(
+      (s) => s.section_type === "class" && s.class_name === "incident",
+    );
     expect(open_class_for_path(full, "/unknown-things/ABC")).toBeNull();
     expect(
       open_class_for_path(incident_only, "/change-requests/CRQ00000001"),
@@ -148,39 +223,73 @@ describe("nav paths", () => {
 });
 
 describe("filter_nav_by_permissions", () => {
-  it("shows everything for admin", () => {
+  it("shows everything for admin including System Configuration", () => {
     reset_default_nav_cache_for_tests();
     const visible = filter_nav_by_permissions(load_default_nav(), ADMIN);
-    expect(visible).toHaveLength(2);
-    expect(visible[0]?.options.map((o) => o.option_type)).toContain("new");
+    expect(visible.map((s) => s.class_name)).toEqual([
+      "change-request",
+      "incident",
+      "system-config",
+    ]);
+    const change = visible[0];
+    expect(change?.section_type).toBe("class");
+    if (change?.section_type === "class") {
+      expect(change.options.map((o) => o.option_type)).toContain("new");
+    }
   });
 
-  it("hides New for readonly", () => {
+  it("hides New for readonly but keeps public System Configuration", () => {
     reset_default_nav_cache_for_tests();
     const visible = filter_nav_by_permissions(load_default_nav(), READONLY);
-    expect(visible).toHaveLength(2);
+    expect(visible.map((s) => s.class_name)).toEqual([
+      "change-request",
+      "incident",
+      "system-config",
+    ]);
     for (const section of visible) {
-      expect(section.options.every((o) => o.option_type === "list")).toBe(true);
+      if (section.section_type === "class") {
+        expect(section.options.every((o) => o.option_type === "list")).toBe(
+          true,
+        );
+      }
     }
   });
 
   it("shows New and lists for readwrite", () => {
     reset_default_nav_cache_for_tests();
     const visible = filter_nav_by_permissions(load_default_nav(), READWRITE);
-    expect(visible[0]?.options.some((o) => o.option_type === "new")).toBe(true);
-    expect(visible[0]?.options.some((o) => o.option_type === "list")).toBe(true);
+    const change = visible[0];
+    expect(change?.section_type).toBe("class");
+    if (change?.section_type === "class") {
+      expect(change.options.some((o) => o.option_type === "new")).toBe(true);
+      expect(change.options.some((o) => o.option_type === "list")).toBe(true);
+    }
   });
 
-  it("hides Change Requests when only incident:read", () => {
+  it("keeps incident lists and public System Configuration for incident:read only", () => {
     reset_default_nav_cache_for_tests();
     const visible = filter_nav_by_permissions(
       load_default_nav(),
       INCIDENT_ONLY_READ,
     );
-    expect(visible.map((s) => s.class_name)).toEqual(["incident"]);
-    expect(visible[0]?.options.every((o) => o.option_type === "list")).toBe(
-      true,
-    );
+    expect(visible.map((s) => s.class_name)).toEqual([
+      "incident",
+      "system-config",
+    ]);
+    const incident = visible[0];
+    expect(incident?.section_type).toBe("class");
+    if (incident?.section_type === "class") {
+      expect(incident.options.every((o) => o.option_type === "list")).toBe(
+        true,
+      );
+    }
+  });
+
+  it("shows only System Configuration when permissions are empty (public read)", () => {
+    reset_default_nav_cache_for_tests();
+    const visible = filter_nav_by_permissions(load_default_nav(), []);
+    expect(visible.map((s) => s.class_name)).toEqual(["system-config"]);
+    expect(visible[0]?.section_type).toBe("object");
   });
 });
 
@@ -191,6 +300,7 @@ describe("can_read_class", () => {
     expect(can_read_class([], "incident")).toBe(false);
     expect(can_read_class([], "public-item", { public: true })).toBe(true);
     expect(can_read_class(["change-request:read"], "incident")).toBe(false);
+    expect(can_read_class([], "system-config")).toBe(true);
   });
 });
 
@@ -232,14 +342,14 @@ describe("default_landing_path", () => {
     );
   });
 
-  it("falls back to first visible when preferred class is hidden", () => {
+  it("falls back to first visible class list when preferred class is hidden", () => {
     reset_default_nav_cache_for_tests();
     expect(default_landing_path(load_default_nav(), INCIDENT_ONLY_READ)).toBe(
       "/incidents/lists/all",
     );
   });
 
-  it("returns null when nothing is visible", () => {
+  it("returns null when only object sections are visible (not a home route)", () => {
     reset_default_nav_cache_for_tests();
     expect(default_landing_path(load_default_nav(), [])).toBeNull();
   });
