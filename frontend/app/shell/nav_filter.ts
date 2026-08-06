@@ -70,6 +70,13 @@ export function filter_nav_by_permissions(
   const sections: NavSectionView[] = [];
 
   for (const section of nav) {
+    if (section.section_type === "object") {
+      if (can_read_class(permissions, section.class_name)) {
+        sections.push(section);
+      }
+      continue;
+    }
+
     if (!has_class_access(permissions, section.class_name)) {
       continue;
     }

@@ -207,13 +207,17 @@ resolved from a single catalog (`untangled.mapping.well_known`).
   names are available and when evaluation runs.
   - `check-constraint`: available `${system-config-id}`; evaluate at definition
     load (before Schema IR / migrate DDL).
-  - `nav-bar`: available `${system-config-id}`; evaluate when nav YAML is loaded
-    (wired by a later ticket).
+  - `nav-bar`: available `${system-config-id}`; evaluate when product nav YAML
+    is loaded (`load_default_nav`). Generated `WELL_KNOWN` /
+    `SUBSTITUTION_CONTEXTS` in `frontend/app/generated/well_known.ts` are the
+    allowlist source; the FE apply helper fails closed like Python.
 - **Fail closed:** unknown name, unknown context, or a name not available in that
   context is an error. Tokens are never left unsubstituted.
-- Generated constants (`make models`): `untangled.generated.well_known` and
-  `frontend/app/generated/well_known.ts`. Application code must import those (or
-  substitute through the catalog)—do not copy the UUID literal.
+- Generated constants and substitution catalog (`make models`):
+  `untangled.generated.well_known` and `frontend/app/generated/well_known.ts`
+  (constants plus `WELL_KNOWN` / `SUBSTITUTION_CONTEXTS` on the TS side).
+  Application code must import those (or substitute through the catalog)—do not
+  copy the UUID literal.
 
 SQL check expressions stay snake_case identifiers with `${…}` only for literals,
 for example `id = '${system-config-id}'::uuid`.
@@ -265,10 +269,15 @@ returns stored values as-is (out-of-bounds HTTP read policy is #151). Helpers
 cache the full object; expiry uses the clamped TTL from that object; call
 `invalidate()` to clear for a future flush broadcast (no flush bus yet —
 workers may serve stale values until TTL). Search API consumption of these
-helpers is #157; nav `object` entry is #156.
+helpers is #157. The product nav includes a top-level **System Configuration**
+`section-type: object` entry with a real detail href to the singleton
+(`${system-config-id}`), visible when the user can read the class (`public` /
+`{class}:read` / `admin`). Default post-login landing remains list-oriented and
+does not treat object sections as a home route.
 
 Relevant follow-ups: #117 (legacy read removal), #139 (audit), #146 (auto-mount),
-#150 (kebab/snake), #151 (HTTP OOB reads), #152 (search-editor UX), #156, #157.
+#150 (kebab/snake), #151 (HTTP OOB reads), #152 (search-editor UX), #157,
+#167 (lazy FE Zod registry loading).
 
 ## Naming conventions
 

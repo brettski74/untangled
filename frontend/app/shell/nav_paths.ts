@@ -1,17 +1,26 @@
 /**
- * Stable path mapping for nav options.
+ * Stable path mapping for nav options and object sections.
  * M1 option identity is kebab-case display-name (renames are breaking URLs).
  */
-import type { NavBarView, NavOptionView, NavSectionView } from "./nav_schema";
+import { record_detail_path } from "../records/record_paths";
+import type {
+  NavBarView,
+  NavClassSectionView,
+  NavObjectSectionView,
+  NavOptionView,
+  NavSectionView,
+} from "./nav_schema";
 
 const CLASS_COLLECTION: Record<string, string> = {
   "change-request": "change-requests",
   incident: "incidents",
+  "system-config": "system-configs",
 };
 
 const COLLECTION_CLASS: Record<string, string> = {
   "change-requests": "change-request",
   incidents: "incident",
+  "system-configs": "system-config",
 };
 
 export function display_name_to_slug(display_name: string): string {
@@ -31,7 +40,7 @@ export function class_for_collection(collection: string): string | null {
 }
 
 export function option_path(
-  section: NavSectionView,
+  section: NavClassSectionView,
   option: NavOptionView,
 ): string | null {
   const collection = collection_for_class(section.class_name);
@@ -48,8 +57,18 @@ export function option_path(
   return `/${collection}/lists/${slug}`;
 }
 
+export function object_section_path(
+  section: NavObjectSectionView,
+): string | null {
+  const collection = collection_for_class(section.class_name);
+  if (collection == null) {
+    return null;
+  }
+  return record_detail_path(collection, section.id);
+}
+
 export type NavMatch = {
-  section: NavSectionView;
+  section: NavClassSectionView;
   option: NavOptionView;
   path: string;
 };
@@ -59,6 +78,9 @@ export function find_match_for_path(
   pathname: string,
 ): NavMatch | null {
   for (const section of nav) {
+    if (section.section_type !== "class") {
+      continue;
+    }
     for (const option of section.options) {
       const path = option_path(section, option);
       if (path != null && path === pathname) {
@@ -70,12 +92,13 @@ export function find_match_for_path(
 }
 
 /**
- * Route-driven open nav class for the accordion.
+ * Route-driven open nav class for the accordion (class sections only).
  *
  * Rule order (do not reorder casually):
  * 1. Exact list/new option path → that option's section class.
  * 2. Else exactly two non-empty segments `/{collection}/{locator}` whose
- *    collection maps to a section present in `nav` → that class.
+ *    collection maps to a **class** section present in `nav` → that class.
+ *    Object sections use link active state, not accordion open state.
  *    Today only `/new` and `/:locator` share that shape under a collection;
  *    `/new` is covered by (1). Three-segment list paths (`/lists/...`) are
  *    never treated as detail. A future two-segment collection route that is
@@ -103,7 +126,10 @@ export function open_class_for_path(
   if (class_name == null) {
     return null;
   }
-  return nav.some((section) => section.class_name === class_name)
+  return nav.some(
+    (section) =>
+      section.section_type === "class" && section.class_name === class_name,
+  )
     ? class_name
     : null;
 }
@@ -117,7 +143,10 @@ export function find_list_option(
   if (class_name == null) {
     return null;
   }
-  const section = nav.find((item) => item.class_name === class_name);
+  const section = nav.find(
+    (item): item is NavClassSectionView =>
+      item.section_type === "class" && item.class_name === class_name,
+  );
   if (section == null) {
     return null;
   }
@@ -144,7 +173,10 @@ export function find_new_option(
   if (class_name == null) {
     return null;
   }
-  const section = nav.find((item) => item.class_name === class_name);
+  const section = nav.find(
+    (item): item is NavClassSectionView =>
+      item.section_type === "class" && item.class_name === class_name,
+  );
   if (section == null) {
     return null;
   }
@@ -157,4 +189,27 @@ export function find_new_option(
     return null;
   }
   return { section, option, path };
+}
+
+export function find_object_section_for_path(
+  nav: NavBarView,
+  pathname: string,
+): NavObjectSectionView | null {
+  for (const section of nav) {
+    if (section.section_type !== "object") {
+      continue;
+    }
+    const path = object_section_path(section);
+    if (path != null && path === pathname) {
+      return section;
+    }
+  }
+  return null;
+}
+
+/** Type guard helper for callers that still iterate mixed sections. */
+export function is_class_section(
+  section: NavSectionView,
+): section is NavClassSectionView {
+  return section.section_type === "class";
 }

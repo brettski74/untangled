@@ -13,6 +13,7 @@ import {
   RefreshTokenUpdateSchema,
   RolePermissionUpdateSchema,
   RoleUpdateSchema,
+  SystemConfigUpdateSchema,
   UserRoleUpdateSchema,
   UserUpdateSchema,
 } from "../generated";
@@ -28,6 +29,7 @@ const UPDATE_SCHEMAS: Readonly<Record<string, UpdateZodSchema>> = {
   "refresh-token": RefreshTokenUpdateSchema,
   "role-permission": RolePermissionUpdateSchema,
   role: RoleUpdateSchema,
+  "system-config": SystemConfigUpdateSchema,
   "user-role": UserRoleUpdateSchema,
   user: UserUpdateSchema,
 };
