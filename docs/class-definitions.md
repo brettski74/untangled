@@ -233,9 +233,42 @@ always ensures the `system` user row (including no-op schema plans): inactive,
 unusable password verifier, no roles. It also upserts before audit `ADD FOREIGN
 KEY` so existing system-actor stamps do not block the constraint. Do not
 activate this principal; future user-admin UI must not treat it as a
-reactivatable deactivated human. `#155` bootstrap of `system-config` must use
-this id. Full local **login** credentials still come from **`make seed`**.
-Protected domain APIs should pass the authenticated principal.
+reactivatable deactivated human. Migrate also insert-once ensures the
+`system-config` singleton (`SYSTEM_CONFIG_ID`), attributed with this principal,
+and never overwrites operator updates on re-migrate. Full local **login**
+credentials still come from **`make seed`**. Protected domain APIs should pass
+the authenticated principal.
+
+### System configuration class
+
+`system-config` is the durable home for **general, non-sensitive,
+environment-local system settings** (operators may tune per deployment without
+a Git promote cycle). It is `public: true` (authenticated read without
+`system-config:read`), with create/delete/search suppressed. Fetch and
+unversioned update use the shared router factory like other mounted classes.
+Among seed roles, only `admin` can update (no dedicated permission grants).
+
+Initial attributes (YAML min/max on create/update; list will grow):
+
+| Attribute | Default | Purpose |
+| --------- | ------- | ------- |
+| `max-search-nesting-depth` | 3 | Max search predicate nesting depth (root depth 1) |
+| `max-search-nesting-length` | 20 | Max children in one logical `and`/`or` predicates array |
+| `max-search-total-predicates` | 50 | Max predicates counted recursively |
+| `max-search-total-regexp` | 3 | Max regexp predicates in a search tree |
+| `system-config-cache-ttl-seconds` | 900 | In-process helper cache TTL |
+
+In-process helpers (`untangled.system_config`) always address the well-known id,
+**fail closed** if the row is unreadable (no fabricated defaults), and **clamp**
+numeric attributes into YAML min/max from class-definition metadata. HTTP fetch
+returns stored values as-is (out-of-bounds HTTP read policy is #151). Helpers
+cache the full object; expiry uses the clamped TTL from that object; call
+`invalidate()` to clear for a future flush broadcast (no flush bus yet —
+workers may serve stale values until TTL). Search API consumption of these
+helpers is #157; nav `object` entry is #156.
+
+Relevant follow-ups: #117 (legacy read removal), #139 (audit), #146 (auto-mount),
+#150 (kebab/snake), #151 (HTTP OOB reads), #152 (search-editor UX), #156, #157.
 
 ## Naming conventions
 

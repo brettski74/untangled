@@ -83,6 +83,7 @@ def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefini
         "demo_item",
         "change_request",
         "incident",
+        "system_config",
         "refresh_token",
         "role",
         "permission",

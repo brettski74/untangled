@@ -1,4 +1,4 @@
-"""Domain record HTTP package: Incident and Change Request CRUD."""
+"""Domain record HTTP package: Incident, Change Request, System Config."""
 
 from __future__ import annotations
 
@@ -19,6 +19,12 @@ change_requests_router = build_class_router(
     tags=["change-requests"],
     surface="legacy",
 )
+system_configs_router = build_class_router(
+    class_kebab="system-config",
+    prefix="/system-configs",
+    tags=["system-configs"],
+    surface="legacy",
+)
 incidents_v1_router = build_class_router(
     class_kebab="incident",
     prefix="/api/v1/incidents",
@@ -31,10 +37,18 @@ change_requests_v1_router = build_class_router(
     tags=["change-requests-v1"],
     surface="v1",
 )
+system_configs_v1_router = build_class_router(
+    class_kebab="system-config",
+    prefix="/api/v1/system-configs",
+    tags=["system-configs-v1"],
+    surface="v1",
+)
 
 __all__ = [
     "change_requests_router",
     "change_requests_v1_router",
     "incidents_router",
     "incidents_v1_router",
+    "system_configs_router",
+    "system_configs_v1_router",
 ]

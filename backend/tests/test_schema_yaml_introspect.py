@@ -27,6 +27,7 @@ _MANAGED = {
     "refresh_token",
     "role",
     "role_permission",
+    "system_config",
     "user",
     "user_role",
 }
@@ -150,6 +151,10 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
         referenced_table="permission",
         referenced_columns=("id",),
     ) in role_permission.foreign_keys
+
+    system_config = by_table["system_config"]
+    assert len(system_config.checks) == 1
+    assert "01900000-0000-7000-8000-000000000050" in system_config.checks[0].expression
 
 
 def test_introspect_matches_desired_for_demo(
