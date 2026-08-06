@@ -31,12 +31,16 @@ import {
   type ListSortSpec,
 } from "./header_sort";
 
+export type BasicListEmptyMode = "match" | "failed";
+
 export type BasicListProps = {
   collection: string;
   columns: ListColumn[];
   widths: Readonly<Record<string, number>>;
   sort: readonly ListSortSpec[];
   rows: Record<string, unknown>[];
+  /** Empty-body presentation: successful match-empty vs failed action. */
+  empty_mode?: BasicListEmptyMode;
   on_sort_click: (attribute: string) => void;
   on_reorder: (from_index: number, to_index: number) => void;
   on_resize_commit: (attribute: string, width_px: number) => void;
@@ -52,11 +56,13 @@ export function BasicList({
   widths,
   sort,
   rows,
+  empty_mode = "match",
   on_sort_click,
   on_reorder,
   on_resize_commit,
 }: BasicListProps) {
   const empty = rows.length === 0;
+  const failed_empty = empty && empty_mode === "failed";
   const table_ref = useRef<HTMLTableElement | null>(null);
   const ghost_ref = useRef<HTMLDivElement | null>(null);
   const separator_ref = useRef<HTMLDivElement | null>(null);
@@ -351,9 +357,16 @@ export function BasicList({
               <tr>
                 <td
                   colSpan={Math.max(columns.length, 1)}
-                  className="px-3 py-8 text-slate-600"
+                  className={
+                    failed_empty
+                      ? "px-3 py-8 text-sm font-medium text-red-800"
+                      : "px-3 py-8 text-slate-600"
+                  }
+                  role={failed_empty ? "alert" : undefined}
                 >
-                  No records match this list.
+                  {failed_empty
+                    ? "This search could not be run. Previous results were cleared."
+                    : "No records match this list."}
                 </td>
               </tr>
             ) : (
