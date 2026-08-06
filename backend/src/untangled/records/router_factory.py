@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from untangled.auth.dependencies import DbConn
+from untangled.persistence.search import SearchNestingLimits
 from untangled.rbac.dependencies import require_class_operation
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
 from untangled.records.read_protocol import (
@@ -19,6 +20,7 @@ from untangled.records.search_models import (
     SearchStructuralError,
     SearchValidationError,
 )
+from untangled.system_config import SystemConfigUnreadableError, get_system_config
 
 ApiSurface = Literal["legacy", "v1"]
 
@@ -105,7 +107,17 @@ def build_class_router(
                 else None
             )
             try:
+                # First HTTP consumer of SystemConfigUnreadableError → 503.
+                # Later surfaces should reuse this mapping (not invent another).
+                config = get_system_config(conn)
+                limits = SearchNestingLimits(
+                    max_depth=config.max_search_nesting_depth,
+                    max_length=config.max_search_nesting_length,
+                    max_total_predicates=config.max_search_total_predicates,
+                    max_total_regexp=config.max_search_total_regexp,
+                )
                 result = store.search(
+                    limits=limits,
                     predicate=body.predicate,
                     sort=sort_keys,
                     attributes=body.attributes,
@@ -113,6 +125,14 @@ def build_class_router(
                     offset=body.offset,
                     enrich_fk_identity=enrich,
                 )
+            except SystemConfigUnreadableError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        "system configuration could not be read; "
+                        "search cannot run"
+                    ),
+                ) from exc
             except SearchStructuralError as exc:
                 # Structural taxonomy aligned with request_validation (issue #56).
                 raise HTTPException(
