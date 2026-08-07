@@ -75,6 +75,7 @@ Non-secret connection wiring — set as **variables** (`vars.*`), not secrets.
 | `POSTGRES_USER` | no | Default `untangled` |
 | `POSTGRES_DB` | no | Default `untangled` |
 | `DATABASE_URL` | no | Default `postgresql://USER:PASSWORD@postgres:5432/DB` |
+| `UNTANGLED_REDIS_URL` | no | Default `redis://redis:6379/0` (local/Rocky Compose; no password in default) |
 | `UNTANGLED_COOKIE_SECURE` | no | Default `true` (Actions also sets web host port `3000`) |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | no | Default `900` |
 | `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | no | Default `604800` |
@@ -126,9 +127,9 @@ Automatic deploy never runs migrate/seed. Operators run those deliberately when 
 | SSH / SCP failure | Key, known_hosts, host/port/user |
 | Make / Compose missing | Install GNU Make and Podman Compose |
 | `ERROR [pull]` | GHCR visibility or host registry login |
-| `ERROR [up]` | Compose, `.env`/secrets, ports; ensure `--no-build` path (no source tree on host). On Rocky Podman: short image names can fail non-interactively — postgres must stay fully qualified (`docker.io/library/…`) |
+| `ERROR [up]` | Compose, `.env`/secrets, ports; ensure `--no-build` path (no source tree on host). On Rocky Podman: short image names can fail non-interactively — postgres and redis must stay fully qualified (`docker.io/library/…`) |
 | `ERROR [health]` | `compose exec` logs for api/web |
-| `short-name resolution enforced but cannot prompt without a TTY` | Unqualified image in Compose (e.g. `postgres:…`); use `docker.io/library/postgres:…` |
+| `short-name resolution enforced but cannot prompt without a TTY` | Unqualified image in Compose (e.g. `postgres:…` / `redis:…`); use `docker.io/library/…` |
 
 ### Re-run / rollback
 

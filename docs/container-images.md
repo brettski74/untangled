@@ -15,7 +15,7 @@ Product CI mirrors local Make:
 - `make lint` — backend `ruff`, frontend typecheck (including models codegen)
 - `make test` — backend pytest (Postgres required) + frontend unit tests and SSR production build
 
-In Actions, Postgres is a job service container. The workflow runs `make test-ci`, which is the same check set as `lint` + `test` but skips Compose `db-up` only.
+In Actions, Postgres and Redis are job service containers. The workflow runs `make test-ci`, which is the same check set as `lint` + `test` but skips Compose `db-up` / `redis-up` only.
 
 **Product CI (lint/test) is not environment validation or promotion.** Passing CI means the product checks for that commit succeeded; it does not certify a staging/prod rollout.
 

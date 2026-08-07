@@ -1,6 +1,7 @@
-# Compose runtime: PostgreSQL + API + web.
+# Compose runtime: PostgreSQL + Redis + API + web.
 # Local: make up (build:). Rocky/GHCR: make deploy-pull (image pins + --no-build).
 # Variable defaults preserve local-dev behaviour when no .env is present.
+# Redis is ephemeral (no named volume): cache/bus consumers tolerate restart loss.
 services:
   postgres:
     # Fully-qualified registry path: Rocky Podman short-name mode cannot prompt
@@ -22,12 +23,24 @@ services:
       # subdirs), not the old /var/lib/postgresql/data path.
       - untangled_pgdata:/var/lib/postgresql
 
+  redis:
+    # Fully-qualified: same Rocky/Podman short-name constraint as postgres.
+    image: docker.io/library/redis:7-alpine
+    ports:
+      - "${UNTANGLED_REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
   api:
     image: ${UNTANGLED_API_IMAGE:-untangled-api:local}
     build:
       context: ./backend
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://untangled:untangled@postgres:5432/untangled}
+      UNTANGLED_REDIS_URL: ${UNTANGLED_REDIS_URL:-redis://redis:6379/0}
       # Local-dev default — override via .env / Environment secrets for Rocky.
       UNTANGLED_JWT_SECRET: ${UNTANGLED_JWT_SECRET:-local-dev-only-change-me-untangled-jwt-secret}
       UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}
@@ -36,6 +49,8 @@ services:
       - "${UNTANGLED_API_HOST_PORT:-8000}:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
@@ -53,6 +68,8 @@ services:
       # Server-side / in-network API base (Compose DNS). Authenticated browser
       # traffic stays on the web tier (SSR loaders/actions); see ADR 002.
       UNTANGLED_API_BASE_URL: ${UNTANGLED_API_BASE_URL:-http://api:8000}
+      # Shared Redis for future SSR bus subscribers (no DB in the web process).
+      UNTANGLED_REDIS_URL: ${UNTANGLED_REDIS_URL:-redis://redis:6379/0}
       # Required at runtime — local-dev default; override for Rocky.
       UNTANGLED_SESSION_SECRET: ${UNTANGLED_SESSION_SECRET:-local-dev-only-change-me-untangled-session-secret}
       # Plain HTTP on localhost — must opt out; unset defaults to Secure cookies.
@@ -63,6 +80,8 @@ services:
       - "${UNTANGLED_WEB_HOST_PORT:-5173}:3000"
     depends_on:
       api:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
