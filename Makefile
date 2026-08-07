@@ -38,7 +38,7 @@ export COMPOSE
 export COMPOSE_WAIT_FLAG
 export COMPOSE_SUPPORTS_WAIT
 
-.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait deploy-pull backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
+.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait deploy-pull backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -56,17 +56,19 @@ backend-install: ## Create backend venv and install locked dependencies
 frontend-install: ## Install frontend npm dependencies
 	cd $(FRONTEND_DIR) && npm ci
 
-up: ## Build and start postgres + api + web via Compose
+up: ## Build and start postgres + redis + api + web via Compose
 	$(COMPOSE) up -d --build $(COMPOSE_WAIT_FLAG)
 ifneq ($(COMPOSE_SUPPORTS_WAIT),yes)
 	@$(MAKE) db-wait
+	@$(MAKE) redis-wait
 endif
 
-down: ## Stop Compose runtime (keeps named DB volume)
+down: ## Stop Compose runtime (keeps named DB volume; Redis is ephemeral)
 	$(COMPOSE) down
 
 # Full local reset: wipe named volumes (Postgres), bring stack back, migrate, seed.
-# Optional: WITH_HOST_INSTALL=1 also runs `make install` after teardown.
+# Redis has no named volume — restart always starts empty. Optional:
+# WITH_HOST_INSTALL=1 also runs `make install` after teardown.
 reinstall: ## Wipe DB volume, restart stack, migrate, and seed
 	$(COMPOSE) down -v --remove-orphans
 ifeq ($(WITH_HOST_INSTALL),1)
@@ -104,6 +106,25 @@ db-wait: ## Wait until PostgreSQL accepts connections
 		sleep 1; \
 	done; \
 	echo "PostgreSQL did not become ready in time"; \
+	exit 1
+
+redis-up: ## Start containerized Redis only (for host-run bus / cache work)
+	$(COMPOSE) up -d redis
+	@$(MAKE) redis-wait
+
+redis-down: ## Stop the Compose Redis service
+	$(COMPOSE) stop redis
+
+redis-wait: ## Wait until Redis accepts connections
+	@echo "waiting for Redis..."; \
+	for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do \
+		if $(COMPOSE) exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then \
+			echo "Redis is ready"; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "Redis did not become ready in time"; \
 	exit 1
 
 # Shared Rocky / GHCR pin path on root compose.yaml (image pins + --no-build).
@@ -162,19 +183,23 @@ lint: backend-lint frontend-lint ## Run backend and frontend lint checks
 
 test: backend-test frontend-test ## Run backend and frontend tests
 
-# Same leaf checks as lint + test. Skips Compose db-up only — Postgres must already
-# be reachable (e.g. Actions service container). Does not shrink the check set.
-test-ci: ## Lint + test without Compose db-up (Postgres must already be up)
+# Same leaf checks as lint + test. Skips Compose db-up / redis-up — Postgres and
+# Redis must already be reachable (e.g. Actions service containers).
+test-ci: ## Lint + test without Compose db-up/redis-up (services must already be up)
 	$(MAKE) lint
-	$(MAKE) SKIP_DB_UP=1 test
+	$(MAKE) SKIP_DB_UP=1 SKIP_REDIS_UP=1 test
 
 backend-lint: backend-install ## Lint backend Python sources
 	$(BACKEND_VENV)/bin/ruff check $(BACKEND_DIR)/src $(BACKEND_DIR)/tests
 
 # SKIP_DB_UP=1: assume PostgreSQL is already reachable (CI service container).
+# SKIP_REDIS_UP=1: assume Redis is already reachable (CI service container).
 backend-test: backend-install frontend-install ## Run backend pytest suite (includes DB-backed persistence tests)
 ifneq ($(SKIP_DB_UP),1)
 	@$(MAKE) db-up
+endif
+ifneq ($(SKIP_REDIS_UP),1)
+	@$(MAKE) redis-up
 endif
 	PYTHONPATH=$(BACKEND_DIR)/src $(BACKEND_PYTHON) -m pytest $(BACKEND_DIR)
 

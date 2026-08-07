@@ -1,8 +1,8 @@
 # Local development
 
-Untangled is **containers-first**: `make up` brings up PostgreSQL, the API, and the web app via Compose (Podman or Docker).
+Untangled is **containers-first**: `make up` brings up PostgreSQL, Redis, the API, and the web app via Compose (Podman or Docker).
 
-For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` if you need Postgres). Those are not required for the Compose runtime.
+For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` / `make redis-up` if you need Postgres or Redis). Those are not required for the Compose runtime.
 
 Schema apply and baseline seed are **intentional**: after `make up`, run `make migrate` then `make seed`. Neither runs automatically on Compose start.
 
@@ -18,7 +18,7 @@ Published GHCR images (optional; not used by default Compose `build:`) and GitHu
 
 This section documents how the root `Makefile` selects and uses Compose for developers and operators (and for reuse by future start/shutdown scripts). It describes Make behavior—not a separate policy source.
 
-The root `Makefile` picks a Compose command once per Make invocation and uses it for all Compose targets (`up`, `down`, `db-up`, `db-down`, `db-wait`, `reinstall`, etc.). Nested Make calls inherit the same selection.
+The root `Makefile` picks a Compose command once per Make invocation and uses it for all Compose targets (`up`, `down`, `db-up`, `db-down`, `db-wait`, `redis-up`, `redis-down`, `redis-wait`, `reinstall`, etc.). Nested Make calls inherit the same selection.
 
 **When `COMPOSE` is unset**, auto-detect uses this precedence (first *usable* wins; usable means a version/capability probe succeeds, not merely that a binary is on `PATH`):
 
@@ -37,7 +37,7 @@ make COMPOSE="docker compose" up
 
 **Override:** if you set `COMPOSE` in the environment or on the Make command line, that value always wins (no auto-detect). An empty `COMPOSE=` is an error — unset the variable for auto-detect, or pass a real command.
 
-**Wait / readiness:** if the selected engine supports `compose up --wait`, `make up` uses it; otherwise `--wait` is omitted and Postgres readiness uses `make db-wait` (capability probe of the selected engine, not a name check for “podman”).
+**Wait / readiness:** if the selected engine supports `compose up --wait`, `make up` uses it; otherwise `--wait` is omitted and readiness uses `make db-wait` and `make redis-wait` (capability probe of the selected engine, not a name check for “podman”).
 
 Future production start/shutdown scripts should reuse this same precedence, override, and wait behavior so operator `make` and host scripts stay equivalent.
 
@@ -51,7 +51,7 @@ make migrate   # apply YAML schema intent (Postgres must be reachable)
 make seed      # idempotent baseline users + RBAC (roles/permissions/attachments)
 ```
 
-That builds images and starts **postgres**, **api**, and **web**, waiting until healthchecks pass, reconciles the database to `backend/class-definitions/`, then upserts the local seed users, RBAC attachments, and sample Incident / Change Request rows.
+That builds images and starts **postgres**, **redis**, **api**, and **web**, waiting until healthchecks pass, reconciles the database to `backend/class-definitions/`, then upserts the local seed users, RBAC attachments, and sample Incident / Change Request rows.
 
 For host-side lint/test tooling:
 
@@ -65,7 +65,13 @@ Default DB connection from the **host** (override with `DATABASE_URL`):
 postgresql://untangled:untangled@127.0.0.1:5432/untangled
 ```
 
-Inside the **api** container, Compose sets `DATABASE_URL` to use the `postgres` service hostname.
+Default Redis URL from the **host** (override with `UNTANGLED_REDIS_URL`):
+
+```text
+redis://127.0.0.1:6379/0
+```
+
+Inside the **api** / **web** containers, Compose sets `DATABASE_URL` / `UNTANGLED_REDIS_URL` to use the `postgres` / `redis` service hostnames. Redis is ephemeral (no named volume); local-dev has no Redis password — acceptable for Compose, not a production hardening claim.
 
 ## Auth (local)
 
@@ -77,6 +83,7 @@ Inside the **api** container, Compose sets `DATABASE_URL` to use the `postgres` 
 | `UNTANGLED_SESSION_SECRET` | `local-dev-only-change-me-untangled-session-secret` (web cookie signing; **required**, no in-code default) |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
+| `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` |
 | `UNTANGLED_DEFINITIONS_DIR` | Optional. Absolute path to YAML class-definitions for unusual layouts only; Compose uses `/app/class-definitions` via the image WORKDIR (do not set this for normal local Compose). |
 
 Seed users (usernames are case-normalized to lowercase):
@@ -372,20 +379,23 @@ Six incident rows and fourteen change-request rows are seeded; full stable UUID 
 | Command | Purpose |
 | ------- | ------- |
 | `make` or `make help` | List targets with one-line descriptions |
-| `make up` | Build and start postgres + api + web via Compose (does **not** migrate or seed) |
-| `make down` | Stop the Compose stack (keeps the named DB volume) |
+| `make up` | Build and start postgres + redis + api + web via Compose (does **not** migrate or seed) |
+| `make down` | Stop the Compose stack (keeps the named DB volume; Redis is ephemeral) |
 | `make reinstall` | Wipe named DB volume, then `up` → `migrate` → `seed` (add `WITH_HOST_INSTALL=1` to also run `make install`) |
 | `make reinstall-keep-data` | Same as `reinstall` but keeps the Postgres volume (`make down` only) |
 | `make db-up` | Start PostgreSQL only (for host-run tests / persistence) |
 | `make db-down` | Stop the Compose PostgreSQL service |
 | `make db-wait` | Wait until PostgreSQL accepts connections |
+| `make redis-up` | Start Redis only (for host-run bus / cache work) |
+| `make redis-down` | Stop the Compose Redis service |
+| `make redis-wait` | Wait until Redis accepts connections |
 | `make migrate` | Apply YAML schema intent via production CLI (`python -m untangled.schema`) |
 | `make seed` | Idempotent seed of baseline users + RBAC + sample INC/CHG (`python -m untangled.seed`) |
 | `make backend-dev` | Run FastAPI with reload on the host (port 8000) |
 | `make frontend-dev` | Run React Router dev server on the host (port 5173) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
-| `make test` | Backend pytest (starts DB; uses migrate path) + frontend build smoke test |
-| `make test-ci` | Same as lint + test, but skip Compose `db-up` (Postgres must already be up; used by Actions) |
+| `make test` | Backend pytest (starts DB + Redis; uses migrate path) + frontend build smoke test |
+| `make test-ci` | Same as lint + test, but skip Compose `db-up` / `redis-up` (services must already be up; used by Actions) |
 | `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
 | `make clean` | Same as `clean-models` (clean source tree of codegen output) |
@@ -396,13 +406,14 @@ Destructive schema plans are rejected by default. To allow them locally:
 make migrate MIGRATE_ARGS=--allow-destructive
 ```
 
-Ensure host ports **5432**, **8000**, and **5173** are free before `make up`.
+Ensure host ports **5432**, **6379**, **8000**, and **5173** are free before `make up`.
 
 ## Ports
 
 | Service | Local Compose (host) | Notes |
 | ------- | -------------------- | ----- |
 | postgres | `5432` | Published for host tools and tests |
+| redis | `6379` | Ephemeral; published for host tools and tests |
 | api | `8000` | FastAPI; docs at `/docs` |
 | web | `5173` | Maps to container port **3000**. Production / non-local deploys should expose **3000**, not 5173. |
 
@@ -414,6 +425,7 @@ After `make up` → `make migrate` → `make seed`:
 - API docs: open `http://127.0.0.1:8000/docs` and run the Authorize loop above
 - Web: open `http://127.0.0.1:5173` — unauthenticated users redirect to `/login`; after seed login, authenticated stub shows `/auth/me`
 - Postgres: `docker compose exec postgres pg_isready -U untangled -d untangled`
+- Redis: `docker compose exec redis redis-cli ping` → `PONG`
 - Web → API on the Compose network:
 
 ```bash
@@ -423,6 +435,10 @@ docker compose exec web wget -qO- http://api:8000/health
 After `make db-up` only (postgres):
 
 - `docker compose exec postgres pg_isready -U untangled -d untangled`
+
+After `make redis-up` only (redis):
+
+- `docker compose exec redis redis-cli ping`
 
 ## API base URL (Compose)
 
@@ -437,13 +453,14 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 
 | Piece | Status | Later work |
 | ----- | ------ | ---------- |
-| `make up` / `make down` | Full Compose runtime (postgres + api + web); **no auto-migrate/seed** | — |
+| `make up` / `make down` | Full Compose runtime (postgres + redis + api + web); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
 | Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI refresh (#14); hardening #33 / security review #67 |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly-id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not-empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
+| `make redis-up` / Redis | Shared bus + cache instance (ephemeral) | Message bus (#161); authz cache (#162) |
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |
 | Persistence (`untangled.persistence`) | Thin SQL create/fetch/update/delete + friendly-id assign | Domain routes stamp authenticated actor |
@@ -458,7 +475,7 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 backend/     Python FastAPI application (src layout; Dockerfile for api)
 frontend/    React Router v7 framework-mode SSR app (Dockerfile for web)
 docs/        Developer documentation
-compose.yaml postgres + api + web
+compose.yaml postgres + redis + api + web
 Makefile     Primary command entrypoint
 ```
 

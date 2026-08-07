@@ -21,8 +21,10 @@ jobs:
       contents: read
     env:
       DATABASE_URL: postgresql://untangled:untangled@127.0.0.1:5432/untangled
-      # Skip Compose db-up; Postgres comes from the service container below.
+      UNTANGLED_REDIS_URL: redis://127.0.0.1:6379/0
+      # Skip Compose db-up / redis-up; services come from containers below.
       SKIP_DB_UP: "1"
+      SKIP_REDIS_UP: "1"
     services:
       postgres:
         image: docker.io/library/postgres:18-alpine
@@ -34,6 +36,15 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U untangled -d untangled"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+      redis:
+        image: docker.io/library/redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 15
@@ -246,6 +257,7 @@ jobs:
             printf 'POSTGRES_PASSWORD=%s\n' "${POSTGRES_PASSWORD}"
             printf 'POSTGRES_DB=%s\n' "${pg_db}"
             printf 'DATABASE_URL=%s\n' "${DATABASE_URL}"
+            printf 'UNTANGLED_REDIS_URL=%s\n' "${UNTANGLED_REDIS_URL:-redis://redis:6379/0}"
             printf 'UNTANGLED_JWT_SECRET=%s\n' "${UNTANGLED_JWT_SECRET}"
             printf 'UNTANGLED_SESSION_SECRET=%s\n' "${UNTANGLED_SESSION_SECRET}"
             printf 'UNTANGLED_COOKIE_SECURE=%s\n' "${UNTANGLED_COOKIE_SECURE:-true}"
