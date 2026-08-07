@@ -153,8 +153,11 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
     ) in role_permission.foreign_keys
 
     system_config = by_table["system_config"]
-    assert len(system_config.checks) == 1
+    assert len(system_config.checks) == 2
     assert "01900000-0000-7000-8000-000000000050" in system_config.checks[0].expression
+    assert system_config.checks[1].expression == (
+        "password_maximum_chars > password_minimum_chars"
+    )
 
 
 def test_introspect_matches_desired_for_demo(

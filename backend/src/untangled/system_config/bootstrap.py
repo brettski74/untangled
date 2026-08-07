@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from psycopg import Connection, sql
 
 from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.well_known import SYSTEM_CONFIG_ID, SYSTEM_USER_ID
 
 # Seeded attribute defaults — keep aligned with system-config.yaml create-default.
-SYSTEM_CONFIG_DEFAULTS: dict[str, int] = {
+SYSTEM_CONFIG_DEFAULTS: dict[str, int | Decimal] = {
     "max_search_nesting_depth": 3,
     "max_search_nesting_length": 20,
     "max_search_total_predicates": 50,
     "max_search_total_regexp": 3,
     "system_config_cache_ttl_seconds": 900,
+    "password_minimum_chars": 12,
+    "password_maximum_chars": 128,
+    "password_acceptable_crack_time_days": 1000,
+    "password_guess_per_second": 10000,
+    "password_estimate_drift_factor": Decimal("1.1"),
 }
 
 _TABLE = "system_config"

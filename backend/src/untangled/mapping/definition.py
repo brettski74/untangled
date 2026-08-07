@@ -53,7 +53,8 @@ class AttributeDefinition:
     # Kebab-case class name this attribute references (FK to that table's ``id``).
     references: str | None = None
     unique: bool = False
-    # Create-form UX default (JSON-serializable scalar); not a DB column DEFAULT.
+    # Create-form UX default and migrate add-time backfill for required attrs
+    # (temporary DEFAULT then DROP DEFAULT; not a lasting DB column DEFAULT).
     create_default: str | int | float | bool | None = None
     min_value: int | float | Decimal | None = None
     max_value: int | float | Decimal | None = None

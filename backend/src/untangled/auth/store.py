@@ -62,6 +62,32 @@ def authenticate_user(conn: Connection, username: str, password: str) -> dict[st
     return user
 
 
+def update_user_password_hash(
+    conn: Connection,
+    user_id: UUID,
+    password_hash: str,
+    *,
+    actor_id: UUID,
+) -> None:
+    """Persist a new Argon2id ``password_hash`` for ``user_id`` and commit."""
+    now = utc_now()
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "UPDATE {} SET password_hash = {}, updated_at = {}, updated_by = {} "
+                "WHERE id = {}"
+            ).format(
+                sql.Identifier("user"),
+                sql.Placeholder(),
+                sql.Placeholder(),
+                sql.Placeholder(),
+                sql.Placeholder(),
+            ),
+            (password_hash, now, actor_id, user_id),
+        )
+    conn.commit()
+
+
 def issue_token_pair(conn: Connection, user_id: UUID) -> tuple[str, str]:
     """Create access + refresh tokens; persist the hashed refresh token."""
     access = create_access_token(user_id)

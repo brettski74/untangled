@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from psycopg import sql
 
 from untangled.schema.ir import ColumnIR, TableIR
@@ -16,6 +18,7 @@ from untangled.schema.plan import (
     CreateTable,
     DropCheck,
     DropColumn,
+    DropColumnDefault,
     DropForeignKey,
     DropIndex,
     DropSequence,
@@ -33,7 +36,12 @@ def compile_op(op: MigrationOp) -> sql.Composed:
     if isinstance(op, AddColumn):
         return sql.SQL("ALTER TABLE {} ADD COLUMN {}").format(
             sql.Identifier(op.table_name),
-            _column_def(op.column),
+            _column_def(op.column, add_default=op.add_default),
+        )
+    if isinstance(op, DropColumnDefault):
+        return sql.SQL("ALTER TABLE {} ALTER COLUMN {} DROP DEFAULT").format(
+            sql.Identifier(op.table_name),
+            sql.Identifier(op.column_name),
         )
     if isinstance(op, DropColumn):
         return sql.SQL("ALTER TABLE {} DROP COLUMN {}").format(
@@ -126,10 +134,35 @@ def _create_table(table: TableIR) -> sql.Composed:
     )
 
 
-def _column_def(column: ColumnIR) -> sql.Composed:
+def _column_def(
+    column: ColumnIR,
+    *,
+    add_default: str | int | float | bool | None = None,
+) -> sql.Composed:
     nullability = sql.SQL("NULL") if column.nullable else sql.SQL("NOT NULL")
-    return sql.SQL("{} {} {}").format(
+    base = sql.SQL("{} {} {}").format(
         sql.Identifier(column.name),
         sql.SQL(column.type_name),
         nullability,
     )
+    if add_default is None:
+        return base
+    return sql.SQL("{} DEFAULT {}").format(base, _default_literal(column, add_default))
+
+
+def _default_literal(
+    column: ColumnIR,
+    value: str | int | float | bool,
+) -> sql.Composable:
+    """Encode a YAML ``create-default`` scalar as a SQL DEFAULT literal."""
+    if column.type_name == "numeric" and isinstance(value, str):
+        return sql.Literal(Decimal(value))
+    if isinstance(value, bool):
+        return sql.Literal(value)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return sql.Literal(value)
+    if isinstance(value, float):
+        return sql.Literal(value)
+    if isinstance(value, str):
+        return sql.Literal(value)
+    raise TypeError(f"unsupported create-default type for DDL: {type(value)!r}")

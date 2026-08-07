@@ -11,7 +11,9 @@ public: true
 suppress-create: true
 suppress-delete: true
 suppress-search: true
-check-constraint: "id = '${system-config-id}'::uuid"
+check-constraint:
+  - "id = '${system-config-id}'::uuid"
+  - "password_maximum_chars > password_minimum_chars"
 attributes:
   max-search-nesting-depth:
     type: integer
@@ -43,3 +45,33 @@ attributes:
     create-default: 900
     min-value: 1
     max-value: 86400
+  password-minimum-chars:
+    type: integer
+    required: true
+    create-default: 12
+    min-value: 1
+    max-value: 256
+  password-maximum-chars:
+    type: integer
+    required: true
+    create-default: 128
+    min-value: 1
+    max-value: 256
+  password-acceptable-crack-time-days:
+    type: integer
+    required: true
+    create-default: 1000
+    min-value: 100
+    max-value: 1000000
+  password-guess-per-second:
+    type: integer
+    required: true
+    create-default: 10000
+    min-value: 100
+    max-value: 1000000
+  password-estimate-drift-factor:
+    type: decimal
+    required: true
+    create-default: 1.1
+    min-value: 1
+    max-value: 10

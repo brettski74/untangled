@@ -11,7 +11,7 @@ from psycopg import Connection
 from untangled.mapping.definition import ClassDefinition, load_definitions
 from untangled.mapping.system_fields import AUDIT_USER_TABLE
 from untangled.schema.ddl import compile_op
-from untangled.schema.diff import diff_schemas
+from untangled.schema.diff import AddDefaultValue, diff_schemas
 from untangled.schema.from_yaml import desired_schema_from_classes
 from untangled.schema.introspect import introspect_schema
 from untangled.schema.ir import SchemaIR
@@ -79,7 +79,11 @@ def migrate(
     current = introspect_schema(conn, managed, sequence_names=managed_seqs)
     # Resolve max+1 starts only for sequences that will be created.
     desired_for_plan = resolve_sequence_starts(conn, desired)
-    plan = diff_schemas(desired_for_plan, current)
+    plan = diff_schemas(
+        desired_for_plan,
+        current,
+        column_add_defaults=_required_create_defaults(definitions),
+    )
 
     if plan.is_empty:
         log("migrate: no changes (no-op)")
@@ -147,6 +151,19 @@ def migrate(
         version_id=version_id,
         restore_point_name=rp_name,
     )
+
+
+def _required_create_defaults(
+    definitions: list[ClassDefinition],
+) -> dict[tuple[str, str], AddDefaultValue]:
+    """Map ``(table, column)`` → create-default for required attrs that declare one."""
+    defaults: dict[tuple[str, str], AddDefaultValue] = {}
+    for defn in definitions:
+        for attr in defn.attributes:
+            if not attr.required or attr.create_default is None:
+                continue
+            defaults[(defn.name_snake, attr.name_snake)] = attr.create_default
+    return defaults
 
 
 def format_destructive_ops(ops: tuple[MigrationOp, ...]) -> str:

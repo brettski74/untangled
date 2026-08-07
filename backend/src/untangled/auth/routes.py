@@ -1,4 +1,4 @@
-"""Auth HTTP routes: login, refresh, logout, ``/auth/me``, and RBAC probe."""
+"""Auth HTTP routes: login, refresh, logout, ``/auth/me``, change-password, RBAC probe."""
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from untangled.auth.dependencies import CurrentUser, DbConn
+from untangled.auth.dependencies import CurrentUser, DbConn, PasswordChangeSubject
+from untangled.auth.password_change import change_password
 from untangled.auth.schemas import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
     LogoutRequest,
     RbacProbeResponse,
     RefreshRequest,
@@ -84,6 +87,32 @@ def me(user: CurrentUser, conn: DbConn) -> UserProfile:
         roles=roles,
         permissions=permissions,
     )
+
+
+@router.post("/change-password", response_model=ChangePasswordResponse)
+def change_password_route(
+    body: ChangePasswordRequest,
+    user: PasswordChangeSubject,
+    conn: DbConn,
+) -> ChangePasswordResponse:
+    """Identity-bound self-service password change (not class RBAC).
+
+    Missing/invalid Bearer → 401 (dependency). Post-auth pipeline failures →
+    uniform 422 with a generic message; success → 200.
+    """
+    ok, detail = change_password(
+        conn,
+        user,
+        current_password=body.current_password,
+        new_password=body.new_password,
+        verify_new_password=body.verify_new_password,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=detail,
+        )
+    return ChangePasswordResponse(detail=detail)
 
 
 @router.get("/rbac-probe", response_model=RbacProbeResponse)
