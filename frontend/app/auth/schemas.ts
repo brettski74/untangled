@@ -25,3 +25,12 @@ export const user_profile_schema = z.object({
 });
 
 export type UserProfile = z.infer<typeof user_profile_schema>;
+
+/** Generic success/failure envelope for POST /auth/change-password. */
+export const change_password_response_schema = z.object({
+  detail: z.string(),
+});
+
+export type ChangePasswordResponse = z.infer<
+  typeof change_password_response_schema
+>;
