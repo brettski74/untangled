@@ -1,6 +1,12 @@
-import { Form } from "react-router";
+import { Form, Link } from "react-router";
 import { CircleHelp, Search, Settings } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type ShellHeaderProps = {
   display_name: string;
@@ -9,7 +15,35 @@ export type ShellHeaderProps = {
 
 export function ShellHeader({ display_name, username }: ShellHeaderProps) {
   const [search_open, set_search_open] = useState(false);
+  const [identity_open, set_identity_open] = useState(false);
   const search_input_id = useId();
+  const identity_menu_id = useId();
+  const identity_root_ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!identity_open) {
+      return;
+    }
+    function on_pointer(event: MouseEvent) {
+      if (
+        identity_root_ref.current != null &&
+        !identity_root_ref.current.contains(event.target as Node)
+      ) {
+        set_identity_open(false);
+      }
+    }
+    function on_key(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        set_identity_open(false);
+      }
+    }
+    document.addEventListener("mousedown", on_pointer);
+    document.addEventListener("keydown", on_key);
+    return () => {
+      document.removeEventListener("mousedown", on_pointer);
+      document.removeEventListener("keydown", on_key);
+    };
+  }, [identity_open]);
 
   return (
     <header
@@ -24,27 +58,50 @@ export function ShellHeader({ display_name, username }: ShellHeaderProps) {
         />
       </div>
 
-      {/* Right edge inward per #12: Settings, Help, Search, current user (+ Sign out). */}
+      {/* Right edge inward per #12: Settings, Help, Search, identity menu. */}
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          title={username}
-          className="max-w-40 truncate rounded px-2 py-1 text-xs font-medium text-[var(--color-shell-chrome-fg)] hover:bg-white/10"
-          onClick={() => {
-            /* no-op — profile content later */
-          }}
-        >
-          {display_name}
-        </button>
-
-        <Form method="post" action="/logout">
+        <div className="relative" ref={identity_root_ref}>
           <button
-            type="submit"
-            className="rounded border border-[var(--color-shell-separator)] px-2 py-1 text-xs text-[var(--color-shell-chrome-muted)] hover:bg-white/10 hover:text-[var(--color-shell-chrome-fg)]"
+            type="button"
+            title={username}
+            aria-haspopup="menu"
+            aria-expanded={identity_open}
+            aria-controls={identity_menu_id}
+            className="max-w-40 truncate rounded px-2 py-1 text-xs font-medium text-[var(--color-shell-chrome-fg)] hover:bg-white/10"
+            onClick={() => set_identity_open((open) => !open)}
           >
-            Sign out
+            {display_name}
           </button>
-        </Form>
+          {identity_open ? (
+            <ul
+              id={identity_menu_id}
+              role="menu"
+              className="absolute top-full right-0 z-20 mt-1 min-w-44 rounded border border-[var(--color-shell-separator)] bg-[var(--color-shell-chrome)] py-1 shadow-lg"
+            >
+              <li role="none">
+                <Link
+                  role="menuitem"
+                  to="/change-password"
+                  className="block w-full px-3 py-1.5 text-left text-xs text-[var(--color-shell-chrome-fg)] hover:bg-white/10"
+                  onClick={() => set_identity_open(false)}
+                >
+                  Change Password
+                </Link>
+              </li>
+              <li role="none">
+                <Form method="post" action="/logout">
+                  <button
+                    type="submit"
+                    role="menuitem"
+                    className="block w-full px-3 py-1.5 text-left text-xs text-[var(--color-shell-chrome-muted)] hover:bg-white/10 hover:text-[var(--color-shell-chrome-fg)]"
+                  >
+                    Sign out
+                  </button>
+                </Form>
+              </li>
+            </ul>
+          ) : null}
+        </div>
 
         {search_open ? (
           <div className="flex items-center">
