@@ -336,6 +336,31 @@ def test_update_rejects_out_of_range(tickets_client: TestClient) -> None:
     assert response.status_code in {400, 422}
 
 
+def test_update_password_max_not_greater_than_min_is_422_not_500(
+    tickets_client: TestClient,
+) -> None:
+    """CHECK on password bounds → semantic 422 with primary text, no row dump."""
+    headers = _headers(tickets_client, "admin")
+    response = tickets_client.patch(
+        f"/system-configs/{SYSTEM_CONFIG_ID}",
+        headers=headers,
+        json={
+            "password_minimum_chars": 20,
+            "password_maximum_chars": 20,
+        },
+    )
+    assert response.status_code == 422
+    body = response.json()
+    assert isinstance(body.get("detail"), str)
+    detail = body["detail"]
+    assert "check constraint" in detail.lower()
+    assert "system_config_check" in detail
+    assert "Failing row contains" not in detail
+    assert "Failing row contains" not in response.text
+    # Spot-check: full-row DETAIL must not leak into the body.
+    assert str(SYSTEM_CONFIG_ID) not in detail
+
+
 def test_helpers_fail_closed_when_missing(
     db_conn: Connection,
     repo_definitions: Path,

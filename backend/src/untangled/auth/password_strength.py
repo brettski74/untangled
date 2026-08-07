@@ -9,6 +9,8 @@ from zxcvbn import zxcvbn
 
 _SECONDS_PER_DAY = 86400.0
 _LITERAL_USER_INPUTS = ("Untangled", "itsm")
+# Python zxcvbn DoS guard — not the product password-maximum-chars bound.
+_ZXCVBN_MAX_PASSWORD_LENGTH = 72
 
 
 class StrengthClass(StrEnum):
@@ -44,7 +46,9 @@ def crack_time_ratio(
     # zxcvbn raises on empty input; treat as immediately crackable.
     if password == "":
         return 0.0
-    result: dict[str, Any] = zxcvbn(password, user_inputs=user_inputs)
+    # Score only the library max prefix; full password is hashed/verified elsewhere.
+    scored = password[:_ZXCVBN_MAX_PASSWORD_LENGTH]
+    result: dict[str, Any] = zxcvbn(scored, user_inputs=user_inputs)
     guesses = float(result["guesses"])
     guesses_per_second = max(int(guess_per_second), 1)
     acceptable_days = max(int(acceptable_crack_time_days), 1)

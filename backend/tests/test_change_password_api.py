@@ -16,6 +16,10 @@ from untangled.seed.users import SEED_USERS, password_for
 from untangled.system_config.cache import default_cache
 
 _STRONG_NEW = "orchid-lantern-quasar-7N!pQ2xm"
+# >72 chars: exercises zxcvbn truncate-for-score (library max), not product max.
+_STRONG_LONG = (
+    "orchid-lantern-quasar-7N!pQ2xm-wX9mK2pL7vN4qR8sT1uY3zA5bC6dE0fG8hJ1kLm4nP6"
+)
 _FAILURE = "Password change failed."
 _SUCCESS = "Password change complete."
 
@@ -269,3 +273,45 @@ def test_change_password_structural_body_is_400(
         content=b"{not-json",
     )
     assert response.status_code == 400
+
+
+def test_change_password_longer_than_zxcvbn_max_does_not_500(
+    auth_client: TestClient,
+    db_conn: Connection,
+) -> None:
+    """Passwords >72 chars must not 500; success path still updates the hash."""
+    assert len(_STRONG_LONG) > 72
+    admin = SEED_USERS[0]
+    token = _bearer(auth_client, admin.username)
+    response = _change(
+        auth_client,
+        token,
+        current=password_for(admin),
+        new=_STRONG_LONG,
+        verify=_STRONG_LONG,
+    )
+    assert response.status_code == 200
+    assert response.json() == {"detail": _SUCCESS}
+    assert verify_password(_password_hash(db_conn, admin.id), _STRONG_LONG)
+
+
+def test_change_password_weak_long_prefix_is_uniform_422(
+    auth_client: TestClient,
+    db_conn: Connection,
+) -> None:
+    """Weak scored prefix with length >72 still fails as generic 422."""
+    weak_long = "password" + ("x" * 65)
+    assert len(weak_long) == 73
+    admin = SEED_USERS[0]
+    before = _password_hash(db_conn, admin.id)
+    token = _bearer(auth_client, admin.username)
+    response = _change(
+        auth_client,
+        token,
+        current=password_for(admin),
+        new=weak_long,
+        verify=weak_long,
+    )
+    assert response.status_code == 422
+    assert response.json() == {"detail": _FAILURE}
+    assert _password_hash(db_conn, admin.id) == before
