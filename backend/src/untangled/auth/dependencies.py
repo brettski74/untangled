@@ -7,10 +7,13 @@ from typing import Annotated, Any
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from psycopg import Connection
 
+from untangled.audit.context import client_ip
+from untangled.audit.emit import emit_best_effort, make_event
+from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.auth.store import fetch_user_by_id
 from untangled.auth.tokens import decode_access_token
 from untangled.persistence.connection import connect
@@ -39,6 +42,7 @@ def _credentials_exc() -> HTTPException:
 
 
 def get_current_user(
+    request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
     conn: DbConn,
 ) -> dict[str, Any]:
@@ -47,10 +51,31 @@ def get_current_user(
     try:
         user_id: UUID = decode_access_token(token)
     except jwt.PyJWTError as exc:
+        emit_best_effort(
+            make_event(
+                event_type=EventType.RECORD_AUTHN_DENIED,
+                actor_channel=ActorChannel.HUMAN,
+                outcome=Outcome.FAILURE,
+                reason="invalid_access_token",
+                severity=Severity.WARNING,
+                ip_address=client_ip(request),
+            )
+        )
         raise credentials_exc from exc
 
     user = fetch_user_by_id(conn, user_id)
     if user is None or not user["is_active"]:
+        emit_best_effort(
+            make_event(
+                event_type=EventType.RECORD_AUTHN_DENIED,
+                actor_channel=ActorChannel.HUMAN,
+                outcome=Outcome.FAILURE,
+                reason="inactive_or_missing_user",
+                severity=Severity.WARNING,
+                user_id=user_id if user is not None else None,
+                ip_address=client_ip(request),
+            )
+        )
         raise credentials_exc
     return user
 

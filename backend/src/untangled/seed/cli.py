@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from untangled.audit.deps import ensure_audit_logger
 from untangled.persistence.connection import connect, database_url
 from untangled.seed import seed_all
 from untangled.seed.rbac_catalog import SEED_ROLES, SEED_USER_ROLES
@@ -23,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     build_parser().parse_args(argv)
+    ensure_audit_logger()
     print(f"seed: database={database_url()}")
     with connect() as conn:
         summary = seed_all(conn)

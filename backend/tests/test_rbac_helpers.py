@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from starlette.requests import Request
 
 from untangled.rbac.dependencies import require_class_operation, require_permission
 from untangled.rbac.keys import (
@@ -12,6 +13,23 @@ from untangled.rbac.keys import (
     parse_permission_key,
     permission_grants,
 )
+
+
+def _fake_request() -> Request:
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/",
+        "raw_path": b"/",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+        "server": ("test", 80),
+    }
+    return Request(scope)
 
 
 def test_class_operation_key_format() -> None:
@@ -60,12 +78,16 @@ def test_permission_grants_exact_and_deny() -> None:
 def test_require_permission_factory_allow_and_403() -> None:
     dep = require_permission("demo-item:read")
     user = {"id": "u", "username": "x"}
-    assert dep(user=user, permissions=frozenset({"demo-item:read"})) is user
+    request = _fake_request()
+    assert (
+        dep(request=request, user=user, permissions=frozenset({"demo-item:read"}))
+        is user
+    )
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc_info:
-        dep(user=user, permissions=frozenset({"demo-item:create"}))
+        dep(request=request, user=user, permissions=frozenset({"demo-item:create"}))
     assert exc_info.value.status_code == 403
     assert "demo-item:read" in str(exc_info.value.detail)
 
@@ -73,19 +95,38 @@ def test_require_permission_factory_allow_and_403() -> None:
 def test_require_class_operation_uses_canonical_key() -> None:
     dep = require_class_operation("change-request", "update")
     user = {"id": "u"}
-    assert dep(user=user, permissions=frozenset({"change-request:update"})) is user
+    request = _fake_request()
+    assert (
+        dep(
+            request=request,
+            user=user,
+            permissions=frozenset({"change-request:update"}),
+        )
+        is user
+    )
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc_info:
-        dep(user=user, permissions=frozenset({"change-request:read"}))
+        dep(
+            request=request,
+            user=user,
+            permissions=frozenset({"change-request:read"}),
+        )
     assert exc_info.value.status_code == 403
 
 
 def test_require_permission_admin_allows_any() -> None:
     dep = require_permission("incident:delete")
     user = {"id": "u"}
-    assert dep(user=user, permissions=frozenset({ADMIN_PERMISSION_KEY})) is user
+    assert (
+        dep(
+            request=_fake_request(),
+            user=user,
+            permissions=frozenset({ADMIN_PERMISSION_KEY}),
+        )
+        is user
+    )
 
 
 def test_class_operation_granted_public_read_only() -> None:
@@ -108,10 +149,11 @@ def test_require_class_operation_public_read(monkeypatch: pytest.MonkeyPatch) ->
         lambda name: SimpleNamespace(public=name == "public-item"),
     )
     user = {"id": "u"}
+    request = _fake_request()
     public_dep = require_class_operation("public-item", "read")
-    assert public_dep(user=user, permissions=frozenset()) is user
+    assert public_dep(request=request, user=user, permissions=frozenset()) is user
 
     private_dep = require_class_operation("incident", "read")
     with pytest.raises(HTTPException) as exc_info:
-        private_dep(user=user, permissions=frozenset())
+        private_dep(request=request, user=user, permissions=frozenset())
     assert exc_info.value.status_code == 403

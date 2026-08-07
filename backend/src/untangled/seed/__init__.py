@@ -76,6 +76,25 @@ def upsert_system_user(conn: Connection) -> None:
     if not _relation_exists(conn, "user_role"):
         return
 
+    from untangled.audit.deps import ensure_audit_logger
+    from untangled.audit.emit import emit_fail_closed, make_event
+    from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
+    from untangled.mapping.well_known import SYSTEM_USER_ID as _SYS
+
+    # Fail-closed: privilege mutation must not proceed without a durable audit attempt.
+    ensure_audit_logger()
+    emit_fail_closed(
+        make_event(
+            event_type=EventType.RBAC_PRIVILEGE_CHANGE,
+            actor_channel=ActorChannel.SYSTEM,
+            outcome=Outcome.SUCCESS,
+            reason="system_user_clear_roles",
+            severity=Severity.NOTICE,
+            user_id=_SYS,
+            data={"user_id": str(SYSTEM_USER_ID), "action": "delete_user_roles"},
+        )
+    )
+
     with conn.cursor() as cur:
         cur.execute(
             sql.SQL("DELETE FROM {} WHERE {} = {}").format(

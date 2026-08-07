@@ -21,6 +21,8 @@ SYSTEM_CONFIG_DEFAULTS: dict[str, int | Decimal] = {
     "password_acceptable_crack_time_days": 1000,
     "password_guess_per_second": 10000,
     "password_estimate_drift_factor": Decimal("1.1"),
+    "audit_bulk_read_window_seconds": 600,
+    "audit_bulk_read_max_searches": 100,
 }
 
 _TABLE = "system_config"

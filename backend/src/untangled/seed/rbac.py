@@ -26,13 +26,34 @@ def seed_rbac(conn: Connection) -> dict[str, int]:
     _upsert_permissions(conn, now=now, actor=actor)
     _upsert_role_permissions(conn, now=now, actor=actor)
     _upsert_user_roles(conn, now=now, actor=actor)
-    conn.commit()
-    return {
+    counts = {
         "roles": len(SEED_ROLES),
         "permissions": len(SEED_PERMISSIONS),
         "role_permissions": len(SEED_ROLE_PERMISSIONS),
         "user_roles": len(SEED_USER_ROLES),
     }
+    from untangled.audit.deps import ensure_audit_logger
+    from untangled.audit.emit import emit_fail_closed, make_event
+    from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
+
+    ensure_audit_logger()
+    try:
+        emit_fail_closed(
+            make_event(
+                event_type=EventType.RBAC_PRIVILEGE_CHANGE,
+                actor_channel=ActorChannel.OPERATOR,
+                outcome=Outcome.SUCCESS,
+                reason="seed_rbac",
+                severity=Severity.NOTICE,
+                user_id=SYSTEM_USER_ID,
+                data=counts,
+            )
+        )
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+    return counts
 
 
 def _upsert_roles(conn: Connection, *, now: datetime, actor: UUID) -> None:

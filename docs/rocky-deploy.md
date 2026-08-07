@@ -50,6 +50,8 @@ Rocky 10 can mirror later without redesign.
 
 No manual copy of repo files onto the host. Actions provisions `~/untangled/` each
 deploy. Postgres data stays in the Compose named volume across deploys.
+Audit NDJSON files stay in the `untangled_audit` named volume on the API
+service (API does not prune; retain/forward externally).
 
 ## GitHub Environment `rocky9`
 
@@ -79,6 +81,7 @@ Non-secret connection wiring — set as **variables** (`vars.*`), not secrets.
 | `UNTANGLED_COOKIE_SECURE` | no | Default `true` (Actions also sets web host port `3000`) |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | no | Default `900` |
 | `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | no | Default `604800` |
+| `UNTANGLED_AUDIT_LOG_DIR` | no | Default `/var/log/untangled/audit` (Compose volume `untangled_audit`) |
 
 ### Generate / rotate deploy key
 
