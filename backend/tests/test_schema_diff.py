@@ -16,6 +16,7 @@ from untangled.schema.plan import (
     CreateTable,
     DropCheck,
     DropColumn,
+    DropColumnDefault,
     DropForeignKey,
     DropTable,
 )
@@ -104,6 +105,52 @@ def test_diff_missing_column_is_add() -> None:
     assert isinstance(plan.ops[0], AddColumn)
     assert plan.ops[0].column.name == "summary"
     assert not plan.destructive_ops
+
+
+def test_diff_required_add_with_default_emits_drop_default() -> None:
+    desired = _table(
+        "demo_item",
+        (
+            ColumnIR("id", "uuid", False),
+            ColumnIR("title", "text", False),
+            ColumnIR("priority", "integer", False),
+        ),
+    )
+    current = _table(
+        "demo_item",
+        (ColumnIR("id", "uuid", False), ColumnIR("title", "text", False)),
+    )
+    plan = diff_schemas(
+        SchemaIR(tables=(desired,)),
+        SchemaIR(tables=(current,)),
+        column_add_defaults={("demo_item", "priority"): 5},
+    )
+    assert len(plan.ops) == 2
+    assert isinstance(plan.ops[0], AddColumn)
+    assert plan.ops[0].column.name == "priority"
+    assert plan.ops[0].add_default == 5
+    assert isinstance(plan.ops[1], DropColumnDefault)
+    assert plan.ops[1].table_name == "demo_item"
+    assert plan.ops[1].column_name == "priority"
+
+
+def test_diff_required_add_without_default_has_no_drop_default() -> None:
+    desired = _table(
+        "demo_item",
+        (
+            ColumnIR("id", "uuid", False),
+            ColumnIR("title", "text", False),
+            ColumnIR("priority", "integer", False),
+        ),
+    )
+    current = _table(
+        "demo_item",
+        (ColumnIR("id", "uuid", False), ColumnIR("title", "text", False)),
+    )
+    plan = diff_schemas(SchemaIR(tables=(desired,)), SchemaIR(tables=(current,)))
+    assert len(plan.ops) == 1
+    assert isinstance(plan.ops[0], AddColumn)
+    assert plan.ops[0].add_default is None
 
 
 def test_diff_drop_table_drops_fk_first() -> None:

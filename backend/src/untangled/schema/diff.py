@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Mapping
 
 from untangled.schema.ir import SchemaIR, TableIR
 from untangled.schema.plan import (
@@ -16,6 +17,7 @@ from untangled.schema.plan import (
     CreateTable,
     DropCheck,
     DropColumn,
+    DropColumnDefault,
     DropForeignKey,
     DropIndex,
     DropSequence,
@@ -24,9 +26,22 @@ from untangled.schema.plan import (
     MigrationPlan,
 )
 
+# YAML create-default scalars used as temporary ADD COLUMN DEFAULT values.
+AddDefaultValue = str | int | float | bool
 
-def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
-    """Compare ``desired`` vs ``current`` and return an ordered migration plan."""
+
+def diff_schemas(
+    desired: SchemaIR,
+    current: SchemaIR,
+    *,
+    column_add_defaults: Mapping[tuple[str, str], AddDefaultValue] | None = None,
+) -> MigrationPlan:
+    """Compare ``desired`` vs ``current`` and return an ordered migration plan.
+
+    ``column_add_defaults`` maps ``(table_name, column_name)`` to a temporary
+    DEFAULT for required AddColumn ops (then ``DropColumnDefault``).
+    """
+    defaults = column_add_defaults or {}
     desired_by_name = {t.name: t for t in desired.tables}
     current_by_name = {t.name: t for t in current.tables}
 
@@ -109,7 +124,20 @@ def diff_schemas(desired: SchemaIR, current: SchemaIR) -> MigrationPlan:
         current_cols = {c.name for c in current_table.columns}
         for col in sorted(desired_table.columns, key=lambda c: c.name):
             if col.name not in current_cols:
-                ops.append(AddColumn(table_name=name, column=col))
+                add_default = None
+                if not col.nullable:
+                    add_default = defaults.get((name, col.name))
+                ops.append(
+                    AddColumn(
+                        table_name=name,
+                        column=col,
+                        add_default=add_default,
+                    )
+                )
+                if add_default is not None:
+                    ops.append(
+                        DropColumnDefault(table_name=name, column_name=col.name)
+                    )
 
     # 5b. Create missing sequences (never alter start of existing ones).
     for seq_name in sorted(desired_seqs.keys() - current_seqs.keys()):

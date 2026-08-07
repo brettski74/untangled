@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -20,16 +21,33 @@ class SystemConfigUnreadableError(RuntimeError):
     """Raised when the system-config singleton cannot be read."""
 
 
-def _bound_int(raw: int | float | Any) -> int:
+def _bound_number(raw: int | float | Decimal | Any) -> int | float | Decimal:
+    if isinstance(raw, Decimal):
+        return raw
+    if isinstance(raw, float):
+        return raw
     return int(raw)
 
 
-def _clamp_int(value: int, attr: AttributeDefinition) -> int:
-    result = value
+def _clamp_number(
+    value: int | float | Decimal,
+    attr: AttributeDefinition,
+) -> int | float | Decimal:
+    result: int | float | Decimal = value
     if attr.min_value is not None:
-        result = max(result, _bound_int(attr.min_value))
+        lower = _bound_number(attr.min_value)
+        if result < lower:  # type: ignore[operator]
+            result = lower
     if attr.max_value is not None:
-        result = min(result, _bound_int(attr.max_value))
+        upper = _bound_number(attr.max_value)
+        if result > upper:  # type: ignore[operator]
+            result = upper
+    if isinstance(value, int) and not isinstance(value, bool):
+        return int(result)
+    if isinstance(value, float):
+        return float(result)
+    if isinstance(value, Decimal):
+        return Decimal(result)
     return result
 
 
@@ -37,16 +55,16 @@ def clamp_system_config(row: BaseModel, definition: ClassDefinition) -> BaseMode
     """Return a copy of ``row`` with numeric min/max attributes clamped.
 
     Bounds come only from ``definition`` attribute metadata — not a second
-    hand-authored limit table.
+    hand-authored limit table. Supports integer, float, and decimal values.
     """
-    updates: dict[str, int] = {}
+    updates: dict[str, int | float | Decimal] = {}
     for attr in definition.attributes:
         if attr.min_value is None and attr.max_value is None:
             continue
         current = getattr(row, attr.name_snake)
-        if not isinstance(current, int):
+        if isinstance(current, bool) or not isinstance(current, (int, float, Decimal)):
             continue
-        clamped = _clamp_int(current, attr)
+        clamped = _clamp_number(current, attr)
         if clamped != current:
             updates[attr.name_snake] = clamped
     if not updates:

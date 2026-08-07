@@ -90,14 +90,22 @@ definitions off `string`.
 
 Optional YAML key **`create-default`** on an attribute declares a create-form
 prefill (and values the generic new-record path must include in create POST
-bodies for non-editable fields). It is **not** a PostgreSQL column DEFAULT
-and is not migrate / environment backfill ([#62](https://github.com/brettski74/untangled/issues/62)).
+bodies for non-editable fields). It is **not** a lasting PostgreSQL column
+DEFAULT. For **required** attributes, the same literal is also the migrate
+add-time backfill: `ADD COLUMN … NOT NULL DEFAULT <value>` then `DROP DEFAULT`
+in the same transaction so existing rows receive the value
+([ADR 012](../architecture/decisions/012-create-default-migrate-backfill.md);
+ADD-COLUMN half of [#62](https://github.com/brettski74/untangled/issues/62)).
+Required adds **without** `create-default` still use `ADD … NOT NULL` with no
+DEFAULT and fail on non-empty tables.
 
 - Omit the key when there is no default (do not write `create-default: null`).
 - Generated field meta exposes `create_default` only when declared.
 - Persistence create does not auto-apply these yet; callers (SSR new-record
   action, API clients) must supply them until a later server-apply story.
 - `friendly-id` cannot have `create-default` (server-assigned).
+- Declaring `create-default` on a required attribute backfills **all existing
+  rows** when the column is added — treat that as data-migration intent.
 
 M1 Change Request `requested-by` uses the baseline seed-catalog admin UUID
 (`01900000-0000-7000-8000-000000000001`). That default is valid only when the

@@ -18,7 +18,7 @@ from untangled.schema import (
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import diff_schemas
 from untangled.schema.ir import CheckIR, ColumnIR, SchemaIR, TableIR
-from untangled.schema.plan import AddCheck, CreateTable
+from untangled.schema.plan import AddCheck, AddColumn, CreateTable, DropColumnDefault
 from untangled.schema.versions import (
     class_hashes_for_version,
     current_version_row,
@@ -234,6 +234,131 @@ def test_migrate_ensures_system_user_before_audit_fks(
         ).fetchone()[0]
         == SYSTEM_USER_ID
     )
+
+
+def test_migrate_required_create_default_backfills_populated_table(
+    db_conn: Connection,
+) -> None:
+    """Non-system_config table: ADD NOT NULL DEFAULT then DROP DEFAULT, same txn."""
+    db_conn.execute("DROP TABLE IF EXISTS migrate_default_scratch CASCADE")
+    db_conn.execute(
+        "CREATE TABLE migrate_default_scratch ("
+        "id uuid PRIMARY KEY, title text NOT NULL)"
+    )
+    from untangled.persistence.ids import new_uuid7
+
+    row_id = new_uuid7()
+    db_conn.execute(
+        "INSERT INTO migrate_default_scratch (id, title) VALUES (%s, %s)",
+        (row_id, "existing"),
+    )
+    db_conn.commit()
+
+    current = introspect_schema(db_conn, ["migrate_default_scratch"])
+    desired = SchemaIR(
+        tables=(
+            TableIR(
+                name="migrate_default_scratch",
+                columns=(
+                    ColumnIR("id", "uuid", False),
+                    ColumnIR("title", "text", False),
+                    ColumnIR("priority", "integer", False),
+                ),
+                primary_key=("id",),
+            ),
+        )
+    )
+    plan = diff_schemas(
+        desired,
+        current,
+        column_add_defaults={("migrate_default_scratch", "priority"): 7},
+    )
+    assert [type(op) for op in plan.ops] == [AddColumn, DropColumnDefault]
+
+    try:
+        for op in plan.ops:
+            db_conn.execute(compile_op(op))
+        db_conn.commit()
+    except Exception:
+        db_conn.rollback()
+        raise
+
+    value = db_conn.execute(
+        "SELECT priority FROM migrate_default_scratch WHERE id = %s",
+        (row_id,),
+    ).fetchone()[0]
+    assert value == 7
+
+    default_row = db_conn.execute(
+        """
+        SELECT column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'migrate_default_scratch'
+          AND column_name = 'priority'
+        """
+    ).fetchone()
+    assert default_row is not None
+    assert default_row[0] is None
+
+    db_conn.execute("DROP TABLE IF EXISTS migrate_default_scratch CASCADE")
+    db_conn.commit()
+
+
+def test_migrate_required_add_without_default_fails_when_populated(
+    db_conn: Connection,
+) -> None:
+    db_conn.execute("DROP TABLE IF EXISTS migrate_nodefault_scratch CASCADE")
+    db_conn.execute(
+        "CREATE TABLE migrate_nodefault_scratch ("
+        "id uuid PRIMARY KEY, title text NOT NULL)"
+    )
+    from untangled.persistence.ids import new_uuid7
+
+    db_conn.execute(
+        "INSERT INTO migrate_nodefault_scratch (id, title) VALUES (%s, %s)",
+        (new_uuid7(), "existing"),
+    )
+    db_conn.commit()
+
+    current = introspect_schema(db_conn, ["migrate_nodefault_scratch"])
+    desired = SchemaIR(
+        tables=(
+            TableIR(
+                name="migrate_nodefault_scratch",
+                columns=(
+                    ColumnIR("id", "uuid", False),
+                    ColumnIR("title", "text", False),
+                    ColumnIR("priority", "integer", False),
+                ),
+                primary_key=("id",),
+            ),
+        )
+    )
+    plan = diff_schemas(desired, current)
+    assert len(plan.ops) == 1
+    assert isinstance(plan.ops[0], AddColumn)
+    assert plan.ops[0].add_default is None
+
+    with pytest.raises(Exception):
+        db_conn.execute(compile_op(plan.ops[0]))
+        db_conn.commit()
+    db_conn.rollback()
+
+    cols = {
+        r[0]
+        for r in db_conn.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'migrate_nodefault_scratch'
+            """
+        ).fetchall()
+    }
+    assert "priority" not in cols
+
+    db_conn.execute("DROP TABLE IF EXISTS migrate_nodefault_scratch CASCADE")
+    db_conn.commit()
 
 
 def test_check_constraint_ddl_introspect_round_trip(db_conn: Connection) -> None:

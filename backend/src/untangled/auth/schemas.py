@@ -44,3 +44,21 @@ class RbacProbeResponse(BaseModel):
     ok: bool = True
     required_permission: str
     detail: str = "RBAC check passed"
+
+
+class ChangePasswordRequest(BaseModel):
+    """Body for identity-bound password change.
+
+    Fields default to ``None`` so null/empty/omitted values reach the always-run
+    post-auth pipeline (uniform 422) instead of required-field short-circuit.
+    """
+
+    current_password: str | None = None
+    new_password: str | None = None
+    verify_new_password: str | None = None
+
+
+class ChangePasswordResponse(BaseModel):
+    """Generic success or failure detail (never echoes password material)."""
+
+    detail: str

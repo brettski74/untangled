@@ -37,10 +37,16 @@ class DropTable:
 
 @dataclass(frozen=True, slots=True)
 class AddColumn:
-    """Add a column to an existing table."""
+    """Add a column to an existing table.
+
+    ``add_default`` is temporary add-op metadata (from YAML ``create-default`` for
+    required adds). It is not part of desired ``ColumnIR`` identity; a matching
+    ``DropColumnDefault`` follows in the same plan when set.
+    """
 
     table_name: str
     column: ColumnIR
+    add_default: str | int | float | bool | None = None
 
     @property
     def destructive(self) -> bool:
@@ -48,7 +54,28 @@ class AddColumn:
 
     def describe(self) -> str:
         null = "NULL" if self.column.nullable else "NOT NULL"
-        return f"ADD COLUMN {self.table_name}.{self.column.name} {self.column.type_name} {null}"
+        base = (
+            f"ADD COLUMN {self.table_name}.{self.column.name} "
+            f"{self.column.type_name} {null}"
+        )
+        if self.add_default is not None:
+            return f"{base} DEFAULT {self.add_default!r}"
+        return base
+
+
+@dataclass(frozen=True, slots=True)
+class DropColumnDefault:
+    """Drop a column DEFAULT after a temporary add-time backfill."""
+
+    table_name: str
+    column_name: str
+
+    @property
+    def destructive(self) -> bool:
+        return False
+
+    def describe(self) -> str:
+        return f"ALTER COLUMN {self.table_name}.{self.column_name} DROP DEFAULT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,6 +259,7 @@ MigrationOp = (
     CreateTable
     | DropTable
     | AddColumn
+    | DropColumnDefault
     | DropColumn
     | AlterColumnType
     | AlterColumnNullability
