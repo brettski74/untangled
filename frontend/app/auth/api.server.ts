@@ -4,6 +4,7 @@
  */
 import { ApiForbiddenError, ApiUnauthorizedError } from "./errors";
 import {
+  change_password_response_schema,
   token_pair_schema,
   user_profile_schema,
   type UserProfile,
@@ -87,6 +88,51 @@ export async function api_fetch_with_token(
   }
 
   return response;
+}
+
+export type ChangePasswordBody = {
+  current_password: string;
+  new_password: string;
+  verify_new_password: string;
+};
+
+export type ChangePasswordResult =
+  | { ok: true; detail: string }
+  | { ok: false; detail: string };
+
+/**
+ * POST /auth/change-password via the web-tier Bearer seam.
+ * 401 propagates as ApiUnauthorizedError; 200/422 return generic detail.
+ */
+export async function change_password(
+  access_token: string,
+  body: ChangePasswordBody,
+): Promise<ChangePasswordResult> {
+  const response = await api_fetch_with_token(
+    access_token,
+    "/auth/change-password",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+
+  let detail = "Password change failed.";
+  try {
+    const payload: unknown = await response.json();
+    detail = change_password_response_schema.parse(payload).detail;
+  } catch {
+    // Keep generic failure when body is missing or malformed.
+  }
+
+  if (response.status === 200) {
+    return { ok: true, detail };
+  }
+  if (response.status === 422) {
+    return { ok: false, detail: detail || "Password change failed." };
+  }
+  return { ok: false, detail: "Password change failed." };
 }
 
 /**
