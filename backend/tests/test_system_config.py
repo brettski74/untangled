@@ -297,6 +297,38 @@ def test_update_requires_admin_among_seed_roles(tickets_client: TestClient) -> N
     )
     assert updated.status_code == 200
     assert updated.json()["max_search_nesting_depth"] == 4
+    assert isinstance(updated.json()["updated_by"], str)
+
+
+def test_v1_update_enriches_audit_fks_and_requires_admin(
+    tickets_client: TestClient,
+) -> None:
+    readonly = _headers(tickets_client, "readonly")
+    denied = tickets_client.patch(
+        f"/api/v1/system-configs/{SYSTEM_CONFIG_ID}",
+        headers=readonly,
+        json={"max_search_nesting_depth": 5},
+    )
+    assert denied.status_code == 403
+
+    admin_seed = next(s for s in SEED_USERS if s.username == "admin")
+    admin = _headers(tickets_client, "admin")
+    updated = tickets_client.patch(
+        f"/api/v1/system-configs/{SYSTEM_CONFIG_ID}",
+        headers=admin,
+        json={"max_search_nesting_depth": 5},
+    )
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    assert body["max_search_nesting_depth"] == 5
+    created = body["created_by"]
+    assert isinstance(created, dict)
+    assert created["id"] == str(SYSTEM_USER_ID)
+    assert created["display_name"] == "System"
+    updated_by = body["updated_by"]
+    assert isinstance(updated_by, dict)
+    assert updated_by["id"] == str(admin_seed.id)
+    assert updated_by["display_name"] == admin_seed.display_name
 
 
 def test_create_delete_search_routes_absent(tickets_client: TestClient) -> None:
@@ -318,11 +350,6 @@ def test_create_delete_search_routes_absent(tickets_client: TestClient) -> None:
         "/api/v1/system-configs/search",
         headers=headers,
         json={"predicate": {"op": "eq", "attribute": "id", "value": str(SYSTEM_CONFIG_ID)}},
-    ).status_code in {404, 405}
-    assert tickets_client.patch(
-        f"/api/v1/system-configs/{SYSTEM_CONFIG_ID}",
-        headers=headers,
-        json={"max_search_nesting_depth": 5},
     ).status_code in {404, 405}
 
 

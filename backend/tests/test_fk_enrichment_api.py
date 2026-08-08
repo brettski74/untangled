@@ -1,4 +1,4 @@
-"""Versioned FK identity enrichment on /api/v1 fetch and search."""
+"""Versioned FK identity enrichment on /api/v1 fetch, search, and update."""
 
 from __future__ import annotations
 
@@ -199,6 +199,55 @@ def test_v1_search_filter_still_accepts_scalar_uuid(
             headers=headers,
             json={"assigned_user_id": None},
         )
+
+
+def test_v1_patch_enriches_audit_and_optional_fk(tickets_client: TestClient) -> None:
+    headers = _headers(tickets_client, "admin")
+    admin = next(s for s in SEED_USERS if s.username == "admin")
+    updated = tickets_client.patch(
+        f"/api/v1/incidents/{SEED_INCIDENT_1_ID}",
+        headers=headers,
+        json={"assigned_user_id": str(admin.id), "status": "in-progress"},
+    )
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    assert body["status"] == "in-progress"
+    assigned = body["assigned_user_id"]
+    assert isinstance(assigned, dict)
+    assert assigned["id"] == str(admin.id)
+    assert assigned["display_name"] == admin.display_name
+    assert "friendly_id" not in assigned
+    created = body["created_by"]
+    assert isinstance(created, dict)
+    assert created["id"] == str(SEED_ADMIN_ID)
+    assert "display_name" in created
+    assert isinstance(created["display_name"], str)
+    assert created["display_name"].strip() != ""
+    assert "friendly_id" not in created
+    updated_by = body["updated_by"]
+    assert isinstance(updated_by, dict)
+    assert updated_by["id"] == str(admin.id)
+    assert updated_by["display_name"] == admin.display_name
+
+    legacy = tickets_client.patch(
+        f"/incidents/{SEED_INCIDENT_1_ID}",
+        headers=headers,
+        json={"assigned_user_id": None, "status": "new"},
+    )
+    assert legacy.status_code == 200, legacy.text
+    assert isinstance(legacy.json()["assigned_user_id"], (str, type(None)))
+    assert legacy.json()["assigned_user_id"] is None
+    assert isinstance(legacy.json()["updated_by"], str)
+    assert legacy.json()["updated_by"] == str(admin.id)
+
+
+def test_v1_patch_requires_update_permission(tickets_client: TestClient) -> None:
+    denied = tickets_client.patch(
+        f"/api/v1/incidents/{SEED_INCIDENT_1_ID}",
+        headers=_headers(tickets_client, "readonly"),
+        json={"status": "in-progress"},
+    )
+    assert denied.status_code == 403
 
 
 def test_no_v1_create_route(tickets_client: TestClient) -> None:
