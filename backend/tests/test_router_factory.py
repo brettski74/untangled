@@ -55,3 +55,4 @@ def test_suppress_flags_omit_create_search_delete(
     assert ("PATCH", "/singleton-items/{locator}") in _route_keys(legacy)
     assert ("POST", "/api/v1/singleton-items/search") not in _route_keys(v1)
     assert ("GET", "/api/v1/singleton-items/{locator}") in _route_keys(v1)
+    assert ("PATCH", "/api/v1/singleton-items/{locator}") in _route_keys(v1)

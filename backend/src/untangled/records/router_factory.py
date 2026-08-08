@@ -48,7 +48,7 @@ def build_class_router(
     """Build authenticated routes for a class.
 
     ``legacy``: full CRUD + scalar fetch/search (pre-versioning compatibility).
-    ``v1``: fetch + search only, with FK identity enrichment.
+    ``v1``: fetch, search, and update with FK identity enrichment on responses.
     """
     create_cls: type[BaseModel] = model(class_kebab, "Create")
     update_cls: type[BaseModel] = model(class_kebab, "Update")
@@ -123,7 +123,7 @@ def build_class_router(
         else (
             "Versioned search. Projected foreign-key fields are identity objects "
             "with canonical id plus configured display_name / friendly_id. "
-            "Create/update/delete remain on unversioned routes until deliberately "
+            "Create/delete remain on unversioned routes until deliberately "
             "versioned."
         )
     )
@@ -246,7 +246,8 @@ def build_class_router(
         if surface == "legacy"
         else (
             "Versioned fetch. All foreign-key fields (including audit created_by / "
-            "updated_by) are identity objects. Writes remain on unversioned routes."
+            "updated_by) are identity objects. Create/delete remain on unversioned "
+            "routes until deliberately versioned."
         )
     )
 
@@ -287,71 +288,104 @@ def build_class_router(
             return serialize_v1_record(row)
         return row
 
-    if surface == "legacy":
+    update_summary = (
+        "Update one record (legacy scalar FK responses)"
+        if surface == "legacy"
+        else "Update one record with FK identity enrichment"
+    )
+    update_description = (
+        "Pre-versioning compatibility route. Foreign-key fields in the response "
+        "are scalar UUID strings. Prefer PATCH /api/v1{prefix}/{locator} for new "
+        "consumers. Removal is tracked by GitHub issue #117."
+        if surface == "legacy"
+        else (
+            "Versioned update. Request body uses scalar foreign-key UUIDs. The "
+            "response is the full updated record with the same FK identity "
+            "enrichment as versioned fetch (including audit created_by / "
+            "updated_by). Create/delete remain on unversioned routes."
+        )
+    )
 
-        @router.patch("/{locator}")
-        def update_record(
-            request: Request,
-            locator: str,
-            body: update_cls,
-            conn: DbConn,
-            user: Annotated[
-                dict[str, Any], Depends(require_class_operation(class_kebab, "update"))
-            ],
-        ) -> Any:
-            definition = class_definition(class_kebab)
-            store = record_store(conn, class_kebab, actor_id=user["id"])
-            existing = fetch_by_locator(store, definition, locator)
-            before = existing.model_dump()
-            patch = body.model_dump(exclude_unset=True)
+    @router.patch(
+        "/{locator}",
+        summary=update_summary,
+        description=update_description,
+        deprecated=deprecated,
+        operation_id=f"{class_kebab.replace('-', '_')}_{surface}_update",
+    )
+    def update_record(
+        request: Request,
+        locator: str,
+        body: update_cls,
+        conn: DbConn,
+        user: Annotated[
+            dict[str, Any], Depends(require_class_operation(class_kebab, "update"))
+        ],
+    ) -> Any:
+        definition = class_definition(class_kebab)
+        store = record_store(conn, class_kebab, actor_id=user["id"])
+        existing = fetch_by_locator(store, definition, locator)
+        before = existing.model_dump()
+        patch = body.model_dump(exclude_unset=True)
+        try:
+            updated = store.update(existing.id, patch)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"{class_kebab} not found",
+            ) from exc
+        try:
+            emit_fail_closed(
+                make_event(
+                    event_type=EventType.RECORD_UPDATE,
+                    actor_channel=ActorChannel.HUMAN,
+                    outcome=Outcome.SUCCESS,
+                    reason="update_ok",
+                    severity=Severity.INFO,
+                    user_id=user["id"],
+                    ip_address=client_ip(request),
+                    data={
+                        "class": class_kebab,
+                        "locator": str(existing.id),
+                        "fields": sorted(patch.keys()),
+                    },
+                )
+            )
+        except AuditWriteError as exc:
             try:
-                updated = store.update(existing.id, patch)
-            except KeyError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"{class_kebab} not found",
-                ) from exc
-            try:
+                restore = {
+                    k: before[k]
+                    for k in patch
+                    if k in before and k not in ("id", "created_at", "created_by")
+                }
+                store.update(existing.id, restore)
                 emit_fail_closed(
                     make_event(
-                        event_type=EventType.RECORD_UPDATE,
-                        actor_channel=ActorChannel.HUMAN,
+                        event_type=EventType.AUDIT_COMPENSATE,
+                        actor_channel=ActorChannel.SYSTEM,
                         outcome=Outcome.SUCCESS,
-                        reason="update_ok",
-                        severity=Severity.INFO,
+                        reason="compensate_restore_after_audit_failure",
+                        severity=Severity.ERROR,
                         user_id=user["id"],
                         ip_address=client_ip(request),
-                        data={
-                            "class": class_kebab,
-                            "locator": str(existing.id),
-                            "fields": sorted(patch.keys()),
-                        },
+                        data={"class": class_kebab, "locator": str(existing.id)},
                     )
                 )
-            except AuditWriteError as exc:
-                try:
-                    restore = {
-                        k: before[k]
-                        for k in patch
-                        if k in before and k not in ("id", "created_at", "created_by")
-                    }
-                    store.update(existing.id, restore)
-                    emit_fail_closed(
-                        make_event(
-                            event_type=EventType.AUDIT_COMPENSATE,
-                            actor_channel=ActorChannel.SYSTEM,
-                            outcome=Outcome.SUCCESS,
-                            reason="compensate_restore_after_audit_failure",
-                            severity=Severity.ERROR,
-                            user_id=user["id"],
-                            ip_address=client_ip(request),
-                            data={"class": class_kebab, "locator": str(existing.id)},
-                        )
-                    )
-                except Exception:
-                    pass
-                raise _audit_http_500(exc) from exc
+            except Exception:
+                pass
+            raise _audit_http_500(exc) from exc
+        if not enrich:
             return updated
+        row = store.fetch_by_id(updated.id, enrich_fk_identity=True)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"{class_kebab} not found",
+            )
+        assert isinstance(row, dict)
+        return serialize_v1_record(row)
+
+    if surface == "legacy":
 
         if not definition.suppress_delete:
 

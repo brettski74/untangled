@@ -4,12 +4,13 @@
 import { z } from "zod";
 
 import { api_fetch_with_token } from "../auth/api.server";
-import { record_response_schema, type RecordResponse } from "./fetch.server";
+import { class_for_collection } from "../shell/nav_paths";
+import { parse_v1_record, type RecordResponse } from "./fetch.server";
 
 export type UpdateRecordBody = Record<string, unknown>;
 
 /**
- * PATCH /{collection}/{locator} via the web-tier Bearer seam.
+ * PATCH /api/v1/{collection}/{locator} via the web-tier Bearer seam.
  * Propagates domain 4xx/5xx as Response (except 401/403 from api_fetch_with_token).
  */
 export async function update_record(
@@ -21,7 +22,7 @@ export async function update_record(
   const encoded = encodeURIComponent(locator);
   const response = await api_fetch_with_token(
     access_token,
-    `/${collection}/${encoded}`,
+    `/api/v1/${collection}/${encoded}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -53,7 +54,11 @@ export async function update_record(
   }
 
   const payload: unknown = await response.json();
-  return record_response_schema.parse(payload);
+  const class_kebab = class_for_collection(collection);
+  if (class_kebab == null) {
+    throw new Error(`Unknown collection for v1 update: ${collection}`);
+  }
+  return parse_v1_record(payload, class_kebab);
 }
 
 /** Narrow runtime check for JSON object bodies (not arrays). */
