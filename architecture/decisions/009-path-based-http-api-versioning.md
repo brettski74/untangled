@@ -52,6 +52,21 @@ Public domain HTTP APIs use major path versions: `/api/v{major}/...`.
 - Breaking changes require parallel major routes for a documented transition, increasing
   router and test surface. Thin bindings and shared internals contain that cost.
 - Removal timing is a release/deprecation decision, not fixed by this ADR.
+- **Exception note:** epic #150 records a one-time, epic-scoped waiver of long-lived
+  previous-major retention for kebab collection path retirement in
+  `architecture/decisions/014-epic-150-cutover-rules.md`, including a **dark**
+  `/api/v2` introduction whose collection segments always track live class `name`
+  (temporarily kebab until that epic’s identity-rename child; no path spelling
+  shim; endorsed FE cutover only after rename). That exception does **not**
+  generalise and does **not** waive Decision §3 for majors that already have
+  endorsed consumers; other work continues under this ADR unless a further human
+  ruling and ADR say otherwise.
+- **Factory note (from v2):** `architecture/decisions/015-epic-150-identity-refinements.md`
+  requires each API major from `/api/v2` onward to use a versioned factory composing
+  shared modules (not long-lived `surface=`-style multi-version conditionals in one
+  factory), so retiring a major is unmount + delete module. Point 4’s “thin bindings /
+  share handlers” intent is met by composition of shared modules, not by one
+  multi-major conditional factory.
 - Primary agents must include this ADR file in commits with the work that introduced it;
   the human should be informed and may request later promotion into the main architecture
   documents.
