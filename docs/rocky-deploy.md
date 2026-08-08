@@ -35,7 +35,11 @@ On push to `main`, after both publish jobs succeed, job `deploy-rocky9`:
 3. Writes a runtime `.env` from Environment secrets (values never logged).
 4. SCPs `Makefile`, `compose.yaml`, and `.env` into `~/untangled/` on the host.
 5. Runs `make deploy-pull` (pull → `up --no-build` → health via compose exec).
-6. **Does not** run `migrate` or `seed`.
+6. Runs `make deploy-migrate` (safe schema apply inside the API container —
+   diff-based; refuses destructive plans; never `down -v` / volume wipe /
+   `--allow-destructive`).
+7. Runs `make deploy-seed` (demo baseline users, RBAC, sample tickets). Rocky is
+   the shared demo host; this is intentional for that Environment only.
 
 MVP acceptance host: **Rocky 9** (`dataphobe.com:2201`, Environment `rocky9`).
 Rocky 10 can mirror later without redesign.
@@ -119,7 +123,23 @@ make deploy-pull \
 
 ## Migrate and seed
 
-Automatic deploy never runs migrate/seed. Operators run those deliberately when needed.
+Host-local `make migrate` / `make seed` need a `backend/` checkout and venv —
+they are for developer machines, not Rocky.
+
+On Rocky (Makefile + Compose only), after `deploy-pull`:
+
+```bash
+make deploy-migrate   # compose exec api → python -m untangled.schema (safe gate)
+make deploy-seed      # compose exec api → python -m untangled.seed
+```
+
+`deploy-rocky9` runs both after every successful pull. Safe migrate is a no-op
+when the DB already matches the image’s class definitions; it fails the job if
+the plan would be destructive. Seed is idempotent (re-run resets seed user
+passwords to env override or built-in default — see #134).
+
+Override seed passwords via `SEED_*_PASSWORD` in the host `.env` if desired
+(not yet wired as GitHub Environment secrets).
 
 ## Diagnose failed deploys
 

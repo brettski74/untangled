@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from untangled.audit.deps import ensure_audit_logger
 from untangled.persistence.connection import connect, database_url
 from untangled.seed import seed_all
 from untangled.seed.rbac_catalog import SEED_ROLES, SEED_USER_ROLES
-from untangled.seed.users import SEED_USERS, password_for
+from untangled.seed.users import SEED_USERS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,11 +35,13 @@ def main(argv: list[str] | None = None) -> int:
     assert isinstance(rbac, dict)
     print(f"seed: upserted users: {', '.join(usernames)}")
     for seed in SEED_USERS:
-        print(
-            f"seed:   {seed.username}  "
-            f"(intent={seed.intent}; "
-            f"password from {seed.password_env} or default {password_for(seed)!r})"
+        # Do not print password values (CI / shared-host logs).
+        src = (
+            f"env {seed.password_env}"
+            if seed.password_env in os.environ
+            else f"built-in default ({seed.password_env} unset)"
         )
+        print(f"seed:   {seed.username}  (intent={seed.intent}; password from {src})")
     print(
         "seed: upserted RBAC: "
         f"roles={rbac['roles']}, permissions={rbac['permissions']}, "

@@ -161,6 +161,8 @@ jobs:
   # Teammate shared Rocky wiring only — not customer environment promotion.
   # Environment `rocky9` scopes host secrets; a future `deploy-rocky10` can mirror this job.
   # Each run SSHs and provisions Makefile + compose.yaml + .env; no pre-placed host files required.
+  # After deploy-pull: safe deploy-migrate (refuse destructive) + deploy-seed (demo).
+  # Never downs volumes or passes --allow-destructive.
   deploy-rocky9:
     name: deploy rocky9
     needs: [publish-api, publish-web]
@@ -302,5 +304,14 @@ jobs:
             "${remote}:untangled/.env"
           ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
             "chmod 600 ~/untangled/.env"
+          echo "Deploy pull (images + up; keeps named volumes; no migrate yet)"
           ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
             "cd ~/untangled && make deploy-pull UNTANGLED_API_IMAGE=$(printf %q "$API_IMAGE") UNTANGLED_WEB_IMAGE=$(printf %q "$WEB_IMAGE")"
+          # Safe schema apply only (diff-based; refuses --allow-destructive). Never down -v.
+          echo "Deploy migrate (api container; destructive plans fail the job)"
+          ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
+            "cd ~/untangled && make deploy-migrate"
+          # Rocky is the shared demo host — seed login users + sample tickets.
+          echo "Deploy seed (demo baseline users/RBAC/tickets via api container)"
+          ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
+            "cd ~/untangled && make deploy-seed"

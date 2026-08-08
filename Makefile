@@ -38,7 +38,7 @@ export COMPOSE
 export COMPOSE_WAIT_FLAG
 export COMPOSE_SUPPORTS_WAIT
 
-.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait deploy-pull backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
+.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait deploy-pull deploy-migrate deploy-seed backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -130,6 +130,7 @@ redis-wait: ## Wait until Redis accepts connections
 # Shared Rocky / GHCR pin path on root compose.yaml (image pins + --no-build).
 # Requires UNTANGLED_API_IMAGE and UNTANGLED_WEB_IMAGE. Does not migrate or seed.
 # Expects a .env beside compose.yaml (Actions writes it; local deploy-pull uses one too).
+# Failsafes: never `down -v`, never volume rm, never --allow-destructive (see deploy-migrate).
 deploy-pull: ## Pull pinned GHCR images and up stack without build (no migrate/seed)
 	@test -n "$(UNTANGLED_API_IMAGE)" || (echo "UNTANGLED_API_IMAGE is required (e.g. ghcr.io/owner/untangled-api:sha-...)" >&2; exit 1)
 	@test -n "$(UNTANGLED_WEB_IMAGE)" || (echo "UNTANGLED_WEB_IMAGE is required (e.g. ghcr.io/owner/untangled-web:sha-...)" >&2; exit 1)
@@ -141,7 +142,7 @@ deploy-pull: ## Pull pinned GHCR images and up stack without build (no migrate/s
 	@echo "step: pull images"
 	@UNTANGLED_API_IMAGE="$(UNTANGLED_API_IMAGE)" UNTANGLED_WEB_IMAGE="$(UNTANGLED_WEB_IMAGE)" \
 		$(COMPOSE) pull api web || (echo "deploy-pull ERROR [pull]: image pull failed" >&2; exit 1)
-	@echo "step: up stack (no build, no migrate/seed)"
+	@echo "step: up stack (no build, no migrate/seed; keeps named volumes)"
 	@UNTANGLED_API_IMAGE="$(UNTANGLED_API_IMAGE)" UNTANGLED_WEB_IMAGE="$(UNTANGLED_WEB_IMAGE)" \
 		$(COMPOSE) up -d --no-build $(COMPOSE_WAIT_FLAG) || (echo "deploy-pull ERROR [up]: compose up --no-build failed" >&2; exit 1)
 	@echo "step: health check (unauthenticated alive only)"
@@ -159,6 +160,25 @@ deploy-pull: ## Pull pinned GHCR images and up stack without build (no migrate/s
 		exit 1; \
 	fi
 	@echo "deploy-pull: success"
+
+# Rocky / image-pin hosts have no backend/ tree. Run schema via the API container.
+# Diff-based: empty DB → additive creates; matching DB → no-op; destructive → fail.
+# Never passes --allow-destructive. Never wipes volumes.
+deploy-migrate: ## Safe schema apply via api container (no --allow-destructive)
+	@test -f compose.yaml || (echo "compose.yaml missing" >&2; exit 1)
+	@echo "deploy-migrate: safe schema apply (refuse destructive; no volume wipe)"
+	@$(COMPOSE) exec -T api python -m untangled.schema \
+		--definitions /app/class-definitions \
+		|| (echo "deploy-migrate ERROR: schema apply failed or refused destructive plan" >&2; exit 1)
+	@echo "deploy-migrate: success"
+
+# Demo/shared hosts only (e.g. rocky9). Idempotent upsert; re-run resets seed passwords.
+deploy-seed: ## Seed users/RBAC/tickets via api container (after deploy-migrate)
+	@test -f compose.yaml || (echo "compose.yaml missing" >&2; exit 1)
+	@echo "deploy-seed: upsert baseline users + RBAC + sample tickets"
+	@$(COMPOSE) exec -T api python -m untangled.seed \
+		|| (echo "deploy-seed ERROR: seed failed (schema missing? run deploy-migrate first)" >&2; exit 1)
+	@echo "deploy-seed: success"
 
 backend-dev: backend-install ## Run the FastAPI dev server in the foreground (host hot-reload)
 	$(BACKEND_VENV)/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
