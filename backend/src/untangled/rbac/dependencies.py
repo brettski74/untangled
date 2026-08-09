@@ -6,9 +6,12 @@ from collections.abc import Callable
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from psycopg import Connection
 
+from untangled.audit.context import client_ip
+from untangled.audit.emit import emit_best_effort, make_event
+from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.auth.dependencies import CurrentUser, DbConn
 from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.registry import class_definition
@@ -39,10 +42,23 @@ def require_permission(required: str) -> Callable[..., dict[str, Any]]:
     """Dependency factory: require ``required`` (or ``admin`` allow-all)."""
 
     def _dependency(
+        request: Request,
         user: CurrentUser,
         permissions: EffectivePermissions,
     ) -> dict[str, Any]:
         if not permission_grants(permissions, required):
+            emit_best_effort(
+                make_event(
+                    event_type=EventType.RECORD_AUTHZ_DENIED,
+                    actor_channel=ActorChannel.HUMAN,
+                    outcome=Outcome.FAILURE,
+                    reason="missing_permission",
+                    severity=Severity.WARNING,
+                    user_id=user["id"],
+                    ip_address=client_ip(request),
+                    data={"required_permission": required},
+                )
+            )
             raise _forbidden(f"Missing permission: {required}")
         return user
 
@@ -62,6 +78,7 @@ def require_class_operation(
     class_name = kebab_to_snake(class_kebab)
 
     def _dependency(
+        request: Request,
         user: CurrentUser,
         permissions: EffectivePermissions,
     ) -> dict[str, Any]:
@@ -72,6 +89,22 @@ def require_class_operation(
             permissions, class_name, operation, public=public
         ):
             required = class_operation_key(class_name, operation)
+            emit_best_effort(
+                make_event(
+                    event_type=EventType.RECORD_AUTHZ_DENIED,
+                    actor_channel=ActorChannel.HUMAN,
+                    outcome=Outcome.FAILURE,
+                    reason="missing_class_operation",
+                    severity=Severity.WARNING,
+                    user_id=user["id"],
+                    ip_address=client_ip(request),
+                    data={
+                        "class": class_name,
+                        "operation": operation,
+                        "required_permission": required,
+                    },
+                )
+            )
             raise _forbidden(f"Missing permission: {required}")
         return user
 

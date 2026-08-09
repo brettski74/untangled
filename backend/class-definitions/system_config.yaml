@@ -75,3 +75,15 @@ attributes:
     create_default: 1.1
     min_value: 1
     max_value: 10
+  audit_bulk_read_window_seconds:
+    type: integer
+    required: true
+    create_default: 600
+    min_value: 60
+    max_value: 86400
+  audit_bulk_read_max_searches:
+    type: integer
+    required: true
+    create_default: 100
+    min_value: 1
+    max_value: 100000

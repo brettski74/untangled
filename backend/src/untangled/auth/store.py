@@ -113,6 +113,20 @@ def rotate_refresh_token(conn: Connection, refresh_plaintext: str) -> tuple[str,
     return issue_token_pair(conn, row["user_id"])
 
 
+def refresh_token_is_active(conn: Connection, refresh_plaintext: str) -> bool:
+    """True when a non-revoked refresh row exists for ``refresh_plaintext``."""
+    token_hash = hash_refresh_token(refresh_plaintext)
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            sql.SQL(
+                "SELECT id, revoked_at FROM {} WHERE token_hash = {}"
+            ).format(sql.Identifier("refresh_token"), sql.Placeholder()),
+            (token_hash,),
+        )
+        row = cur.fetchone()
+    return row is not None and row["revoked_at"] is None
+
+
 def revoke_refresh_token(conn: Connection, refresh_plaintext: str) -> bool:
     """Revoke a refresh token if present and not already revoked. Returns whether revoked."""
     token_hash = hash_refresh_token(refresh_plaintext)

@@ -6,7 +6,7 @@ For iterative coding with hot reload, use `make backend-dev` / `make frontend-de
 
 Schema apply and baseline seed are **intentional**: after `make up`, run `make migrate` then `make seed`. Neither runs automatically on Compose start.
 
-Published GHCR images (optional; not used by default Compose `build:`) and GitHub Actions product CI are documented in [container-images.md](./container-images.md). Shared Rocky deploy automation (separate from local Compose) is in [rocky-deploy.md](./rocky-deploy.md).
+Shared-host GHCR publish / Rocky deploy notes are local-only (gitignored): `docs/container-images.md` and `docs/rocky-deploy.md` when present on your machine.
 
 ## Prerequisites
 
@@ -84,7 +84,18 @@ Inside the **api** / **web** containers, Compose sets `DATABASE_URL` / `UNTANGLE
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
 | `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` |
+| `UNTANGLED_AUDIT_LOG_DIR` | Compose: `/var/log/untangled/audit` (named volume `untangled_audit` on `api`) |
+| `UNTANGLED_AUDIT_ROLLOVER_BYTES` | `1048576` (1 MiB) |
+| `UNTANGLED_AUDIT_ROLLOVER_SECONDS` | `86400` (24 hours) |
 | `UNTANGLED_DEFINITIONS_DIR` | Optional. Absolute path to YAML class-definitions for unusual layouts only; Compose uses `/app/class-definitions` via the image WORKDIR (do not set this for normal local Compose). |
+
+### Access / security audit log (local)
+
+- The API appends **newline-delimited JSON** audit events under `UNTANGLED_AUDIT_LOG_DIR`.
+- Compose mounts named volume `untangled_audit` there. The API process **does not prune** rolled files — retain/forward externally (SIEM/export is a later ticket).
+- With multiple API replicas, each process writes its own files under the shared mount (document forwarder topology; this MVP does not ship a distributed shipper).
+- `ip_address` is the **direct peer** address as seen by the API (in Compose UI traffic this is often the `web` container). Full trusted-proxy / `X-Forwarded-For` policy is tracked separately (#67).
+- Bulk-read volume thresholds live on `system-config` (`audit-bulk-read-window-seconds`, `audit-bulk-read-max-searches`): crossing them emits a **signal-only** event (no throttle).
 
 Seed users (usernames are case-normalized to lowercase):
 

@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
+
+# Before test modules import ``untangled.main`` (which wires the file sink).
+os.environ.setdefault(
+    "UNTANGLED_AUDIT_LOG_DIR",
+    tempfile.mkdtemp(prefix="untangled-audit-"),
+)
 
 import pytest
 from psycopg import Connection, sql

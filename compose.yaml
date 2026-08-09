@@ -1,5 +1,5 @@
 # Compose runtime: PostgreSQL + Redis + API + web.
-# Local: make up (build:). Rocky/GHCR: make deploy-pull (image pins + --no-build).
+# Local: make up (build:). Rocky/GHCR: ./deploy.sh (image pins + --no-build).
 # Variable defaults preserve local-dev behaviour when no .env is present.
 # Redis is ephemeral (no named volume): cache/bus consumers tolerate restart loss.
 services:
@@ -45,8 +45,15 @@ services:
       UNTANGLED_JWT_SECRET: ${UNTANGLED_JWT_SECRET:-local-dev-only-change-me-untangled-jwt-secret}
       UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}
       UNTANGLED_REFRESH_TOKEN_TTL_SECONDS: ${UNTANGLED_REFRESH_TOKEN_TTL_SECONDS:-604800}
+      UNTANGLED_AUDIT_LOG_DIR: ${UNTANGLED_AUDIT_LOG_DIR:-/var/log/untangled/audit}
+      UNTANGLED_AUDIT_ROLLOVER_BYTES: ${UNTANGLED_AUDIT_ROLLOVER_BYTES:-1048576}
+      UNTANGLED_AUDIT_ROLLOVER_SECONDS: ${UNTANGLED_AUDIT_ROLLOVER_SECONDS:-86400}
     ports:
       - "${UNTANGLED_API_HOST_PORT:-8000}:8000"
+    volumes:
+      # NDJSON access/security audit logs (API does not prune; forward/retain externally).
+      # Multi-replica: each process writes its own files under this mount.
+      - untangled_audit:/var/log/untangled/audit
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,3 +99,4 @@ services:
 
 volumes:
   untangled_pgdata:
+  untangled_audit:
