@@ -1,5 +1,5 @@
 # Compose runtime: PostgreSQL + Redis + API + web.
-# Local: make up (build:). Rocky/GHCR: make deploy-pull (image pins + --no-build).
+# Local: make up (build:). Rocky/GHCR: ./deploy.sh (image pins + --no-build).
 # Variable defaults preserve local-dev behaviour when no .env is present.
 # Redis is ephemeral (no named volume): cache/bus consumers tolerate restart loss.
 services:
