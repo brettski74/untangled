@@ -1,8 +1,9 @@
-"""Load and validate snake_case YAML class definitions (dark path; #187).
+"""Load and validate snake_case YAML class definitions (live path; #188).
 
-Not wired as the production entrypoint — see ``definition.py`` (kebab) for that.
-Primary identity on this path is snake; ``name_kebab`` on the shared IR is
-synthetic scaffolding via ``snake_to_kebab`` until dual identity is collapsed.
+Primary identity is the YAML class ``name`` (snake). ``name_kebab`` on the
+shared IR is synthetic scaffolding via ``snake_to_kebab`` until dual identity
+is collapsed (child 5). The kebab loader in ``definition.py`` is unused by
+production.
 """
 
 from __future__ import annotations

@@ -20,20 +20,20 @@ import {
 export type CreateZodSchema = z.ZodType<Record<string, unknown>>;
 
 const CREATE_SCHEMAS: Readonly<Record<string, CreateZodSchema>> = {
-  "change-request": ChangeRequestCreateSchema,
-  "demo-item": DemoItemCreateSchema,
-  "demo-link": DemoLinkCreateSchema,
+  change_request: ChangeRequestCreateSchema,
+  demo_item: DemoItemCreateSchema,
+  demo_link: DemoLinkCreateSchema,
   incident: IncidentCreateSchema,
   permission: PermissionCreateSchema,
-  "refresh-token": RefreshTokenCreateSchema,
-  "role-permission": RolePermissionCreateSchema,
+  refresh_token: RefreshTokenCreateSchema,
+  role_permission: RolePermissionCreateSchema,
   role: RoleCreateSchema,
-  "user-role": UserRoleCreateSchema,
+  user_role: UserRoleCreateSchema,
   user: UserCreateSchema,
 };
 
 /**
- * Returns the generated Create schema for a class kebab name, or null on miss.
+ * Returns the generated Create schema for a class name, or null on miss.
  */
 export function create_schema_for_class(
   class_name: string,

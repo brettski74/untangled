@@ -1,14 +1,14 @@
 # Second demo / fixture class: FK coverage for schema migrate (not a real ticket type).
-name: demo-link
-display-name: Demo Link
+name: demo_link
+display_name: Demo Link
 description: >
-  Minimal fixture class with a foreign key to demo-item. Used to prove YAML → IR
+  Minimal fixture class with a foreign key to demo_item. Used to prove YAML → IR
   → diff → apply for foreign keys. Not a product ticket type.
 attributes:
-  demo-item-id:
+  demo_item_id:
     type: uuid
     required: true
-    references: demo-item
+    references: demo_item
   label:
-    type: compact-text
+    type: compact_text
     required: true

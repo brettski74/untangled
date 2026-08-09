@@ -16,7 +16,7 @@ export type ListColumn = {
 
 /**
  * Build list display columns from generated field meta.
- * Meta attributes are sorted by declaration ``order``; friendly-id is then
+ * Meta attributes are sorted by declaration ``order``; friendly_id is then
  * moved left-most for list display only.
  */
 export function list_display_columns(meta: ClassFieldMeta): ListColumn[] {
@@ -74,7 +74,7 @@ function attribute_to_column(attr: AttributeFieldMeta): ListColumn {
     type_name: attr.type_name,
     references: attr.references,
     label: attribute_display_label(attr.name_kebab),
-    is_friendly_id: attr.type_name === "friendly-id",
+    is_friendly_id: attr.type_name === "friendly_id",
     order: attr.order,
   };
 }
@@ -82,7 +82,7 @@ function attribute_to_column(attr: AttributeFieldMeta): ListColumn {
 /** Sane default column widths (px) by attribute type — horizontal scroll as needed. */
 export function column_width_px(type_name: string): number {
   switch (type_name) {
-    case "friendly-id":
+    case "friendly_id":
       return 140;
     case "boolean":
       return 96;
@@ -95,11 +95,11 @@ export function column_width_px(type_name: string): number {
     case "uuid":
       return 280;
     case "string":
-    case "compact-text":
+    case "compact_text":
     case "choice":
     case "status":
     case "text":
-    case "multiline-text":
+    case "multiline_text":
       return 200;
     default:
       return 200;

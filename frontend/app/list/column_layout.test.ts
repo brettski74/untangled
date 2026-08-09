@@ -25,7 +25,7 @@ function col(
     type_name,
     references: null,
     label: name_snake,
-    is_friendly_id: type_name === "friendly-id",
+    is_friendly_id: type_name === "friendly_id",
     order,
   };
 }
@@ -33,7 +33,7 @@ function col(
 describe("seed_column_layout", () => {
   it("seeds order and type default widths from display columns", () => {
     const columns = [
-      col("number", 0, "friendly-id"),
+      col("number", 0, "friendly_id"),
       col("summary", 1),
       col("status", 2, "status"),
     ];
@@ -46,7 +46,7 @@ describe("seed_column_layout", () => {
 
 describe("apply_column_order", () => {
   const columns = [
-    col("number", 0, "friendly-id"),
+    col("number", 0, "friendly_id"),
     col("summary", 1),
     col("status", 2, "status"),
   ];
@@ -80,7 +80,7 @@ describe("apply_column_order", () => {
 
 describe("reconcile_column_layout", () => {
   const columns = [
-    col("number", 0, "friendly-id"),
+    col("number", 0, "friendly_id"),
     col("summary", 1),
   ];
 
@@ -199,15 +199,15 @@ describe("drop_separator_x_for_insert_before", () => {
 
 describe("total_column_widths_px", () => {
   it("sums clamped widths for the column set", () => {
-    const columns = [col("a", 0, "text"), col("b", 1, "friendly-id")];
+    const columns = [col("a", 0, "text"), col("b", 1, "friendly_id")];
     expect(
       total_column_widths_px(columns, { a: 100, b: 140 }),
     ).toBe(240);
   });
 
   it("falls back to type defaults when a width is missing", () => {
-    const columns = [col("a", 0, "text"), col("b", 1, "friendly-id")];
-    // text default 200 + friendly-id default 140
+    const columns = [col("a", 0, "text"), col("b", 1, "friendly_id")];
+    // text default 200 + friendly_id default 140
     expect(total_column_widths_px(columns, {})).toBe(340);
   });
 

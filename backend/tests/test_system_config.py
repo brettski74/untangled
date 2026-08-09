@@ -1,4 +1,4 @@
-"""system-config class: bootstrap, HTTP mount, helpers, and cache."""
+"""system_config class: bootstrap, HTTP mount, helpers, and cache."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from psycopg import Connection, sql
 
 from untangled.main import app
-from untangled.mapping.definition import load_definition
+from untangled.mapping.definition_snake import load_definition
 from untangled.mapping.registry import class_definition
 from untangled.mapping.well_known import SYSTEM_CONFIG_ID, SYSTEM_USER_ID
 from untangled.records.deps import model
@@ -67,7 +67,7 @@ def _drop_managed(conn: Connection, repo_definitions: Path) -> None:
 
 
 def test_system_config_definition_flags(repo_definitions: Path) -> None:
-    defn = load_definition(repo_definitions / "system-config.yaml")
+    defn = load_definition(repo_definitions / "system_config.yaml")
     assert defn.public is True
     assert defn.suppress_create is True
     assert defn.suppress_delete is True
@@ -76,19 +76,19 @@ def test_system_config_definition_flags(repo_definitions: Path) -> None:
         f"id = '{SYSTEM_CONFIG_ID}'::uuid",
         "password_maximum_chars > password_minimum_chars",
     )
-    by_name = {a.name_kebab: a for a in defn.attributes}
-    assert by_name["max-search-nesting-depth"].create_default == 3
-    assert by_name["max-search-nesting-length"].create_default == 20
-    assert by_name["max-search-nesting-length"].min_value == 1
-    assert by_name["max-search-nesting-length"].max_value == 100
-    assert by_name["system-config-cache-ttl-seconds"].create_default == 900
-    assert by_name["password-minimum-chars"].create_default == 12
-    assert by_name["password-maximum-chars"].create_default == 128
-    assert by_name["password-acceptable-crack-time-days"].create_default == 1000
-    assert by_name["password-guess-per-second"].create_default == 10000
-    assert by_name["password-estimate-drift-factor"].create_default == "1.1"
-    assert by_name["password-minimum-chars"].max_value == 256
-    assert by_name["password-maximum-chars"].max_value == 256
+    by_name = {a.name_snake: a for a in defn.attributes}
+    assert by_name["max_search_nesting_depth"].create_default == 3
+    assert by_name["max_search_nesting_length"].create_default == 20
+    assert by_name["max_search_nesting_length"].min_value == 1
+    assert by_name["max_search_nesting_length"].max_value == 100
+    assert by_name["system_config_cache_ttl_seconds"].create_default == 900
+    assert by_name["password_minimum_chars"].create_default == 12
+    assert by_name["password_maximum_chars"].create_default == 128
+    assert by_name["password_acceptable_crack_time_days"].create_default == 1000
+    assert by_name["password_guess_per_second"].create_default == 10000
+    assert by_name["password_estimate_drift_factor"].create_default == "1.1"
+    assert by_name["password_minimum_chars"].max_value == 256
+    assert by_name["password_maximum_chars"].max_value == 256
 
 
 def test_migrate_bootstraps_system_config_singleton(
@@ -192,7 +192,7 @@ def test_migrate_does_not_clobber_system_config_updates(
     messages: list[str] = []
     second = migrate(db_conn, repo_definitions, progress=messages.append)
     assert second.applied is False
-    assert any("ensure system-config singleton" in m for m in messages)
+    assert any("ensure system_config singleton" in m for m in messages)
 
     length = db_conn.execute(
         "SELECT max_search_nesting_length FROM system_config WHERE id = %s",
@@ -488,8 +488,8 @@ def test_ensure_system_config_row_idempotent(demo_schema, db_conn: Connection) -
 
 
 def test_clamp_uses_definition_bounds() -> None:
-    defn = class_definition("system-config")
-    model_cls = model("system-config")
+    defn = class_definition("system_config")
+    model_cls = model("system_config")
     raw = model_cls.model_validate(
         {
             "id": SYSTEM_CONFIG_ID,

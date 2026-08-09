@@ -7,7 +7,7 @@ import { filter_nav_by_permissions } from "./nav_filter";
 import { option_path } from "./nav_paths";
 import type { NavBarView } from "./nav_schema";
 
-const PREFERRED_CLASS = "change-request";
+const PREFERRED_CLASS = "change_request";
 const PREFERRED_LIST_SLUG = "all";
 
 export function default_landing_path(

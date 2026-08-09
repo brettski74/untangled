@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from psycopg import sql
 
-from untangled.mapping.definition import load_definition
+from untangled.mapping.definition_snake import load_definition
 from untangled.persistence.search import (
     SearchableAttribute,
     SearchNestingLimits,
@@ -20,7 +20,7 @@ from untangled.persistence.search import (
     searchable_attributes,
 )
 
-# Seeded system-config defaults — explicit for unit compiles (no DB).
+# Seeded system_config defaults — explicit for unit compiles (no DB).
 _LIMITS = SearchNestingLimits(
     max_depth=3,
     max_length=20,
@@ -44,7 +44,7 @@ def incident_attrs(repo_root: Path) -> dict[str, SearchableAttribute]:
 @pytest.fixture
 def change_attrs(repo_root: Path) -> dict[str, SearchableAttribute]:
     definition = load_definition(
-        repo_root / "backend" / "class-definitions" / "change-request.yaml"
+        repo_root / "backend" / "class-definitions" / "change_request.yaml"
     )
     return searchable_attributes(definition)
 

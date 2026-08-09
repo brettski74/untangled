@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from untangled.auth.dependencies import DbConn
+from untangled.mapping.naming import kebab_to_snake
 from untangled.persistence.search import SearchNestingLimits
 from untangled.rbac.dependencies import require_class_operation
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
@@ -25,6 +26,15 @@ from untangled.system_config import SystemConfigUnreadableError, get_system_conf
 ApiSurface = Literal["legacy", "v1"]
 
 
+def _live_class_name(mount_identity: str) -> str:
+    """One-way normalize a legacy/v1 mount identity to the live class ``name``.
+
+    Temporary #188 bridge (remove in #192): mounts may still pass historical
+    kebab strings; permission keys and definition lookup use the live name only.
+    """
+    return kebab_to_snake(mount_identity)
+
+
 def build_class_router(
     *,
     class_kebab: str,
@@ -36,10 +46,14 @@ def build_class_router(
 
     ``legacy``: full CRUD + scalar fetch/search (pre-versioning compatibility).
     ``v1``: fetch, search, and update with FK identity enrichment on responses.
+
+    ``class_kebab`` is the mount identity string (may still be kebab for
+    transitional call sites). Resolution uses the live class ``name``.
     """
-    create_cls: type[BaseModel] = model(class_kebab, "Create")
-    update_cls: type[BaseModel] = model(class_kebab, "Update")
-    definition = class_definition(class_kebab)
+    class_name = _live_class_name(class_kebab)
+    create_cls: type[BaseModel] = model(class_name, "Create")
+    update_cls: type[BaseModel] = model(class_name, "Update")
+    definition = class_definition(class_name)
     router = APIRouter(prefix=prefix, tags=tags)
     enrich = surface == "v1"
     deprecated = surface == "legacy"
@@ -51,10 +65,10 @@ def build_class_router(
             body: create_cls,
             conn: DbConn,
             user: Annotated[
-                dict[str, Any], Depends(require_class_operation(class_kebab, "create"))
+                dict[str, Any], Depends(require_class_operation(class_name, "create"))
             ],
         ) -> Any:
-            store = record_store(conn, class_kebab, actor_id=user["id"])
+            store = record_store(conn, class_name, actor_id=user["id"])
             return store.create(body.model_dump())
 
     search_response_model = V1SearchResponse if enrich else SearchResponse
@@ -85,16 +99,16 @@ def build_class_router(
             summary=search_summary,
             description=search_description,
             deprecated=search_deprecated,
-            operation_id=f"{class_kebab.replace('-', '_')}_{surface}_search",
+            operation_id=f"{class_name}_{surface}_search",
         )
         def search_records(
             body: SearchRequest,
             conn: DbConn,
             user: Annotated[
-                dict[str, Any], Depends(require_class_operation(class_kebab, "read"))
+                dict[str, Any], Depends(require_class_operation(class_name, "read"))
             ],
         ) -> SearchResponse | V1SearchResponse:
-            store = record_store(conn, class_kebab, actor_id=user["id"])
+            store = record_store(conn, class_name, actor_id=user["id"])
             sort_keys = (
                 [
                     (
@@ -179,17 +193,17 @@ def build_class_router(
         summary=fetch_summary,
         description=fetch_description,
         deprecated=deprecated,
-        operation_id=f"{class_kebab.replace('-', '_')}_{surface}_fetch",
+        operation_id=f"{class_name}_{surface}_fetch",
     )
     def fetch_record(
         locator: str,
         conn: DbConn,
         user: Annotated[
-            dict[str, Any], Depends(require_class_operation(class_kebab, "read"))
+            dict[str, Any], Depends(require_class_operation(class_name, "read"))
         ],
     ) -> Any:
-        definition = class_definition(class_kebab)
-        store = record_store(conn, class_kebab, actor_id=user["id"])
+        definition = class_definition(class_name)
+        store = record_store(conn, class_name, actor_id=user["id"])
         row = fetch_by_locator(
             store, definition, locator, enrich_fk_identity=enrich
         )
@@ -221,25 +235,25 @@ def build_class_router(
         summary=update_summary,
         description=update_description,
         deprecated=deprecated,
-        operation_id=f"{class_kebab.replace('-', '_')}_{surface}_update",
+        operation_id=f"{class_name}_{surface}_update",
     )
     def update_record(
         locator: str,
         body: update_cls,
         conn: DbConn,
         user: Annotated[
-            dict[str, Any], Depends(require_class_operation(class_kebab, "update"))
+            dict[str, Any], Depends(require_class_operation(class_name, "update"))
         ],
     ) -> Any:
-        definition = class_definition(class_kebab)
-        store = record_store(conn, class_kebab, actor_id=user["id"])
+        definition = class_definition(class_name)
+        store = record_store(conn, class_name, actor_id=user["id"])
         existing = fetch_by_locator(store, definition, locator)
         try:
             updated = store.update(existing.id, body.model_dump(exclude_unset=True))
         except KeyError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"{class_kebab} not found",
+                detail=f"{class_name} not found",
             ) from exc
         if not enrich:
             return updated
@@ -247,7 +261,7 @@ def build_class_router(
         if row is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"{class_kebab} not found",
+                detail=f"{class_name} not found",
             )
         assert isinstance(row, dict)
         return serialize_v1_record(row)
@@ -262,16 +276,16 @@ def build_class_router(
                 conn: DbConn,
                 user: Annotated[
                     dict[str, Any],
-                    Depends(require_class_operation(class_kebab, "delete")),
+                    Depends(require_class_operation(class_name, "delete")),
                 ],
             ) -> Response:
-                record_def = class_definition(class_kebab)
-                store = record_store(conn, class_kebab, actor_id=user["id"])
+                record_def = class_definition(class_name)
+                store = record_store(conn, class_name, actor_id=user["id"])
                 existing = fetch_by_locator(store, record_def, locator)
                 if not store.delete(existing.id):
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"{class_kebab} not found",
+                        detail=f"{class_name} not found",
                     )
                 return Response(status_code=status.HTTP_204_NO_CONTENT)
 

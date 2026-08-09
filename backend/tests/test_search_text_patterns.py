@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from untangled.mapping.definition import load_definition
+from untangled.mapping.definition_snake import load_definition
 from untangled.persistence.search import (
     SearchNestingLimits,
     SearchSemanticError,
@@ -17,7 +17,7 @@ from untangled.persistence.search import (
     searchable_attributes,
 )
 
-# Seeded system-config defaults — explicit for unit compiles (no DB).
+# Seeded system_config defaults — explicit for unit compiles (no DB).
 _LIMITS = SearchNestingLimits(
     max_depth=3,
     max_length=20,
@@ -66,7 +66,7 @@ def test_regexp_binds_raw_pattern(incident_attrs: dict) -> None:
 
 
 def test_text_pattern_type_matrix(incident_attrs: dict) -> None:
-    # text-family + friendly-id accepted (summary is ``text`` after #80)
+    # text-family + friendly_id accepted (summary is ``text`` after #80)
     for op in ("contains", "starts-with", "ends-with", "regexp"):
         _compile(
             {"op": op, "attribute": "summary", "value": "x"},

@@ -10,8 +10,9 @@ from pathlib import Path
 import pytest
 from psycopg import Connection, sql
 
-from untangled.mapping.definition import ClassDefinition, load_definition
-from untangled.mapping.generate import generate_models
+from untangled.mapping.definition import ClassDefinition
+from untangled.mapping.definition_snake import load_definition
+from untangled.mapping.generate_snake import generate_models_snake as generate_models
 from untangled.persistence.connection import connect
 from untangled.schema.migrate import migrate
 from untangled.seed import ensure_stub_actor_user
@@ -61,7 +62,7 @@ def db_conn() -> Iterator[Connection]:
 
 @pytest.fixture
 def demo_definition(repo_definitions: Path) -> ClassDefinition:
-    return load_definition(repo_definitions / "demo-item.yaml")
+    return load_definition(repo_definitions / "demo_item.yaml")
 
 
 @pytest.fixture

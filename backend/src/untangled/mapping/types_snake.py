@@ -1,4 +1,4 @@
-"""Snake_case type vocabulary for the dark snake definition loader (#187)."""
+"""Snake_case type vocabulary for the live snake definition loader (#188)."""
 
 from __future__ import annotations
 

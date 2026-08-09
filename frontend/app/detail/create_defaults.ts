@@ -20,7 +20,7 @@ export function record_from_create_defaults(
 ): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const attr of attributes_in_declaration_order(meta.attributes)) {
-    if (attr.name_snake === "id" || attr.type_name === "friendly-id") {
+    if (attr.name_snake === "id" || attr.type_name === "friendly_id") {
       record[attr.name_snake] = null;
       continue;
     }
@@ -42,7 +42,7 @@ export function record_from_create_defaults(
  * - Editable author fields: client value when present, else create_default.
  * - FK / referenced attributes (read-only on M1 new): schema create_default only
  *   (client cannot override).
- * - Never includes id, friendly-id, or system audit fields.
+ * - Never includes id, friendly_id, or system audit fields.
  */
 export function merge_create_body(
   meta: ClassFieldMeta,
@@ -53,7 +53,7 @@ export function merge_create_body(
 
   for (const attr of attributes_in_declaration_order(meta.attributes)) {
     const name = attr.name_snake;
-    if (SYSTEM_STRIP.has(name) || attr.type_name === "friendly-id") {
+    if (SYSTEM_STRIP.has(name) || attr.type_name === "friendly_id") {
       continue;
     }
     if (friendly != null && name === friendly) {
@@ -78,7 +78,7 @@ export function merge_create_body(
   return body;
 }
 
-/** Prefer friendly-id locator when present; else UUID id. */
+/** Prefer friendly_id locator when present; else UUID id. */
 export function preferred_create_locator(
   meta: ClassFieldMeta,
   record: Record<string, unknown>,

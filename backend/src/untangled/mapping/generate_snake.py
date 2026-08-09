@@ -1,8 +1,7 @@
-"""Dark snake generate pipeline: snake definitions → Pydantic + Zod + field meta.
+"""Snake generate pipeline: snake definitions → Pydantic + Zod + field meta.
 
-Not wired to ``make models`` / CLI / session fixtures. Callers pass output dirs
-(typically test ``tmp_path``); never overwrite production generated trees from
-this entrypoint in CI or app startup.
+Live ``make models`` / CLI / runtime regen path (#188). The kebab generate
+modules remain in-tree unused by production until child 5.
 """
 
 from __future__ import annotations

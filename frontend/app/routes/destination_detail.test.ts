@@ -135,7 +135,7 @@ describe("destination_detail loader", () => {
       params: { collection: "change-requests", locator: "CHG00000001" },
       context: {},
     } as never);
-    expect(result.data.class_name).toBe("change-request");
+    expect(result.data.class_name).toBe("change_request");
     expect(result.data.class_display_name).toBe("Change Request");
     expect(result.data.layout.compact.some((s) => s.name_snake === "status")).toBe(
       true,

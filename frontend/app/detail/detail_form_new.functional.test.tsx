@@ -41,7 +41,7 @@ function render_new_form(class_kebab: string, can_update = true) {
 }
 
 describe("DetailForm new-record functional surface (#83 / #109)", () => {
-  it("F-C1/B8/B9: INC seed shows status=new; no id; friendly-id empty RO", () => {
+  it("F-C1/B8/B9: INC seed shows status=new; no id; friendly_id empty RO", () => {
     render_new_form("incident");
     const status = screen.getByLabelText(/Status/i) as HTMLInputElement;
     expect(status.value).toBe("new");
@@ -55,7 +55,7 @@ describe("DetailForm new-record functional surface (#83 / #109)", () => {
   });
 
   it("F-C2/B11: CHG seed shows status=draft and requested_by seed UUID as RO FK", () => {
-    render_new_form("change-request");
+    render_new_form("change_request");
     const status = screen.getByLabelText(/Status/i) as HTMLInputElement;
     expect(status.value).toBe("draft");
 
@@ -69,7 +69,7 @@ describe("DetailForm new-record functional surface (#83 / #109)", () => {
   });
 
   it("F-E1: CHG scheduled datetime uses date + 24h time, not datetime-local", () => {
-    render_new_form("change-request");
+    render_new_form("change_request");
 
     const start_date = document.getElementById(
       "detail-scheduled_start",
@@ -104,7 +104,7 @@ describe("DetailForm new-record functional surface (#83 / #109)", () => {
     expect(created_at.value).toBe("");
   });
 
-  it("F-D6: FKs and friendly-id stay non-editable; summary editable when can_update", () => {
+  it("F-D6: FKs and friendly_id stay non-editable; summary editable when can_update", () => {
     render_new_form("incident", true);
     expect((screen.getByLabelText(/Number/i) as HTMLInputElement).readOnly).toBe(
       true,

@@ -1,6 +1,6 @@
 # Change Request — Phase 1 ITSM ticket.
-name: change-request
-display-name: Change Request
+name: change_request
+display_name: Change Request
 description: >
   Planned change record with a human-friendly CHG number. Status is a free
   string in M1; documented status vocabulary (progression) is draft →
@@ -8,40 +8,40 @@ description: >
   cancelled.
 attributes:
   number:
-    type: friendly-id
+    type: friendly_id
     required: true
     prefix: CHG
   summary:
     type: text
     required: true
   description:
-    type: multiline-text
+    type: multiline_text
     required: false
   status:
     type: status
     required: true
-    create-default: draft
-  risk-score:
+    create_default: draft
+  risk_score:
     # Integer 0–100 inclusive (M1 convention; not range-enforced in the compiler yet).
     type: integer
     required: false
-  scheduled-start:
+  scheduled_start:
     type: datetime
     required: true
-  scheduled-end:
+  scheduled_end:
     type: datetime
     required: true
-  actual-start:
+  actual_start:
     type: datetime
     required: false
-  actual-end:
+  actual_end:
     type: datetime
     required: false
-  assigned-user-id:
+  assigned_user_id:
     type: uuid
     required: false
     references: user
-  requested-by:
+  requested_by:
     type: uuid
     required: true
     references: user
@@ -49,4 +49,4 @@ attributes:
     # Valid only when the intentional baseline seed is applied.
     # Prefer current-user substitution / FK picker when that follow-on lands —
     # do not copy this pattern to other actor-typed attributes.
-    create-default: "01900000-0000-7000-8000-000000000001"
+    create_default: "01900000-0000-7000-8000-000000000001"

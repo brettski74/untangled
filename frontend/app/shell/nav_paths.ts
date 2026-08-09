@@ -12,15 +12,15 @@ import type {
 } from "./nav_schema";
 
 const CLASS_COLLECTION: Record<string, string> = {
-  "change-request": "change-requests",
+  change_request: "change-requests",
   incident: "incidents",
-  "system-config": "system-configs",
+  system_config: "system-configs",
 };
 
 const COLLECTION_CLASS: Record<string, string> = {
-  "change-requests": "change-request",
+  "change-requests": "change_request",
   incidents: "incident",
-  "system-configs": "system-config",
+  "system-configs": "system_config",
 };
 
 export function display_name_to_slug(display_name: string): string {

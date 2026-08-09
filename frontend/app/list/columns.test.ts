@@ -26,7 +26,7 @@ function sample_meta(
 }
 
 describe("list_display_columns", () => {
-  it("preserves YAML order when there is no friendly-id", () => {
+  it("preserves YAML order when there is no friendly_id", () => {
     const columns = list_display_columns(
       sample_meta(
         [
@@ -53,7 +53,7 @@ describe("list_display_columns", () => {
     expect(columns.map((c) => c.name_snake)).toEqual(["summary", "status"]);
   });
 
-  it("moves friendly-id left-most for display only", () => {
+  it("moves friendly_id left-most for display only", () => {
     const columns = list_display_columns(
       sample_meta(
         [
@@ -68,7 +68,7 @@ describe("list_display_columns", () => {
           {
             name_kebab: "number",
             name_snake: "number",
-            type_name: "friendly-id",
+            type_name: "friendly_id",
             required: true,
             references: null,
             order: 1,
@@ -94,14 +94,14 @@ describe("list_display_columns", () => {
     expect(columns.map((c) => c.order)).toEqual([1, 0, 2]);
   });
 
-  it("leaves friendly-id in place when already first", () => {
+  it("leaves friendly_id in place when already first", () => {
     const columns = list_display_columns(
       sample_meta(
         [
           {
             name_kebab: "number",
             name_snake: "number",
-            type_name: "friendly-id",
+            type_name: "friendly_id",
             required: true,
             references: null,
             order: 0,

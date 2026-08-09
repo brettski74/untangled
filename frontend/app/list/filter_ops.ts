@@ -27,11 +27,11 @@ export const OPERATOR_DISPLAY_NAMES: Record<string, string> = {
 
 const TEXT_FAMILY = new Set([
   "string",
-  "compact-text",
+  "compact_text",
   "choice",
   "status",
   "text",
-  "multiline-text",
+  "multiline_text",
 ]);
 
 const ORDERED_TYPES = new Set([
@@ -40,10 +40,10 @@ const ORDERED_TYPES = new Set([
   "float",
   "decimal",
   "datetime",
-  "friendly-id",
+  "friendly_id",
 ]);
 
-const TEXT_PATTERN_TYPES = new Set([...TEXT_FAMILY, "friendly-id"]);
+const TEXT_PATTERN_TYPES = new Set([...TEXT_FAMILY, "friendly_id"]);
 
 const NULL_CHECK_OPS = ["empty", "not-empty"] as const;
 const NO_VALUE_OPS = new Set<string>(NULL_CHECK_OPS);

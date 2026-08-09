@@ -22,8 +22,8 @@ const attrs = [
   attr({ name_snake: "summary", type_name: "text", order: 1 }),
   attr({ name_snake: "risk_score", type_name: "integer", order: 2 }),
   attr({ name_snake: "scheduled_start", type_name: "datetime", order: 3 }),
-  attr({ name_snake: "number", type_name: "friendly-id", order: 4 }),
-  attr({ name_snake: "description", type_name: "multiline-text", order: 5 }),
+  attr({ name_snake: "number", type_name: "friendly_id", order: 4 }),
+  attr({ name_snake: "description", type_name: "multiline_text", order: 5 }),
   attr({ name_snake: "active", type_name: "boolean", order: 6 }),
 ];
 

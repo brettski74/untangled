@@ -1,6 +1,6 @@
 # Incident — Phase 1 ITSM ticket.
 name: incident
-display-name: Incident
+display_name: Incident
 description: >
   Operational incident record with a human-friendly INC number. Status and
   severity are free strings in M1; documented status vocabulary (progression)
@@ -9,40 +9,40 @@ description: >
   User error, Application fault, Hardware fault, Network fault, Other.
 attributes:
   number:
-    type: friendly-id
+    type: friendly_id
     required: true
     prefix: INC
   summary:
     type: text
     required: true
   description:
-    type: multiline-text
+    type: multiline_text
     required: false
   status:
     type: status
     required: true
-    create-default: new
+    create_default: new
   severity:
     type: choice
     required: true
-  major-incident:
+  major_incident:
     # Optional boolean is tri-state (NULL ≠ false). Prefer required+default when
     # schema defaults/backfill land (#62). Unset rows match neither eq true nor eq false.
     type: boolean
     required: false
-  resolved-at:
+  resolved_at:
     type: datetime
     required: false
-  closed-at:
+  closed_at:
     type: datetime
     required: false
-  assigned-user-id:
+  assigned_user_id:
     type: uuid
     required: false
     references: user
   resolution:
-    type: multiline-text
+    type: multiline_text
     required: false
-  resolution-type:
+  resolution_type:
     type: choice
     required: false

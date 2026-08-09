@@ -337,7 +337,7 @@ function QuickFilterControls({
     }
   }
 
-  if (kind === "text" || kind === "friendly-id") {
+  if (kind === "text" || kind === "friendly_id") {
     return (
       <input
         type="text"

@@ -10,6 +10,7 @@ from fastapi import Depends, HTTPException, status
 from psycopg import Connection
 
 from untangled.auth.dependencies import CurrentUser, DbConn
+from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.registry import class_definition
 from untangled.rbac.keys import (
     class_operation_granted,
@@ -52,7 +53,13 @@ def require_class_operation(
     class_kebab: str,
     operation: str,
 ) -> Callable[..., dict[str, Any]]:
-    """Dependency factory: require ``{class}:{operation}`` (or ``admin`` / ``public`` read)."""
+    """Dependency factory: require ``{class}:{operation}`` (or ``admin`` / ``public`` read).
+
+    Temporary #188 bridge (remove in #192): normalize mount identity to the
+    live class ``name`` before building the permission key (seeds use snake
+    class segments).
+    """
+    class_name = kebab_to_snake(class_kebab)
 
     def _dependency(
         user: CurrentUser,
@@ -60,11 +67,11 @@ def require_class_operation(
     ) -> dict[str, Any]:
         public = False
         if operation == "read":
-            public = class_definition(class_kebab).public
+            public = class_definition(class_name).public
         if not class_operation_granted(
-            permissions, class_kebab, operation, public=public
+            permissions, class_name, operation, public=public
         ):
-            required = class_operation_key(class_kebab, operation)
+            required = class_operation_key(class_name, operation)
             raise _forbidden(f"Missing permission: {required}")
         return user
 

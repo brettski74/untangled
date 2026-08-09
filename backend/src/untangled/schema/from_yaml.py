@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from untangled.mapping.definition import (
-    ClassDefinition,
+from untangled.mapping.definition import ClassDefinition
+from untangled.mapping.definition_snake import (
     load_definitions,
     validate_platform_definitions,
 )
 from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.system_fields import AUDIT_USER_TABLE, SYSTEM_FIELDS
-from untangled.mapping.types import friendly_id_sequence_name
+from untangled.mapping.types_snake import friendly_id_sequence_name
 from untangled.schema.checks import check_constraint_name, normalize_check_expression
 from untangled.schema.ir import (
     CheckIR,
