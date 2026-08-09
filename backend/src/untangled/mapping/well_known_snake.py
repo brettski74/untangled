@@ -1,7 +1,4 @@
-"""Snake_case well-known ``${…}`` catalog for the dark snake definition loader.
-
-Isolated from production ``well_known.py`` (kebab). Used only by
-``definition_snake`` / snake generate — not merged into the live catalog.
+"""Snake_case well-known ``${…}`` catalog for the live snake definition loader.
 """
 
 from __future__ import annotations
@@ -20,6 +17,7 @@ WELL_KNOWN: dict[str, str] = {
 
 SUBSTITUTION_CONTEXTS: dict[str, frozenset[str]] = {
     "check_constraint": frozenset({"system_config_id"}),
+    "nav_bar": frozenset({"system_config_id"}),
 }
 
 _TOKEN_RE = re.compile(r"\$\{([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\}")

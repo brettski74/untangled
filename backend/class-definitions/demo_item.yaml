@@ -1,30 +1,30 @@
 # Demo / fixture class for the mapping layer (not a real INC/CHG/User).
 # Edit definitions here, then run `make models`. Schema sync + CRUD live in
 # untangled.persistence (make db-up / make test).
-name: demo-item
-display-name: Demo Item
+name: demo_item
+display_name: Demo Item
 description: >
   Minimal fixture class used to prove YAML definitions through Pydantic/Zod
   generation and PostgreSQL persistence. Not a product ticket type.
 attributes:
   title:
-    type: compact-text
+    type: compact_text
     required: true
   summary:
-    type: compact-text
+    type: compact_text
     required: false
-  is-active:
+  is_active:
     type: boolean
     required: true
   quantity:
     type: integer
     required: true
-  unit-price:
+  unit_price:
     type: float
     required: false
-  fixed-amount:
+  fixed_amount:
     type: decimal
     required: true
-  due-at:
+  due_at:
     type: datetime
     required: false

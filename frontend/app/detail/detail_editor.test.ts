@@ -28,7 +28,7 @@ function slot(
 ): DetailFieldSlot {
   return {
     name_kebab: partial.name_snake.replace(/_/g, "-"),
-    type_name: "compact-text",
+    type_name: "compact_text",
     label: partial.name_snake,
     references: null,
     ...partial,
@@ -42,8 +42,8 @@ describe("editable slots", () => {
     compact_left: [
       slot({
         name_snake: "number",
-        kind: "friendly-id",
-        type_name: "friendly-id",
+        kind: "friendly_id",
+        type_name: "friendly_id",
       }),
       slot({ name_snake: "status", kind: "author", type_name: "status" }),
     ],
@@ -167,8 +167,8 @@ describe("undo chunks", () => {
 describe("update_schema_registry", () => {
   it("R1: known classes resolve", () => {
     expect(update_schema_for_class("incident")).not.toBeNull();
-    expect(update_schema_for_class("change-request")).not.toBeNull();
-    expect(update_schema_for_class("system-config")).not.toBeNull();
+    expect(update_schema_for_class("change_request")).not.toBeNull();
+    expect(update_schema_for_class("system_config")).not.toBeNull();
   });
 
   it("R2: unknown class is observable miss", () => {

@@ -14,7 +14,7 @@ import {
 const SEED_ADMIN = "01900000-0000-7000-8000-000000000001";
 
 describe("record_from_create_defaults", () => {
-  it("D1: INC seeds status=new; friendly-id and audit empty", () => {
+  it("D1: INC seeds status=new; friendly_id and audit empty", () => {
     const meta = class_field_meta("incident")!;
     const seed = record_from_create_defaults(meta);
     expect(seed.status).toBe("new");
@@ -27,7 +27,7 @@ describe("record_from_create_defaults", () => {
   });
 
   it("D2: CHG seeds status=draft and requested_by seed UUID", () => {
-    const meta = class_field_meta("change-request")!;
+    const meta = class_field_meta("change_request")!;
     const seed = record_from_create_defaults(meta);
     expect(seed.status).toBe("draft");
     expect(seed.requested_by).toBe(SEED_ADMIN);
@@ -38,7 +38,7 @@ describe("record_from_create_defaults", () => {
 
 describe("merge_create_body", () => {
   it("M1: merges RO FK create_default when client omits it", () => {
-    const meta = class_field_meta("change-request")!;
+    const meta = class_field_meta("change_request")!;
     const merged = merge_create_body(meta, {
       summary: "Window",
       status: "draft",
@@ -51,7 +51,7 @@ describe("merge_create_body", () => {
   });
 
   it("M2: ignores client override of RO FK default", () => {
-    const meta = class_field_meta("change-request")!;
+    const meta = class_field_meta("change_request")!;
     const merged = merge_create_body(meta, {
       summary: "Window",
       status: "draft",
@@ -62,7 +62,7 @@ describe("merge_create_body", () => {
     expect(merged.requested_by).toBe(SEED_ADMIN);
   });
 
-  it("M3: strips friendly-id / id / audit even if client sends them", () => {
+  it("M3: strips friendly_id / id / audit even if client sends them", () => {
     const meta = class_field_meta("incident")!;
     const merged = merge_create_body(meta, {
       summary: "Outage",
@@ -91,7 +91,7 @@ describe("merge_create_body", () => {
 });
 
 describe("preferred_create_locator", () => {
-  it("L1: prefers friendly-id over id", () => {
+  it("L1: prefers friendly_id over id", () => {
     const meta = class_field_meta("incident")!;
     expect(
       preferred_create_locator(meta, {
@@ -101,7 +101,7 @@ describe("preferred_create_locator", () => {
     ).toBe("INC00000001");
   });
 
-  it("L2: falls back to id when friendly-id empty", () => {
+  it("L2: falls back to id when friendly_id empty", () => {
     const meta = class_field_meta("incident")!;
     expect(
       preferred_create_locator(meta, {
@@ -194,8 +194,8 @@ describe("create-valid from merged body (INC/CHG)", () => {
   });
 
   it("V3: CHG defaults alone are not create-valid; requested_by still merged", () => {
-    const meta = class_field_meta("change-request")!;
-    const schema = create_schema_for_class("change-request")!;
+    const meta = class_field_meta("change_request")!;
+    const schema = create_schema_for_class("change_request")!;
     const merged = merge_create_body(meta, {});
     expect(merged.requested_by).toBe(SEED_ADMIN);
     expect(merged.status).toBe("draft");
@@ -203,8 +203,8 @@ describe("create-valid from merged body (INC/CHG)", () => {
   });
 
   it("V4: CHG with schedule + summary is create-valid including requested_by", () => {
-    const meta = class_field_meta("change-request")!;
-    const schema = create_schema_for_class("change-request")!;
+    const meta = class_field_meta("change_request")!;
+    const schema = create_schema_for_class("change_request")!;
     const merged = merge_create_body(meta, {
       summary: "Window",
       scheduled_start: "2026-02-01T00:00:00Z",
@@ -218,7 +218,7 @@ describe("create-valid from merged body (INC/CHG)", () => {
 describe("create_schema_registry", () => {
   it("R1: resolves known Create schemas", () => {
     expect(create_schema_for_class("incident")).not.toBeNull();
-    expect(create_schema_for_class("change-request")).not.toBeNull();
+    expect(create_schema_for_class("change_request")).not.toBeNull();
     const schema = create_schema_for_class("incident")!;
     expect(create_schema_keys(schema).has("summary")).toBe(true);
     expect(create_schema_keys(schema).has("number")).toBe(false);

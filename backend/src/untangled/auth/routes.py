@@ -39,7 +39,7 @@ _INVALID_CREDENTIALS = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
-_DEMO_ITEM_READ = class_operation_key("demo-item", "read")
+_DEMO_ITEM_READ = class_operation_key("demo_item", "read")
 
 
 @router.post("/login", response_model=TokenPair)
@@ -117,7 +117,7 @@ def change_password_route(
 
 @router.get("/rbac-probe", response_model=RbacProbeResponse)
 def rbac_probe(
-    _user: Annotated[dict[str, Any], Depends(require_class_operation("demo-item", "read"))],
+    _user: Annotated[dict[str, Any], Depends(require_class_operation("demo_item", "read"))],
 ) -> RbacProbeResponse:
     """RBAC proof route: requires ``demo-item:read`` (or ``admin`` allow-all)."""
     return RbacProbeResponse(required_permission=_DEMO_ITEM_READ)

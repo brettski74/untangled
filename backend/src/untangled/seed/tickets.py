@@ -8,7 +8,7 @@ from uuid import UUID
 from psycopg import Connection
 
 from untangled.mapping.datetime_utc import utc_now
-from untangled.mapping.definition import load_definition
+from untangled.mapping.definition_snake import load_definition
 from untangled.persistence.store import RecordStore
 from untangled.records.deps import definitions_dir, model
 from untangled.seed.users import SEED_ADMIN_ID, SEED_READWRITE_ID
@@ -51,12 +51,12 @@ def seed_tickets(conn: Connection) -> dict[str, list[str]]:
     """Upsert sample INC/CHG rows via RecordStore. Returns created/skipped summaries."""
     defs = definitions_dir()
     incident_def = load_definition(defs / "incident.yaml")
-    change_def = load_definition(defs / "change-request.yaml")
+    change_def = load_definition(defs / "change_request.yaml")
     incident_store = RecordStore(
         conn, incident_def, model("incident"), actor_id=SEED_ADMIN_ID
     )
     change_store = RecordStore(
-        conn, change_def, model("change-request"), actor_id=SEED_ADMIN_ID
+        conn, change_def, model("change_request"), actor_id=SEED_ADMIN_ID
     )
 
     now = utc_now()

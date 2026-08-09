@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from untangled.mapping.datetime_utc import format_utc_iso_z, utc_now
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
-from untangled.mapping.types import format_friendly_id, friendly_id_sequence_name
+from untangled.mapping.types_snake import format_friendly_id, friendly_id_sequence_name
 from untangled.persistence.actor import SYSTEM_USER_ID
 from untangled.persistence.fk_enrichment import (
     RelatedIdentity,
@@ -274,7 +274,7 @@ class RecordStore[T: BaseModel]:
             return
         if self._friendly.name_snake in user_fields:
             raise ValueError(
-                f"{context} payload must not include server-assigned friendly-id "
+                f"{context} payload must not include server-assigned friendly_id "
                 f"field {self._friendly.name_snake!r}"
             )
 

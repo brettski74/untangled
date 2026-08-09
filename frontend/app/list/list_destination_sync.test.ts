@@ -19,7 +19,7 @@ function attr(
 
 describe("list_destination_ui_sync", () => {
   const attributes = [
-    attr({ name_snake: "number", type_name: "friendly-id", order: 0 }),
+    attr({ name_snake: "number", type_name: "friendly_id", order: 0 }),
     attr({ name_snake: "risk_score", type_name: "integer", order: 1 }),
   ];
 

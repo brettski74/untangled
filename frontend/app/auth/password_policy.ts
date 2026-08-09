@@ -1,5 +1,5 @@
 /**
- * Parse password policy fields from the public system-config singleton record.
+ * Parse password policy fields from the public system_config singleton record.
  * Fail-closed: throws when required fields are missing or invalid.
  */
 import { z } from "zod";

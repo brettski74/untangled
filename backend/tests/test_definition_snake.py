@@ -274,10 +274,10 @@ def test_deprecated_string_type_warns(tmp_path: Path) -> None:
     assert any(isinstance(w.message, DeprecatedStringTypeWarning) for w in caught)
 
 
-def test_kebab_loader_still_production_entrypoint() -> None:
-    """Dark path must not replace the live kebab loader import surface."""
-    from untangled.mapping import generate as generate_mod
+def test_snake_loader_is_production_entrypoint() -> None:
+    """Live mapping package and registry use the snake loader (#188)."""
+    from untangled import mapping as mapping_pkg
     from untangled.mapping import registry
 
-    assert generate_mod.load_definitions.__module__ == "untangled.mapping.definition"
-    assert "definition_snake" not in registry.__file__
+    assert mapping_pkg.load_definitions.__module__ == "untangled.mapping.definition_snake"
+    assert registry.load_definitions.__module__ == "untangled.mapping.definition_snake"

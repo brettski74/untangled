@@ -6,11 +6,12 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from untangled.mapping.definition import (
+from untangled.mapping.definition_snake import (
     ClassDefinition,
     load_definitions,
     validate_platform_definitions,
 )
+from untangled.mapping.naming import kebab_to_snake
 
 DEFINITIONS_DIR_ENV = "UNTANGLED_DEFINITIONS_DIR"
 
@@ -74,21 +75,32 @@ def definitions_dir() -> Path:
 
 
 @lru_cache(maxsize=1)
-def definitions_by_kebab() -> dict[str, ClassDefinition]:
-    """Load and cache the platform definition set keyed by kebab class name."""
+def definitions_by_name() -> dict[str, ClassDefinition]:
+    """Load and cache the platform definition set keyed by class ``name``."""
     definitions = load_definitions(definitions_dir())
     validate_platform_definitions(definitions)
-    return {d.name_kebab: d for d in definitions}
+    return {d.name_snake: d for d in definitions}
 
 
-def class_definition(class_kebab: str) -> ClassDefinition:
-    """Return the loaded class definition for ``class_kebab``."""
+def definitions_by_kebab() -> dict[str, ClassDefinition]:
+    """Compatibility alias for ``definitions_by_name`` (legacy call-site name)."""
+    return definitions_by_name()
+
+
+def class_definition(class_name: str) -> ClassDefinition:
+    """Return the loaded class definition for live class ``name``.
+
+    Temporary #188 bridge (remove in #192): one-way ``kebab_to_snake`` so
+    transitional callers that still pass historical kebab mount strings resolve
+    to the live name. The cache itself is keyed only by live ``name``.
+    """
+    live_name = kebab_to_snake(class_name)
     try:
-        return definitions_by_kebab()[class_kebab]
+        return definitions_by_name()[live_name]
     except KeyError as exc:
-        raise RuntimeError(f"unknown class definition: {class_kebab}") from exc
+        raise RuntimeError(f"unknown class definition: {class_name}") from exc
 
 
 def clear_definition_caches() -> None:
     """Drop cached definition maps (tests / unusual reloads)."""
-    definitions_by_kebab.cache_clear()
+    definitions_by_name.cache_clear()

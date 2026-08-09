@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from untangled.mapping.generate import generate_models
+from untangled.mapping.generate_snake import generate_models_snake as generate_models
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
 from untangled.seed.users import SEED_ADMIN_ID
 
@@ -226,12 +226,12 @@ def test_generate_demo_zod_accepts_and_rejects(
 def test_field_meta_order_and_create_defaults(
     repo_definitions: Path, tmp_path: Path
 ) -> None:
-    from untangled.mapping.definition import load_definitions
+    from untangled.mapping.definition_snake import load_definitions
     from untangled.mapping.emit_field_meta import emit_field_meta_module
 
     definitions = load_definitions(repo_definitions)
     source = emit_field_meta_module(definitions)
-    incident = next(d for d in definitions if d.name_kebab == "incident")
+    incident = next(d for d in definitions if d.name_snake == "incident")
     assert [a.name_snake for a in incident.attributes][:4] == [
         "number",
         "summary",
@@ -241,7 +241,7 @@ def test_field_meta_order_and_create_defaults(
     assert incident.attributes[1].type_name == "text"
     assert incident.attributes[3].create_default == "new"
 
-    change = next(d for d in definitions if d.name_kebab == "change-request")
+    change = next(d for d in definitions if d.name_snake == "change_request")
     requested = next(a for a in change.attributes if a.name_snake == "requested_by")
     assert requested.create_default == str(SEED_ADMIN_ID)
 
@@ -256,23 +256,23 @@ def test_field_meta_order_and_create_defaults(
 def test_min_max_on_create_update_not_full_model(tmp_path: Path) -> None:
     from pydantic import ValidationError
 
-    from untangled.mapping.definition import load_definition
-    from untangled.mapping.emit_field_meta import emit_field_meta_module
-    from untangled.mapping.emit_pydantic import emit_pydantic_module
+    from untangled.mapping.definition_snake import load_definition
+    from untangled.mapping.emit_field_meta_snake import emit_field_meta_module
+    from untangled.mapping.emit_pydantic_snake import emit_pydantic_module
 
-    path = tmp_path / "bounded-item.yaml"
+    path = tmp_path / "bounded_item.yaml"
     path.write_text(
         "\n".join(
             [
-                "name: bounded-item",
-                "display-name: Bounded Item",
+                "name: bounded_item",
+                "display_name: Bounded Item",
                 "description: Numeric bounds.",
                 "attributes:",
                 "  quantity:",
                 "    type: integer",
                 "    required: true",
-                "    min-value: 1",
-                "    max-value: 10",
+                "    min_value: 1",
+                "    max_value: 10",
             ]
         )
         + "\n",

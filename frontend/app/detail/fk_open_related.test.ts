@@ -28,7 +28,7 @@ describe("fk_open_related", () => {
     expect(open.tooltip).toBe("Open Outbound email");
   });
 
-  it("F1c: encodes friendly-id locator segments", () => {
+  it("F1c: encodes friendly_id locator segments", () => {
     const open = fk_open_related("incident", {
       id: "01901234-5678-7abc-89ab-cdef01234567",
       friendly_id: "INC/odd",
@@ -53,7 +53,7 @@ describe("fk_open_related", () => {
   });
 
   it("F4: tooltip uses Open {uuid} when set", () => {
-    const open = fk_open_related("change-request", "abc");
+    const open = fk_open_related("change_request", "abc");
     expect(open.tooltip).toBe("Open abc");
   });
 });

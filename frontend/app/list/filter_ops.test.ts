@@ -43,7 +43,7 @@ describe("editor_filterable_attributes", () => {
         references: "user",
       }),
       attr({ name_snake: "status", type_name: "status", order: 2 }),
-      attr({ name_snake: "number", type_name: "friendly-id", order: 3 }),
+      attr({ name_snake: "number", type_name: "friendly_id", order: 3 }),
       attr({ name_snake: "id", type_name: "uuid", order: 4 }),
     ]);
     expect(filtered.map((a) => a.name_snake)).toEqual([

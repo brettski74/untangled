@@ -98,7 +98,7 @@ describe("destination_new loader", () => {
       username: "admin",
       display_name: "Admin",
       roles: ["admin"],
-      permissions: ["change-request:create", "change-request:read"],
+      permissions: ["change_request:create", "change_request:read"],
     });
     const { loader } = await import("../routes/destination_new");
     const cookie = await session_cookie();

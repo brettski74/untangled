@@ -79,8 +79,8 @@ def load_system_config(
 ) -> BaseModel:
     """Fetch and clamp the singleton. Raises if missing or unreadable."""
     ensure_generated_package()
-    definition = class_definition("system-config")
-    model_cls = model("system-config")
+    definition = class_definition("system_config")
+    model_cls = model("system_config")
     store: RecordStore[Any] = RecordStore(
         conn,
         definition,

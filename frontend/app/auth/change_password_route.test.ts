@@ -66,7 +66,7 @@ describe("change-password route (#173)", () => {
     fetch_record.mockResolvedValue(POLICY_RECORD);
   });
 
-  it("loader returns password policy from system-config", async () => {
+  it("loader returns password policy from system_config", async () => {
     const { loader } = await import("../routes/change_password");
     const cookie = await session_cookie();
     const response = await loader({

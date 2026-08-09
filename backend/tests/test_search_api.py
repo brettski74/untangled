@@ -297,7 +297,7 @@ def test_search_ordered_ops(tickets_client: TestClient) -> None:
     for item in status_gt.json()["items"]:
         assert item["status"] > "m"
 
-    # friendly-id starts-with-style bound via gte on INC numbers
+    # friendly_id starts-with-style bound via gte on INC numbers
     number_gte = _search(
         tickets_client,
         "/incidents/search",
@@ -485,7 +485,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
     assert regexp.status_code == 200
     assert str(SEED_INCIDENT_1_ID) in {i["id"] for i in regexp.json()["items"]}
 
-    # friendly-id starts-with on change-requests (shared factory path).
+    # friendly_id starts-with on change-requests (shared factory path).
     chg = _search(
         tickets_client,
         "/change-requests/search",
@@ -724,7 +724,7 @@ def test_search_unreadable_system_config_503(
     from untangled.system_config import SystemConfigUnreadableError
 
     def _boom(_conn, *, cache=None):
-        raise SystemConfigUnreadableError("system-config singleton could not be read")
+        raise SystemConfigUnreadableError("system_config singleton could not be read")
 
     monkeypatch.setattr(
         "untangled.records.router_factory.get_system_config",

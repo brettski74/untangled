@@ -8,12 +8,12 @@ import type { SearchPredicate } from "./quick_filter";
 
 const STRING_FAMILY = new Set([
   "string",
-  "compact-text",
+  "compact_text",
   "choice",
   "status",
   "text",
-  "multiline-text",
-  "friendly-id",
+  "multiline_text",
+  "friendly_id",
   "uuid",
 ]);
 

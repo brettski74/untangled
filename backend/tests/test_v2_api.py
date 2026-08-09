@@ -181,13 +181,13 @@ def test_v2_system_config_suppresses_create_search_delete(
     # Suppressed ops are unbound. POST /search may 405 because GET /{locator}
     # still matches the "search" path segment.
     create = tickets_client.post(
-        "/api/v2/system-config",
+        "/api/v2/system_config",
         headers=headers,
         json={},
     )
     assert create.status_code in (404, 405), create.text
     search = tickets_client.post(
-        "/api/v2/system-config/search",
+        "/api/v2/system_config/search",
         headers=headers,
         json={},
     )

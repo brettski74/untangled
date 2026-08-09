@@ -98,7 +98,7 @@ describe("validate_change_password_form", () => {
 });
 
 describe("parse_password_policy", () => {
-  it("parses decimal drift strings from system-config", () => {
+  it("parses decimal drift strings from system_config", () => {
     const policy = parse_password_policy({
       password_minimum_chars: 12,
       password_maximum_chars: 128,

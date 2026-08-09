@@ -25,7 +25,7 @@ function sample_meta(
 }
 
 describe("partition_detail_layout", () => {
-  it("L1: puts text and multiline-text in the text section in declaration order", () => {
+  it("L1: puts text and multiline_text in the text section in declaration order", () => {
     const layout = partition_detail_layout(
       sample_meta(
         [
@@ -48,7 +48,7 @@ describe("partition_detail_layout", () => {
           {
             name_kebab: "description",
             name_snake: "description",
-            type_name: "multiline-text",
+            type_name: "multiline_text",
             required: false,
             references: null,
             order: 2,
@@ -101,7 +101,7 @@ describe("partition_detail_layout", () => {
     ]);
   });
 
-  it("L3: pins friendly-id top-left; other compact keep declaration order", () => {
+  it("L3: pins friendly_id top-left; other compact keep declaration order", () => {
     const layout = partition_detail_layout(
       sample_meta(
         [
@@ -116,7 +116,7 @@ describe("partition_detail_layout", () => {
           {
             name_kebab: "number",
             name_snake: "number",
-            type_name: "friendly-id",
+            type_name: "friendly_id",
             required: true,
             references: null,
             order: 1,
@@ -134,7 +134,7 @@ describe("partition_detail_layout", () => {
       ),
     );
     expect(layout.compact[0]?.name_snake).toBe("number");
-    expect(layout.compact[0]?.kind).toBe("friendly-id");
+    expect(layout.compact[0]?.kind).toBe("friendly_id");
     expect(layout.compact.map((s) => s.name_snake).slice(0, 3)).toEqual([
       "number",
       "status",
@@ -142,7 +142,7 @@ describe("partition_detail_layout", () => {
     ]);
   });
 
-  it("L4: without friendly-id, compact starts with first non-text author attr", () => {
+  it("L4: without friendly_id, compact starts with first non-text author attr", () => {
     const layout = partition_detail_layout(
       sample_meta(
         [

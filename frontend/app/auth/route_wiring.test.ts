@@ -12,12 +12,12 @@ const READWRITE_PERMISSIONS = [
   "incident:create",
   "incident:read",
   "incident:update",
-  "change-request:create",
-  "change-request:read",
-  "change-request:update",
-  "demo-item:create",
-  "demo-item:read",
-  "demo-item:update",
+  "change_request:create",
+  "change_request:read",
+  "change_request:update",
+  "demo_item:create",
+  "demo_item:read",
+  "demo_item:update",
 ];
 
 async function session_cookie(token = fake_access_token()): Promise<string> {
@@ -85,7 +85,7 @@ describe("route wiring", () => {
       },
     });
     expect(result.data.nav?.map((s: { class_name: string }) => s.class_name)).toEqual(
-      ["change-request", "incident", "system-config"],
+      ["change_request", "incident", "system_config"],
     );
     expect(result.init?.headers).toMatchObject({
       "Cache-Control": "private, no-store",

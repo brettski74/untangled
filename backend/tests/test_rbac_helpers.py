@@ -15,8 +15,8 @@ from untangled.rbac.keys import (
 
 
 def test_class_operation_key_format() -> None:
-    assert class_operation_key("demo-item", "read") == "demo-item:read"
-    assert class_operation_key("change-request", "delete") == "change-request:delete"
+    assert class_operation_key("demo_item", "read") == "demo_item:read"
+    assert class_operation_key("change_request", "delete") == "change_request:delete"
 
 
 def test_class_operation_key_rejects_bad_inputs() -> None:
@@ -45,40 +45,40 @@ def test_parse_permission_key_rejects_invalid() -> None:
 
 def test_permission_grants_admin_short_circuit() -> None:
     effective = frozenset({ADMIN_PERMISSION_KEY})
-    assert permission_grants(effective, "demo-item:delete")
+    assert permission_grants(effective, "demo_item:delete")
     assert permission_grants(effective, "incident:create")
     assert permission_grants(effective, ADMIN_PERMISSION_KEY)
 
 
 def test_permission_grants_exact_and_deny() -> None:
-    effective = frozenset({"demo-item:read", "demo-item:create"})
-    assert permission_grants(effective, "demo-item:read")
-    assert not permission_grants(effective, "demo-item:delete")
-    assert not permission_grants(frozenset(), "demo-item:read")
+    effective = frozenset({"demo_item:read", "demo_item:create"})
+    assert permission_grants(effective, "demo_item:read")
+    assert not permission_grants(effective, "demo_item:delete")
+    assert not permission_grants(frozenset(), "demo_item:read")
 
 
 def test_require_permission_factory_allow_and_403() -> None:
-    dep = require_permission("demo-item:read")
+    dep = require_permission("demo_item:read")
     user = {"id": "u", "username": "x"}
-    assert dep(user=user, permissions=frozenset({"demo-item:read"})) is user
+    assert dep(user=user, permissions=frozenset({"demo_item:read"})) is user
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc_info:
-        dep(user=user, permissions=frozenset({"demo-item:create"}))
+        dep(user=user, permissions=frozenset({"demo_item:create"}))
     assert exc_info.value.status_code == 403
-    assert "demo-item:read" in str(exc_info.value.detail)
+    assert "demo_item:read" in str(exc_info.value.detail)
 
 
 def test_require_class_operation_uses_canonical_key() -> None:
-    dep = require_class_operation("change-request", "update")
+    dep = require_class_operation("change_request", "update")
     user = {"id": "u"}
-    assert dep(user=user, permissions=frozenset({"change-request:update"})) is user
+    assert dep(user=user, permissions=frozenset({"change_request:update"})) is user
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc_info:
-        dep(user=user, permissions=frozenset({"change-request:read"}))
+        dep(user=user, permissions=frozenset({"change_request:read"}))
     assert exc_info.value.status_code == 403
 
 
@@ -90,8 +90,8 @@ def test_require_permission_admin_allows_any() -> None:
 
 def test_class_operation_granted_public_read_only() -> None:
     empty = frozenset()
-    assert class_operation_granted(empty, "system-config", "read", public=True)
-    assert not class_operation_granted(empty, "system-config", "update", public=True)
+    assert class_operation_granted(empty, "system_config", "read", public=True)
+    assert not class_operation_granted(empty, "system_config", "update", public=True)
     assert not class_operation_granted(empty, "incident", "read", public=False)
 
 
@@ -105,10 +105,10 @@ def test_require_class_operation_public_read(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(
         rbac_deps,
         "class_definition",
-        lambda name: SimpleNamespace(public=name == "public-item"),
+        lambda name: SimpleNamespace(public=name == "public_item"),
     )
     user = {"id": "u"}
-    public_dep = require_class_operation("public-item", "read")
+    public_dep = require_class_operation("public_item", "read")
     assert public_dep(user=user, permissions=frozenset()) is user
 
     private_dep = require_class_operation("incident", "read")

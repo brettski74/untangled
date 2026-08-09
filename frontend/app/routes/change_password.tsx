@@ -60,7 +60,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (error instanceof ApiForbiddenError) {
       throw forbidden_response();
     }
-    // Fail closed when system-config password policy cannot be read.
+    // Fail closed when system_config password policy cannot be read.
     throw new Response("Password policy unavailable", {
       status: 503,
       statusText: "Password policy unavailable",

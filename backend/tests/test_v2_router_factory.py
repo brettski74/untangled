@@ -66,16 +66,16 @@ def test_v2_full_crud_routes_use_singular_class_name(
         ),
     )
     v2 = build_v2_class_router(
-        class_kebab="change-request",
-        prefix="/api/v2/change-request",
-        tags=["change-request-v2"],
+        class_kebab="change_request",
+        prefix="/api/v2/change_request",
+        tags=["change_request-v2"],
     )
     keys = _route_keys(v2)
-    assert ("POST", "/api/v2/change-request") in keys
-    assert ("POST", "/api/v2/change-request/search") in keys
-    assert ("GET", "/api/v2/change-request/{locator}") in keys
-    assert ("PATCH", "/api/v2/change-request/{locator}") in keys
-    assert ("DELETE", "/api/v2/change-request/{locator}") in keys
+    assert ("POST", "/api/v2/change_request") in keys
+    assert ("POST", "/api/v2/change_request/search") in keys
+    assert ("GET", "/api/v2/change_request/{locator}") in keys
+    assert ("PATCH", "/api/v2/change_request/{locator}") in keys
+    assert ("DELETE", "/api/v2/change_request/{locator}") in keys
     # No pluralized collection segment.
     assert not any("/change-requests" in path for _, path in keys)
 
@@ -84,8 +84,8 @@ def test_v2_mounts_include_registry_classes_beyond_legacy_allowlist() -> None:
     routers = build_v2_record_routers()
     prefixes = {router.prefix for router in routers}
     assert "/api/v2/incident" in prefixes
-    assert "/api/v2/change-request" in prefixes
-    assert "/api/v2/system-config" in prefixes
+    assert "/api/v2/change_request" in prefixes
+    assert "/api/v2/system_config" in prefixes
     # Auth/RBAC classes mount with no exclusion allowlist (#185 is follow-up).
     assert "/api/v2/user" in prefixes
     assert "/api/v2/role" in prefixes

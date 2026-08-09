@@ -8,7 +8,8 @@ from pathlib import Path
 
 from psycopg import Connection
 
-from untangled.mapping.definition import ClassDefinition, load_definitions
+from untangled.mapping.definition import ClassDefinition
+from untangled.mapping.definition_snake import load_definitions
 from untangled.mapping.system_fields import AUDIT_USER_TABLE
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import AddDefaultValue, diff_schemas
@@ -89,7 +90,7 @@ def migrate(
         log("migrate: no changes (no-op)")
         log("migrate: ensure system user (platform attribution principal)")
         upsert_system_user(conn)
-        log("migrate: ensure system-config singleton")
+        log("migrate: ensure system_config singleton")
         ensure_system_config_row(conn)
         conn.commit()
         return MigrateResult(
@@ -129,7 +130,7 @@ def migrate(
             conn.execute(compile_op(op))
         log("migrate: ensure system user (platform attribution principal)")
         upsert_system_user(conn)
-        log("migrate: ensure system-config singleton")
+        log("migrate: ensure system_config singleton")
         ensure_system_config_row(conn)
         record_schema_version(
             conn,

@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from untangled.mapping.generate import generate_models
 from untangled.mapping.generate_snake import generate_models_snake
 from untangled.mapping.well_known_snake import SYSTEM_CONFIG_ID
 
@@ -108,11 +107,14 @@ def test_generate_snake_pydantic_accepts_payload(
         module.SampleItem.model_validate({**payload, "quantity": "nope"})
 
 
-def test_production_generate_still_uses_kebab_loader(
+def test_production_generate_uses_snake_loader(
     repo_definitions: Path, tmp_path: Path
 ) -> None:
-    """Session/CLI generate path remains the kebab pipeline."""
+    """Session/CLI generate path is the snake pipeline (#188)."""
+    from untangled.mapping import generate_models
+
     result = generate_models(repo_definitions, tmp_path / "p", tmp_path / "z")
     demo = next(d for d in result.definitions if d.name_snake == "demo_item")
     title = next(a for a in demo.attributes if a.name_snake == "title")
-    assert title.type_name == "compact-text"
+    assert title.type_name == "compact_text"
+

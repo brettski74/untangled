@@ -15,11 +15,11 @@ from untangled.seed.users import (
 )
 
 # Seeded YAML class names that receive a full CRUD permission catalog in M1.
-# Pre-seeding incident / change-request keys does not create those domain tables.
+# Pre-seeding incident / change_request keys does not create those domain tables.
 SEEDED_PERMISSION_CLASSES: tuple[str, ...] = (
-    "demo-item",
+    "demo_item",
     "incident",
-    "change-request",
+    "change_request",
 )
 
 SEED_ROLE_ADMIN_ID = UUID("01900000-0000-7000-8000-000000000011")
@@ -40,20 +40,20 @@ class SeedRole:
 
 SEED_ROLES: tuple[SeedRole, ...] = (
     SeedRole(id=SEED_ROLE_ADMIN_ID, name="admin", display_name="Administrator"),
-    SeedRole(id=SEED_ROLE_READ_ONLY_ID, name="read-only", display_name="Read Only"),
+    SeedRole(id=SEED_ROLE_READ_ONLY_ID, name="read_only", display_name="Read Only"),
     SeedRole(
         id=SEED_ROLE_READ_WRITE_ID,
-        name="read-write",
+        name="read_write",
         display_name="Read Write",
     ),
     SeedRole(
         id=SEED_ROLE_CHANGE_REQUEST_READ_WRITE_ID,
-        name="change-request-read-write",
+        name="change_request_read_write",
         display_name="Change Request Read Write",
     ),
     SeedRole(
         id=SEED_ROLE_INCIDENT_READ_ONLY_ID,
-        name="incident-read-only",
+        name="incident_read_only",
         display_name="Incident Read Only",
     ),
 )
@@ -118,23 +118,23 @@ class SeedRolePermission:
 def _role_permission_keys(role_name: str) -> tuple[str, ...]:
     if role_name == "admin":
         return (ADMIN_PERMISSION_KEY,)
-    if role_name == "read-only":
+    if role_name == "read_only":
         return tuple(
             class_operation_key(class_name, "read")
             for class_name in SEEDED_PERMISSION_CLASSES
         )
-    if role_name == "read-write":
+    if role_name == "read_write":
         keys: list[str] = []
         for class_name in SEEDED_PERMISSION_CLASSES:
             for operation in ("create", "read", "update"):
                 keys.append(class_operation_key(class_name, operation))
         return tuple(keys)
-    if role_name == "change-request-read-write":
+    if role_name == "change_request_read_write":
         return tuple(
-            class_operation_key("change-request", operation)
+            class_operation_key("change_request", operation)
             for operation in ("create", "read", "update")
         )
-    if role_name == "incident-read-only":
+    if role_name == "incident_read_only":
         return (class_operation_key("incident", "read"),)
     raise ValueError(f"unknown seed role: {role_name!r}")
 
