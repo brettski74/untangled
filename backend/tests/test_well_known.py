@@ -7,12 +7,12 @@ from uuid import UUID
 
 import pytest
 
-from untangled.mapping.emit_well_known_snake import (
+from untangled.mapping.emit_well_known import (
     emit_python_well_known,
     emit_ts_well_known,
 )
-from untangled.mapping.generate_snake import generate_models_snake as generate_models
-from untangled.mapping.well_known_snake import (
+from untangled.mapping.generate import generate_models
+from untangled.mapping.well_known import (
     SUBSTITUTION_CONTEXTS,
     SYSTEM_CONFIG_ID,
     SYSTEM_USER_ID,

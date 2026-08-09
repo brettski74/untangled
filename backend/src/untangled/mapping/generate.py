@@ -1,4 +1,4 @@
-"""Reusable generate pipeline: class definitions → Pydantic + Zod + field meta."""
+"""Generate Pydantic, Zod, field meta, and well-known constants from definitions."""
 
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ from untangled.mapping.definition import (
 )
 from untangled.mapping.emit_field_meta import write_field_meta
 from untangled.mapping.emit_pydantic import write_pydantic_models
-from untangled.mapping.emit_well_known import write_python_well_known, write_ts_well_known
+from untangled.mapping.emit_well_known import (
+    write_python_well_known,
+    write_ts_well_known,
+)
 from untangled.mapping.emit_zod import write_zod_models
 
 
@@ -33,13 +36,7 @@ def generate_models(
     pydantic_out: Path,
     zod_out: Path,
 ) -> GenerateResult:
-    """Load definitions from ``definitions_dir`` and write generated modules.
-
-    Writes Pydantic under ``pydantic_out`` and Zod + field meta under ``zod_out``
-    (frontend ``app/generated/``). Paths are inputs so the same pipeline can run
-    for core fixtures or a later custom-class product feature without a rewrite.
-    Requires a full platform definition set (including ``user``).
-    """
+    """Load definitions and write generated modules to the given dirs."""
     definitions = load_definitions(definitions_dir)
     validate_platform_definitions(definitions)
     pydantic_paths = write_pydantic_models(definitions, pydantic_out)

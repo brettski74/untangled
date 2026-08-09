@@ -11,7 +11,6 @@ function sample_meta(
   friendly_id_attr: string | null = null,
 ): ClassFieldMeta {
   return {
-    name_kebab: "sample",
     name_snake: "sample",
     display_name: "Sample",
     attributes,
@@ -30,7 +29,6 @@ describe("partition_detail_layout", () => {
       sample_meta(
         [
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,
@@ -38,7 +36,6 @@ describe("partition_detail_layout", () => {
             order: 0,
           },
           {
-            name_kebab: "summary",
             name_snake: "summary",
             type_name: "text",
             required: true,
@@ -46,7 +43,6 @@ describe("partition_detail_layout", () => {
             order: 1,
           },
           {
-            name_kebab: "description",
             name_snake: "description",
             type_name: "multiline_text",
             required: false,
@@ -75,7 +71,6 @@ describe("partition_detail_layout", () => {
       sample_meta(
         [
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,
@@ -83,7 +78,6 @@ describe("partition_detail_layout", () => {
             order: 0,
           },
           {
-            name_kebab: "severity",
             name_snake: "severity",
             type_name: "choice",
             required: true,
@@ -106,7 +100,6 @@ describe("partition_detail_layout", () => {
       sample_meta(
         [
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,
@@ -114,7 +107,6 @@ describe("partition_detail_layout", () => {
             order: 0,
           },
           {
-            name_kebab: "number",
             name_snake: "number",
             type_name: "friendly_id",
             required: true,
@@ -122,7 +114,6 @@ describe("partition_detail_layout", () => {
             order: 1,
           },
           {
-            name_kebab: "severity",
             name_snake: "severity",
             type_name: "choice",
             required: true,
@@ -147,7 +138,6 @@ describe("partition_detail_layout", () => {
       sample_meta(
         [
           {
-            name_kebab: "summary",
             name_snake: "summary",
             type_name: "text",
             required: true,
@@ -155,7 +145,6 @@ describe("partition_detail_layout", () => {
             order: 0,
           },
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,
@@ -174,7 +163,6 @@ describe("partition_detail_layout", () => {
       sample_meta(
         [
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,
@@ -200,7 +188,6 @@ describe("partition_detail_layout", () => {
       sample_meta(
         [
           {
-            name_kebab: "id",
             name_snake: "id",
             type_name: "uuid",
             required: true,
@@ -208,7 +195,6 @@ describe("partition_detail_layout", () => {
             order: 0,
           },
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,
@@ -228,7 +214,6 @@ describe("partition_detail_layout", () => {
       sample_meta(
         [
           {
-            name_kebab: "a",
             name_snake: "a",
             type_name: "status",
             required: true,
@@ -236,7 +221,6 @@ describe("partition_detail_layout", () => {
             order: 0,
           },
           {
-            name_kebab: "b",
             name_snake: "b",
             type_name: "choice",
             required: true,
@@ -244,7 +228,6 @@ describe("partition_detail_layout", () => {
             order: 1,
           },
           {
-            name_kebab: "c",
             name_snake: "c",
             type_name: "integer",
             required: false,
@@ -269,7 +252,6 @@ describe("partition_detail_layout", () => {
         sample_meta(
           [
             {
-              name_kebab: "status",
               name_snake: "status",
               type_name: "status",
               required: true,
@@ -288,7 +270,6 @@ describe("partition_detail_layout", () => {
       sample_meta(
         [
           {
-            name_kebab: "legacy",
             name_snake: "legacy",
             type_name: "string",
             required: false,
@@ -296,7 +277,6 @@ describe("partition_detail_layout", () => {
             order: 0,
           },
           {
-            name_kebab: "severity",
             name_snake: "severity",
             type_name: "choice",
             required: true,
@@ -304,7 +284,6 @@ describe("partition_detail_layout", () => {
             order: 1,
           },
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,

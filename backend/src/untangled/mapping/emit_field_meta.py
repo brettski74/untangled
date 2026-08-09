@@ -1,4 +1,7 @@
-"""Emit TypeScript class field metadata from Schema IR (YAML order)."""
+"""Emit TypeScript field metadata from class definition IR.
+
+Keyed by snake class ``name``. Identity field is ``name_snake`` only.
+"""
 
 from __future__ import annotations
 
@@ -10,10 +13,11 @@ from untangled.mapping.definition import AttributeDefinition, ClassDefinition
 
 _HEADER = """\
 /**
- * Generated class field metadata. Do not edit by hand; run `make models`.
+ * Generated class field metadata. Do not edit by hand; run ``make models``.
  * Attribute arrays follow YAML declaration order. Each attribute carries an
  * explicit 0-based ``order`` ordinal (declaration order). Consumers must sort
- * by ``order`` and fail closed if it is missing — do not invent a sort.
+ * by ``order`` and fail closed if it is missing — do not invent a sort. Map
+ * keys are snake_case class names.
  */
 """
 
@@ -23,7 +27,6 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
     lines: list[str] = [
         _HEADER,
         "export type AttributeFieldMeta = {",
-        "  name_kebab: string;",
         "  name_snake: string;",
         "  type_name: string;",
         "  required: boolean;",
@@ -37,16 +40,15 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
         "};",
         "",
         "export type ClassFieldMeta = {",
-        "  name_kebab: string;",
         "  name_snake: string;",
         "  display_name: string;",
         "  /** Author attributes; sort by ``order`` for layout",
         "   * (array may match but is not authoritative). */",
         "  attributes: readonly AttributeFieldMeta[];",
-        "  /** Snake_case friendly-id attribute name, if any. */",
+        "  /** Snake_case friendly_id attribute name, if any. */",
         "  friendly_id_attr: string | null;",
-        "  /** Snake_case display-attribute name, if any",
-        "   * (exact compact-text). */",
+        "  /** Snake_case display_attribute name, if any",
+        "   * (exact compact_text). */",
         "  display_attribute: string | null;",
         "  /** Authenticated read without ``{class}:read``. */",
         "  public: boolean;",
@@ -58,9 +60,8 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
         "export const CLASS_FIELD_META: Readonly<Record<string, ClassFieldMeta>> = {",
     ]
 
-    for definition in sorted(definitions, key=lambda d: d.name_kebab):
-        lines.append(f"  {_ts_string(definition.name_kebab)}: {{")
-        lines.append(f"    name_kebab: {_ts_string(definition.name_kebab)},")
+    for definition in sorted(definitions, key=lambda d: d.name_snake):
+        lines.append(f"  {_ts_string(definition.name_snake)}: {{")
         lines.append(f"    name_snake: {_ts_string(definition.name_snake)},")
         lines.append(f"    display_name: {_ts_string(definition.display_name)},")
         lines.append("    attributes: [")
@@ -87,10 +88,10 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
     lines.append("")
     lines.append(
         "export function class_field_meta("
-        "class_kebab: string,"
+        "class_name: string,"
         "): ClassFieldMeta | undefined {"
     )
-    lines.append("  return CLASS_FIELD_META[class_kebab];")
+    lines.append("  return CLASS_FIELD_META[class_name];")
     lines.append("}")
     lines.append("")
     return "\n".join(lines)
@@ -110,7 +111,6 @@ def _attribute_literal(attr: AttributeDefinition, order: int) -> str:
     references = "null" if attr.references is None else _ts_string(attr.references)
     required = "true" if attr.required else "false"
     parts = [
-        f"name_kebab: {_ts_string(attr.name_kebab)}",
         f"name_snake: {_ts_string(attr.name_snake)}",
         f"type_name: {_ts_string(attr.type_name)}",
         f"required: {required}",

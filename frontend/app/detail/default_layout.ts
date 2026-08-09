@@ -16,25 +16,21 @@ const TEXT_SECTION_TYPES = new Set(["text", "multiline_text"]);
 export const DETAIL_AUDIT_FIELDS = [
   {
     name_snake: "created_at",
-    name_kebab: "created-at",
     type_name: "datetime",
     references: null as string | null,
   },
   {
     name_snake: "created_by",
-    name_kebab: "created-by",
     type_name: "uuid",
     references: "user",
   },
   {
     name_snake: "updated_at",
-    name_kebab: "updated-at",
     type_name: "datetime",
     references: null as string | null,
   },
   {
     name_snake: "updated_by",
-    name_kebab: "updated-by",
     type_name: "uuid",
     references: "user",
   },
@@ -42,7 +38,6 @@ export const DETAIL_AUDIT_FIELDS = [
 
 export type DetailFieldSlot = {
   name_snake: string;
-  name_kebab: string;
   type_name: string;
   label: string;
   references: string | null;
@@ -94,9 +89,8 @@ export function partition_detail_layout(meta: ClassFieldMeta): DetailLayout {
 
   const audit: DetailFieldSlot[] = DETAIL_AUDIT_FIELDS.map((field) => ({
     name_snake: field.name_snake,
-    name_kebab: field.name_kebab,
     type_name: field.type_name,
-    label: attribute_display_label(field.name_kebab),
+    label: attribute_display_label(field.name_snake),
     references: field.references,
     kind: "audit" as const,
   }));
@@ -130,9 +124,8 @@ export function split_compact_columns(
 function attribute_to_slot(attr: AttributeFieldMeta): DetailFieldSlot {
   return {
     name_snake: attr.name_snake,
-    name_kebab: attr.name_kebab,
     type_name: attr.type_name,
-    label: attribute_display_label(attr.name_kebab),
+    label: attribute_display_label(attr.name_snake),
     references: attr.references,
     kind: "author",
   };

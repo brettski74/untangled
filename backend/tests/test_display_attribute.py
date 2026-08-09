@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from untangled.mapping.definition_snake import (
+from untangled.mapping.definition import (
     DefinitionError,
     load_definition,
     load_definitions,
     validate_platform_definitions,
 )
-from untangled.mapping.generate_snake import generate_models_snake as generate_models
+from untangled.mapping.generate import generate_models
 
 
 def _write_class(

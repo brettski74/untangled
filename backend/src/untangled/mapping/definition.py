@@ -1,4 +1,4 @@
-"""Load and validate YAML class definitions."""
+"""Load and validate YAML class definitions (snake_case functional identifiers)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from uuid import UUID
 
 import yaml
 
-from untangled.mapping.naming import kebab_to_snake
+from untangled.mapping.naming import is_snake_case
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
 from untangled.mapping.types import (
     DEFAULT_FRIENDLY_ID_PAD_WIDTH,
@@ -28,8 +28,8 @@ class DefinitionError(ValueError):
 class DeprecatedStringTypeWarning(DeprecationWarning):
     """Emitted when a class definition still uses deprecated type ``string``.
 
-    Prefer ``compact-text`` (or a more specific text-family type). Behaviour is
-    identical to ``compact-text``. Shown by default for this module via the
+    Prefer ``compact_text`` (or a more specific text-family type). Behaviour is
+    identical to ``compact_text``. Shown by default for this module via the
     filter below (``DeprecationWarning`` is otherwise filtered for imports).
     """
 
@@ -46,11 +46,10 @@ warnings.filterwarnings(
 class AttributeDefinition:
     """One user-declared attribute on a class."""
 
-    name_kebab: str
     name_snake: str
     type_name: str
     required: bool
-    # Kebab-case class name this attribute references (FK to that table's ``id``).
+    # Snake_case class name this attribute references (FK to that table's ``id``).
     references: str | None = None
     unique: bool = False
     # Create-form UX default and migrate add-time backfill for required attrs
@@ -58,7 +57,7 @@ class AttributeDefinition:
     create_default: str | int | float | bool | None = None
     min_value: int | float | Decimal | None = None
     max_value: int | float | Decimal | None = None
-    # friendly-id only:
+    # friendly_id only:
     prefix: str | None = None
     pad_width: int = DEFAULT_FRIENDLY_ID_PAD_WIDTH
     start_at: int | None = None
@@ -68,13 +67,12 @@ class AttributeDefinition:
 class ClassDefinition:
     """Normalized class definition loaded from YAML."""
 
-    name_kebab: str
     name_snake: str
     display_name: str
     description: str
     attributes: tuple[AttributeDefinition, ...]
     source_path: Path
-    # Class-scoped display identity attribute (exact compact-text), or None.
+    # Class-scoped display identity attribute (exact compact_text), or None.
     display_attribute: AttributeDefinition | None = None
     public: bool = False
     suppress_create: bool = False
@@ -84,13 +82,9 @@ class ClassDefinition:
     check_constraints: tuple[str, ...] = ()
 
     def friendly_id_attr(self) -> AttributeDefinition | None:
-        """Return the sole friendly-id / friendly_id attribute, if any.
-
-        Accepts both kebab and snake type tokens so shared IR from either
-        loader can locate the attribute during the #150 transition.
-        """
+        """Return the sole friendly_id attribute, if any."""
         for attr in self.attributes:
-            if attr.type_name in ("friendly-id", "friendly_id"):
+            if attr.type_name == "friendly_id":
                 return attr
         return None
 
@@ -142,7 +136,7 @@ def validate_platform_definitions(definitions: list[ClassDefinition]) -> None:
 
 
 def load_definition(path: Path) -> ClassDefinition:
-    """Load and validate a single class definition YAML file."""
+    """Load and validate a single snake_case class definition YAML file."""
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
@@ -153,13 +147,13 @@ def load_definition(path: Path) -> ClassDefinition:
 
     name = raw.get("name")
     if not isinstance(name, str) or not name.strip():
-        raise DefinitionError(f"{path}: 'name' is required (kebab-case class name)")
+        raise DefinitionError(f"{path}: 'name' is required (snake_case class name)")
     name = name.strip()
-    _require_kebab(name, path, "name")
+    _require_snake(name, path, "name")
 
-    display_name = raw.get("display-name")
+    display_name = raw.get("display_name")
     if not isinstance(display_name, str) or not display_name.strip():
-        raise DefinitionError(f"{path}: 'display-name' is required")
+        raise DefinitionError(f"{path}: 'display_name' is required")
     display_name = display_name.strip()
 
     description = raw.get("description")
@@ -176,155 +170,163 @@ def load_definition(path: Path) -> ClassDefinition:
     attributes: list[AttributeDefinition] = []
     seen_snake: set[str] = set()
     friendly_id_count = 0
-    for attr_kebab, spec in attributes_raw.items():
-        if not isinstance(attr_kebab, str):
+    for attr_snake, spec in attributes_raw.items():
+        if not isinstance(attr_snake, str):
             raise DefinitionError(f"{path}: attribute keys must be strings")
-        _require_kebab(attr_kebab, path, f"attribute '{attr_kebab}'")
-        snake = kebab_to_snake(attr_kebab)
-        if snake in SYSTEM_FIELD_NAMES:
+        _require_snake(attr_snake, path, f"attribute '{attr_snake}'")
+        if attr_snake in SYSTEM_FIELD_NAMES:
             raise DefinitionError(
-                f"{path}: attribute '{attr_kebab}' conflicts with injected system "
-                f"field '{snake}'; remove it from the YAML definition"
+                f"{path}: attribute '{attr_snake}' conflicts with injected system "
+                f"field '{attr_snake}'; remove it from the YAML definition"
             )
-        if snake in seen_snake:
-            raise DefinitionError(f"{path}: duplicate attribute '{attr_kebab}'")
-        seen_snake.add(snake)
+        if attr_snake in seen_snake:
+            raise DefinitionError(f"{path}: duplicate attribute '{attr_snake}'")
+        seen_snake.add(attr_snake)
 
         if not isinstance(spec, dict):
-            raise DefinitionError(f"{path}: attribute '{attr_kebab}' must be a mapping")
+            raise DefinitionError(f"{path}: attribute '{attr_snake}' must be a mapping")
 
         type_name = spec.get("type")
         if not isinstance(type_name, str) or type_name not in SUPPORTED_TYPES:
             raise DefinitionError(
-                f"{path}: attribute '{attr_kebab}' has unsupported type "
+                f"{path}: attribute '{attr_snake}' has unsupported type "
                 f"{type_name!r}; expected one of {sorted(SUPPORTED_TYPES)}"
             )
         if type_name == "string":
             warnings.warn(
-                f"{path}: attribute '{attr_kebab}' uses deprecated type "
-                f"'string'; prefer 'compact-text' (behaviour is identical)",
+                f"{path}: attribute '{attr_snake}' uses deprecated type "
+                f"'string'; prefer 'compact_text' (behaviour is identical)",
                 DeprecatedStringTypeWarning,
                 stacklevel=2,
             )
 
         required = spec.get("required", False)
         if not isinstance(required, bool):
-            raise DefinitionError(f"{path}: attribute '{attr_kebab}'.required must be a boolean")
+            raise DefinitionError(
+                f"{path}: attribute '{attr_snake}'.required must be a boolean"
+            )
 
         references_raw = spec.get("references")
         references: str | None = None
         if references_raw is not None:
             if not isinstance(references_raw, str) or not references_raw.strip():
                 raise DefinitionError(
-                    f"{path}: attribute '{attr_kebab}'.references must be a non-empty string"
+                    f"{path}: attribute '{attr_snake}'.references must be a "
+                    f"non-empty string"
                 )
             references = references_raw.strip()
-            _require_kebab(references, path, f"attribute '{attr_kebab}'.references")
+            _require_snake(references, path, f"attribute '{attr_snake}'.references")
             if type_name != "uuid":
                 raise DefinitionError(
-                    f"{path}: attribute '{attr_kebab}' with references must have type uuid"
+                    f"{path}: attribute '{attr_snake}' with references must have "
+                    f"type uuid"
                 )
 
         unique = spec.get("unique", False)
         if not isinstance(unique, bool):
-            raise DefinitionError(f"{path}: attribute '{attr_kebab}'.unique must be a boolean")
+            raise DefinitionError(
+                f"{path}: attribute '{attr_snake}'.unique must be a boolean"
+            )
 
         create_default: str | int | float | bool | None = None
-        if "create-default" in spec:
+        if "create_default" in spec:
             create_default = _parse_create_default(
-                path, attr_kebab, type_name, spec.get("create-default")
+                path, attr_snake, type_name, spec.get("create_default")
             )
 
         min_value: int | float | Decimal | None = None
         max_value: int | float | Decimal | None = None
-        if "min-value" in spec or "max-value" in spec:
-            min_value, max_value = _parse_min_max(path, attr_kebab, type_name, spec)
+        if "min_value" in spec or "max_value" in spec:
+            min_value, max_value = _parse_min_max(path, attr_snake, type_name, spec)
 
         prefix: str | None = None
         pad_width = DEFAULT_FRIENDLY_ID_PAD_WIDTH
         start_at: int | None = None
 
-        if type_name == "friendly-id":
+        if type_name == "friendly_id":
             friendly_id_count += 1
             if friendly_id_count > 1:
                 raise DefinitionError(
-                    f"{path}: at most one friendly-id attribute is allowed per class"
+                    f"{path}: at most one friendly_id attribute is allowed per class"
                 )
             if references is not None:
                 raise DefinitionError(
-                    f"{path}: attribute '{attr_kebab}' friendly-id cannot have references"
+                    f"{path}: attribute '{attr_snake}' friendly_id cannot have "
+                    f"references"
                 )
             if create_default is not None:
                 raise DefinitionError(
-                    f"{path}: attribute '{attr_kebab}' friendly-id cannot have create-default"
+                    f"{path}: attribute '{attr_snake}' friendly_id cannot have "
+                    f"create_default"
                 )
             prefix_raw = spec.get("prefix")
             if not isinstance(prefix_raw, str) or not prefix_raw.strip():
                 raise DefinitionError(
-                    f"{path}: attribute '{attr_kebab}'.prefix is required for friendly-id"
+                    f"{path}: attribute '{attr_snake}'.prefix is required for "
+                    f"friendly_id"
                 )
             prefix = prefix_raw.strip()
             if not prefix.isalnum():
                 raise DefinitionError(
-                    f"{path}: attribute '{attr_kebab}'.prefix must be alphanumeric, "
+                    f"{path}: attribute '{attr_snake}'.prefix must be alphanumeric, "
                     f"got {prefix!r}"
                 )
 
-            if "pad-width" in spec:
-                pad_raw = spec.get("pad-width")
+            if "pad_width" in spec:
+                pad_raw = spec.get("pad_width")
                 if not isinstance(pad_raw, int) or isinstance(pad_raw, bool):
                     raise DefinitionError(
-                        f"{path}: attribute '{attr_kebab}'.pad-width must be an integer"
+                        f"{path}: attribute '{attr_snake}'.pad_width must be an "
+                        f"integer"
                     )
                 if pad_raw < MIN_FRIENDLY_ID_PAD_WIDTH:
                     raise DefinitionError(
-                        f"{path}: attribute '{attr_kebab}'.pad-width must be >= "
+                        f"{path}: attribute '{attr_snake}'.pad_width must be >= "
                         f"{MIN_FRIENDLY_ID_PAD_WIDTH}, got {pad_raw}"
                     )
                 pad_width = pad_raw
 
-            if "start-at" in spec:
-                start_raw = spec.get("start-at")
+            if "start_at" in spec:
+                start_raw = spec.get("start_at")
                 if not isinstance(start_raw, int) or isinstance(start_raw, bool):
                     raise DefinitionError(
-                        f"{path}: attribute '{attr_kebab}'.start-at must be an integer"
+                        f"{path}: attribute '{attr_snake}'.start_at must be an "
+                        f"integer"
                     )
                 if start_raw < 1:
                     raise DefinitionError(
-                        f"{path}: attribute '{attr_kebab}'.start-at must be >= 1, "
+                        f"{path}: attribute '{attr_snake}'.start_at must be >= 1, "
                         f"got {start_raw}"
                     )
                 start_at = start_raw
 
-            # Unique index is required for friendly-id lookup.
             unique = True
-            allowed = {"type", "required", "prefix", "pad-width", "start-at", "unique"}
+            allowed = {"type", "required", "prefix", "pad_width", "start_at", "unique"}
         else:
-            if "prefix" in spec or "pad-width" in spec or "start-at" in spec:
+            if "prefix" in spec or "pad_width" in spec or "start_at" in spec:
                 raise DefinitionError(
-                    f"{path}: attribute '{attr_kebab}' has friendly-id-only keys "
-                    f"(prefix/pad-width/start-at) but type is {type_name!r}"
+                    f"{path}: attribute '{attr_snake}' has friendly_id-only keys "
+                    f"(prefix/pad_width/start_at) but type is {type_name!r}"
                 )
             allowed = {
                 "type",
                 "required",
                 "references",
                 "unique",
-                "create-default",
-                "min-value",
-                "max-value",
+                "create_default",
+                "min_value",
+                "max_value",
             }
 
         unknown = set(spec) - allowed
         if unknown:
             raise DefinitionError(
-                f"{path}: attribute '{attr_kebab}' has unknown keys: {sorted(unknown)}"
+                f"{path}: attribute '{attr_snake}' has unknown keys: {sorted(unknown)}"
             )
 
         attributes.append(
             AttributeDefinition(
-                name_kebab=attr_kebab,
-                name_snake=snake,
+                name_snake=attr_snake,
                 type_name=type_name,
                 required=required,
                 references=references,
@@ -340,31 +342,30 @@ def load_definition(path: Path) -> ClassDefinition:
 
     unknown_top = set(raw) - {
         "name",
-        "display-name",
+        "display_name",
         "description",
         "attributes",
-        "display-attribute",
+        "display_attribute",
         "public",
-        "suppress-create",
-        "suppress-delete",
-        "suppress-search",
-        "check-constraint",
+        "suppress_create",
+        "suppress_delete",
+        "suppress_search",
+        "check_constraint",
     }
     if unknown_top:
         raise DefinitionError(f"{path}: unknown top-level keys: {sorted(unknown_top)}")
 
     display_attribute = _resolve_display_attribute(
-        path, name, attributes, raw.get("display-attribute", _DISPLAY_ATTRIBUTE_OMITTED)
+        path, name, attributes, raw.get("display_attribute", _DISPLAY_ATTRIBUTE_OMITTED)
     )
     public = _parse_optional_bool(path, "public", raw)
-    suppress_create = _parse_optional_bool(path, "suppress-create", raw)
-    suppress_delete = _parse_optional_bool(path, "suppress-delete", raw)
-    suppress_search = _parse_optional_bool(path, "suppress-search", raw)
+    suppress_create = _parse_optional_bool(path, "suppress_create", raw)
+    suppress_delete = _parse_optional_bool(path, "suppress_delete", raw)
+    suppress_search = _parse_optional_bool(path, "suppress_search", raw)
     check_constraints = _parse_check_constraints(path, raw)
 
     return ClassDefinition(
-        name_kebab=name,
-        name_snake=kebab_to_snake(name),
+        name_snake=name,
         display_name=display_name,
         description=description,
         attributes=tuple(attributes),
@@ -378,7 +379,6 @@ def load_definition(path: Path) -> ClassDefinition:
     )
 
 
-# Sentinel: key omitted from YAML (distinct from explicit null).
 _DISPLAY_ATTRIBUTE_OMITTED = object()
 
 
@@ -388,72 +388,69 @@ def _resolve_display_attribute(
     attributes: list[AttributeDefinition],
     raw: object,
 ) -> AttributeDefinition | None:
-    """Resolve class-scoped ``display-attribute`` (omit / null / explicit value)."""
-    by_kebab = {attr.name_kebab: attr for attr in attributes}
+    by_snake = {attr.name_snake: attr for attr in attributes}
 
     if raw is _DISPLAY_ATTRIBUTE_OMITTED:
-        default = by_kebab.get("display-name")
-        if default is not None and default.type_name == "compact-text":
+        default = by_snake.get("display_name")
+        if default is not None and default.type_name == "compact_text":
             return default
         return None
 
     if raw is None:
-        # Explicit null: suppress implicit display-name default.
         return None
 
     if not isinstance(raw, str) or not raw.strip():
         raise DefinitionError(
-            f"{path}: class {class_name!r}: display-attribute must be a non-empty "
-            f"kebab-case attribute name or null, got {raw!r}"
+            f"{path}: class {class_name!r}: display_attribute must be a non-empty "
+            f"snake_case attribute name or null, got {raw!r}"
         )
     value = raw.strip()
     try:
-        _require_kebab(value, path, "display-attribute")
+        _require_snake(value, path, "display_attribute")
     except DefinitionError as exc:
         raise DefinitionError(
-            f"{path}: class {class_name!r}: display-attribute {value!r} is not "
-            f"kebab-case"
+            f"{path}: class {class_name!r}: display_attribute {value!r} is not "
+            f"snake_case"
         ) from exc
 
-    attr = by_kebab.get(value)
+    attr = by_snake.get(value)
     if attr is None:
         raise DefinitionError(
-            f"{path}: class {class_name!r}: display-attribute {value!r} does not "
+            f"{path}: class {class_name!r}: display_attribute {value!r} does not "
             f"name a declared attribute"
         )
-    if attr.type_name != "compact-text":
+    if attr.type_name != "compact_text":
         raise DefinitionError(
-            f"{path}: class {class_name!r}: display-attribute {value!r} must have "
-            f"type exactly 'compact-text', got {attr.type_name!r}"
+            f"{path}: class {class_name!r}: display_attribute {value!r} must have "
+            f"type exactly 'compact_text', got {attr.type_name!r}"
         )
     return attr
 
 
 def _validate_references(definitions: list[ClassDefinition]) -> None:
-    known = {defn.name_kebab for defn in definitions}
+    known = {defn.name_snake for defn in definitions}
     for defn in definitions:
         for attr in defn.attributes:
             if attr.references is None:
                 continue
             if attr.references not in known:
                 raise DefinitionError(
-                    f"{defn.source_path}: attribute '{attr.name_kebab}' references "
+                    f"{defn.source_path}: attribute '{attr.name_snake}' references "
                     f"unknown class {attr.references!r}"
                 )
 
 
 def _validate_friendly_id_prefixes(definitions: list[ClassDefinition]) -> None:
-    """Reject duplicate prefixes case-insensitively across the definitions tree."""
     seen: dict[str, tuple[Path, str]] = {}
     for defn in definitions:
         for attr in defn.attributes:
-            if attr.type_name != "friendly-id" or attr.prefix is None:
+            if attr.type_name != "friendly_id" or attr.prefix is None:
                 continue
             key = attr.prefix.lower()
             if key in seen:
                 other_path, other_prefix = seen[key]
                 raise DefinitionError(
-                    f"{defn.source_path}: friendly-id prefix {attr.prefix!r} collides "
+                    f"{defn.source_path}: friendly_id prefix {attr.prefix!r} collides "
                     f"with {other_prefix!r} in {other_path} (prefixes are "
                     f"case-insensitive)"
                 )
@@ -470,9 +467,9 @@ def _parse_optional_bool(path: Path, key: str, raw: dict[object, object]) -> boo
 
 
 def _parse_check_constraints(path: Path, raw: dict[object, object]) -> tuple[str, ...]:
-    if "check-constraint" not in raw:
+    if "check_constraint" not in raw:
         return ()
-    value = raw["check-constraint"]
+    value = raw["check_constraint"]
     expressions: list[str]
     if isinstance(value, str):
         expressions = [value]
@@ -480,18 +477,18 @@ def _parse_check_constraints(path: Path, raw: dict[object, object]) -> tuple[str
         expressions = list(value)
     else:
         raise DefinitionError(
-            f"{path}: 'check-constraint' must be a string or a list of strings"
+            f"{path}: 'check_constraint' must be a string or a list of strings"
         )
     if not expressions:
-        raise DefinitionError(f"{path}: 'check-constraint' must not be empty")
+        raise DefinitionError(f"{path}: 'check_constraint' must not be empty")
     resolved: list[str] = []
     for index, expr in enumerate(expressions, start=1):
         if not isinstance(expr, str) or not expr.strip():
             raise DefinitionError(
-                f"{path}: 'check-constraint' entry {index} must be a non-empty string"
+                f"{path}: 'check_constraint' entry {index} must be a non-empty string"
             )
         try:
-            resolved.append(substitute(expr.strip(), "check-constraint"))
+            resolved.append(substitute(expr.strip(), "check_constraint"))
         except SubstitutionError as exc:
             raise DefinitionError(f"{path}: {exc}") from exc
     return tuple(resolved)
@@ -502,40 +499,44 @@ _NUMERIC_BOUND_TYPES = frozenset({"integer", "float", "decimal"})
 
 def _parse_min_max(
     path: Path,
-    attr_kebab: str,
+    attr_snake: str,
     type_name: str,
     spec: dict[object, object],
 ) -> tuple[int | float | Decimal | None, int | float | Decimal | None]:
     if type_name not in _NUMERIC_BOUND_TYPES:
         raise DefinitionError(
-            f"{path}: attribute '{attr_kebab}' min-value/max-value are only valid "
+            f"{path}: attribute '{attr_snake}' min_value/max_value are only valid "
             f"for integer, float, or decimal (got {type_name!r})"
         )
     min_value = (
-        _parse_numeric_bound(path, attr_kebab, type_name, "min-value", spec["min-value"])
-        if "min-value" in spec
+        _parse_numeric_bound(
+            path, attr_snake, type_name, "min_value", spec["min_value"]
+        )
+        if "min_value" in spec
         else None
     )
     max_value = (
-        _parse_numeric_bound(path, attr_kebab, type_name, "max-value", spec["max-value"])
-        if "max-value" in spec
+        _parse_numeric_bound(
+            path, attr_snake, type_name, "max_value", spec["max_value"]
+        )
+        if "max_value" in spec
         else None
     )
     if min_value is not None and max_value is not None and min_value > max_value:
         raise DefinitionError(
-            f"{path}: attribute '{attr_kebab}' min-value must be <= max-value"
+            f"{path}: attribute '{attr_snake}' min_value must be <= max_value"
         )
     return min_value, max_value
 
 
 def _parse_numeric_bound(
     path: Path,
-    attr_kebab: str,
+    attr_snake: str,
     type_name: str,
     key: str,
     raw: object,
 ) -> int | float | Decimal:
-    label = f"{path}: attribute '{attr_kebab}'.{key}"
+    label = f"{path}: attribute '{attr_snake}'.{key}"
     if raw is None:
         raise DefinitionError(f"{label} must not be null; omit the key instead")
     if type_name == "integer":
@@ -556,12 +557,11 @@ def _parse_numeric_bound(
 
 def _parse_create_default(
     path: Path,
-    attr_kebab: str,
+    attr_snake: str,
     type_name: str,
     raw: object,
 ) -> str | int | float | bool:
-    """Validate and normalize a YAML ``create-default`` value."""
-    label = f"{path}: attribute '{attr_kebab}'.create-default"
+    label = f"{path}: attribute '{attr_snake}'.create_default"
     if raw is None:
         raise DefinitionError(
             f"{label} must not be null; omit the key when there is no default"
@@ -598,17 +598,13 @@ def _parse_create_default(
             raise DefinitionError(f"{label} is not a valid UUID") from exc
     if type_name == "datetime":
         if not isinstance(raw, str) or not raw.strip():
-            raise DefinitionError(f"{label} must be a non-empty ISO-8601 datetime string")
+            raise DefinitionError(
+                f"{label} must be a non-empty ISO-8601 datetime string"
+            )
         return raw.strip()
     raise DefinitionError(f"{label} is not supported for type {type_name!r}")
 
 
-def _require_kebab(value: str, path: Path, label: str) -> None:
-    if value != value.lower() or "_" in value or value.startswith("-") or value.endswith("-"):
-        raise DefinitionError(f"{path}: {label} must be kebab-case, got {value!r}")
-    if "--" in value:
-        raise DefinitionError(f"{path}: {label} must be kebab-case, got {value!r}")
-    # Allow single-segment names (e.g. ``title``) and multi-segment kebab.
-    for part in value.split("-"):
-        if not part or not part.isalnum():
-            raise DefinitionError(f"{path}: {label} must be kebab-case, got {value!r}")
+def _require_snake(value: str, path: Path, label: str) -> None:
+    if not is_snake_case(value):
+        raise DefinitionError(f"{path}: {label} must be snake_case, got {value!r}")

@@ -8,8 +8,7 @@ from pathlib import Path
 
 from psycopg import Connection
 
-from untangled.mapping.definition import ClassDefinition
-from untangled.mapping.definition_snake import load_definitions
+from untangled.mapping.definition import ClassDefinition, load_definitions
 from untangled.mapping.system_fields import AUDIT_USER_TABLE
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import AddDefaultValue, diff_schemas

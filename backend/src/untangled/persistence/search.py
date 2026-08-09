@@ -194,7 +194,7 @@ def execute_search(
     limit: int | None = None,
     offset: int | None = None,
     enrich_fk_identity: bool = False,
-    definitions_by_kebab: dict[str, ClassDefinition] | None = None,
+    definitions_by_name: dict[str, ClassDefinition] | None = None,
 ) -> SearchResult:
     """Validate request, run COUNT + SELECT, return projected items.
 
@@ -223,12 +223,12 @@ def execute_search(
     )
 
     if enrich_fk_identity:
-        if definitions_by_kebab is None:
+        if definitions_by_name is None:
             raise RuntimeError(
-                "definitions_by_kebab is required when enrich_fk_identity is true"
+                "definitions_by_name is required when enrich_fk_identity is true"
             )
         plan = build_enriched_read_plan(
-            definition, definitions_by_kebab, select_columns
+            definition, definitions_by_name, select_columns
         )
         order_sql = sql.SQL(", ").join(
             sql.SQL("{} {}").format(

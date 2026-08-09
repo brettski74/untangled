@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from untangled.mapping.generate_snake import generate_models_snake as generate_models
+from untangled.mapping.generate import generate_models
 
 
 def _repo_root_from_package() -> Path:

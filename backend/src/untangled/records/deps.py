@@ -14,7 +14,7 @@ from pydantic import BaseModel
 import untangled
 from untangled.mapping import registry as class_registry
 from untangled.mapping.definition import ClassDefinition
-from untangled.mapping.generate_snake import generate_models_snake as generate_models
+from untangled.mapping.generate import generate_models
 from untangled.mapping.naming import snake_to_pascal
 from untangled.persistence.store import RecordStore
 from untangled.records.locator import classify_locator
@@ -81,17 +81,17 @@ def ensure_generated_package() -> None:
     generate_models(resolve_definitions_dir(), out, zod_tmp)
 
 
-class _DefinitionsByKebab:
+class _DefinitionsByName:
     """Callable cache proxy so tests can ``cache_clear`` the shared registry."""
 
     def __call__(self) -> dict[str, ClassDefinition]:
-        return class_registry.definitions_by_kebab()
+        return class_registry.definitions_by_name()
 
     def cache_clear(self) -> None:
         class_registry.clear_definition_caches()
 
 
-_definitions_by_kebab = _DefinitionsByKebab()
+_definitions_by_name = _DefinitionsByName()
 
 
 def class_definition(class_kebab: str) -> ClassDefinition:
@@ -121,7 +121,7 @@ def record_store(
         definition,
         model(class_kebab),
         actor_id=actor_id,
-        definitions_by_kebab=_definitions_by_kebab(),
+        definitions_by_name=_definitions_by_name(),
     )
 
 
@@ -143,6 +143,6 @@ def fetch_by_locator(
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"{definition.name_kebab} not found",
+            detail=f"{definition.name_snake} not found",
         )
     return row

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from untangled.mapping.definition_snake import DefinitionError, load_definition, load_definitions
+from untangled.mapping.definition import DefinitionError, load_definition, load_definitions
 from untangled.mapping.types import format_friendly_id, friendly_id_sequence_name
 
 

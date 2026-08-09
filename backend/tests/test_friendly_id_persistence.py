@@ -7,8 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from psycopg import Connection
 
-from untangled.mapping.definition import ClassDefinition
-from untangled.mapping.definition_snake import load_definition
+from untangled.mapping.definition import ClassDefinition, load_definition
 from untangled.persistence.actor import SYSTEM_USER_ID
 from untangled.persistence.connection import connect
 from untangled.persistence.store import RecordStore

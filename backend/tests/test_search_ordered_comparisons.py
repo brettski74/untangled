@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from psycopg import sql
 
-from untangled.mapping.definition_snake import load_definition
+from untangled.mapping.definition import load_definition
 from untangled.persistence.search import (
     SearchableAttribute,
     SearchNestingLimits,

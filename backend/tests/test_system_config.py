@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from psycopg import Connection, sql
 
 from untangled.main import app
-from untangled.mapping.definition_snake import load_definition
+from untangled.mapping.definition import load_definition
 from untangled.mapping.registry import class_definition
 from untangled.mapping.well_known import SYSTEM_CONFIG_ID, SYSTEM_USER_ID
 from untangled.records.deps import model

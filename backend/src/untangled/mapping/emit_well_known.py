@@ -1,4 +1,4 @@
-"""Emit generated well-known constant modules from the substitution catalog."""
+"""Emit generated well-known constants from the substitution catalog."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from untangled.mapping.well_known import (
 )
 
 _PY_HEADER = '''\
-"""Generated well-known constants. Do not edit by hand; run `make models`."""
+"""Generated well-known constants. Do not edit by hand."""
 
 from uuid import UUID
 
@@ -21,8 +21,8 @@ from uuid import UUID
 
 _TS_HEADER = """\
 /**
- * Generated well-known constants and substitution catalog. Do not edit by hand;
- * run `make models`.
+ * Generated well-known constants and substitution catalog.
+ * Do not edit by hand; run ``make models``.
  */
 
 """
@@ -45,7 +45,7 @@ def emit_python_well_known() -> str:
 
 
 def emit_ts_well_known() -> str:
-    """Return TypeScript source for catalog constants, map, and contexts."""
+    """Return TypeScript source for snake catalog constants, map, and contexts."""
     lines = [_TS_HEADER.rstrip(), ""]
     for name in sorted(WELL_KNOWN):
         value = WELL_KNOWN[name]

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from untangled.mapping.definition_snake import load_definition
+from untangled.mapping.definition import load_definition
 from untangled.records.locator import classify_locator
 
 

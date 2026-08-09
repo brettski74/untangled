@@ -1,4 +1,4 @@
-"""Tests for the dark snake_case definition loader (#187)."""
+"""Tests for the snake_case definition loader (live path)."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from untangled.mapping.definition import DeprecatedStringTypeWarning
-from untangled.mapping.definition_snake import (
+from untangled.mapping.definition import (
     DefinitionError,
+    DeprecatedStringTypeWarning,
     load_definition,
     load_definitions,
     validate_platform_definitions,
 )
-from untangled.mapping.well_known_snake import SYSTEM_CONFIG_ID
+from untangled.mapping.well_known import SYSTEM_CONFIG_ID
 
 
 @pytest.fixture
@@ -35,7 +35,6 @@ def test_load_snake_fixtures(snake_definitions: Path) -> None:
     }
 
     item = by_snake["sample_item"]
-    assert item.name_kebab == "sample-item"  # synthetic scaffolding
     by_attr = {a.name_snake: a for a in item.attributes}
     assert by_attr["title"].type_name == "compact_text" and by_attr["title"].required
     assert by_attr["summary"].type_name == "text"
@@ -50,7 +49,6 @@ def test_load_snake_fixtures(snake_definitions: Path) -> None:
     link = by_snake["sample_link"]
     link_attrs = {a.name_snake: a for a in link.attributes}
     assert link_attrs["sample_item_id"].references == "sample_item"
-    assert link_attrs["sample_item_id"].name_kebab == "sample-item-id"
 
     ticket = by_snake["sample_ticket"]
     friendly = ticket.friendly_id_attr()
@@ -279,5 +277,5 @@ def test_snake_loader_is_production_entrypoint() -> None:
     from untangled import mapping as mapping_pkg
     from untangled.mapping import registry
 
-    assert mapping_pkg.load_definitions.__module__ == "untangled.mapping.definition_snake"
-    assert registry.load_definitions.__module__ == "untangled.mapping.definition_snake"
+    assert mapping_pkg.load_definitions.__module__ == "untangled.mapping.definition"
+    assert registry.load_definitions.__module__ == "untangled.mapping.definition"

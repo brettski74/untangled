@@ -12,10 +12,10 @@ from untangled.records import deps
 @pytest.fixture(autouse=True)
 def _clear_path_caches() -> None:
     deps.ensure_generated_package.cache_clear()
-    deps._definitions_by_kebab.cache_clear()
+    deps._definitions_by_name.cache_clear()
     yield
     deps.ensure_generated_package.cache_clear()
-    deps._definitions_by_kebab.cache_clear()
+    deps._definitions_by_name.cache_clear()
 
 
 def test_definitions_dir_prefers_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

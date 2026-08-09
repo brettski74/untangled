@@ -23,7 +23,6 @@ function attr(
     Pick<AttributeFieldMeta, "name_snake" | "type_name" | "order">,
 ): AttributeFieldMeta {
   return {
-    name_kebab: overrides.name_kebab ?? overrides.name_snake.replace(/_/g, "-"),
     name_snake: overrides.name_snake,
     type_name: overrides.type_name,
     required: overrides.required ?? false,

@@ -1,4 +1,4 @@
-"""Emit Zod schema modules from class definitions."""
+"""Emit Zod schemas from class definitions."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from untangled.mapping.types import SUPPORTED_TYPES
 
 _HEADER = """\
 /**
- * Generated Zod schemas. Do not edit by hand; run `make models`.
+ * Generated Zod schemas. Do not edit by hand; run ``make models``.
  */
 import { z } from "zod";
 
@@ -40,18 +40,18 @@ const decimalString = z
 
 _ZOD_TYPE: dict[str, str] = {
     "string": "z.string()",
-    "compact-text": "z.string()",
+    "compact_text": "z.string()",
     "choice": "z.string()",
     "status": "z.string()",
     "text": "z.string()",
-    "multiline-text": "z.string()",
+    "multiline_text": "z.string()",
     "boolean": "z.boolean()",
     "integer": "z.number().int()",
     "float": "z.number()",
     "decimal": "decimalString",
     "uuid": "z.string().uuid()",
     "datetime": "utcDateTime",
-    "friendly-id": "z.string()",
+    "friendly_id": "z.string()",
 }
 
 assert set(_ZOD_TYPE) == SUPPORTED_TYPES
@@ -60,7 +60,7 @@ assert set(_ZOD_TYPE) == SUPPORTED_TYPES
 def emit_zod_module(definition: ClassDefinition) -> str:
     """Return TypeScript source for one class's Zod module (full + create + update)."""
     pascal = snake_to_pascal(definition.name_snake)
-    writable = [a for a in definition.attributes if a.type_name != "friendly-id"]
+    writable = [a for a in definition.attributes if a.type_name != "friendly_id"]
     lines: list[str] = [
         _HEADER,
         *_jsdoc_comment(definition),
@@ -135,7 +135,6 @@ def _zod_field_line(attr: AttributeDefinition, *, constrained: bool = False) -> 
 
 
 def _jsdoc_comment(definition: ClassDefinition) -> list[str]:
-    """Emit a JSDoc block from display-name + description."""
     desc = definition.description.replace("*/", "*\\/")
     lines = ["/**", f" * {definition.display_name}", " *"]
     for part in desc.splitlines() or [""]:
@@ -158,7 +157,7 @@ def write_zod_models(definitions: list[ClassDefinition], output_dir: Path) -> li
         export_names.append(module_stem)
 
     index_lines = [
-        "/** Generated Zod schemas. Do not edit by hand; run `make models`. */",
+        "/** Generated Zod schemas. Do not edit by hand; run snake generate. */",
         "",
     ]
     for module_stem in export_names:

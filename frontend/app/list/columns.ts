@@ -5,7 +5,6 @@ import type {
 
 export type ListColumn = {
   name_snake: string;
-  name_kebab: string;
   type_name: string;
   references: string | null;
   label: string;
@@ -51,7 +50,7 @@ export function attributes_in_declaration_order(
       !Number.isInteger(attr.order)
     ) {
       throw new Error(
-        `field meta for attribute '${attr.name_kebab}' is missing a valid ` +
+        `field meta for attribute '${attr.name_snake}' is missing a valid ` +
           `declaration order ordinal`,
       );
     }
@@ -59,9 +58,10 @@ export function attributes_in_declaration_order(
   return [...attributes].sort((left, right) => left.order - right.order);
 }
 
-export function attribute_display_label(name_kebab: string): string {
-  return name_kebab
-    .split("-")
+/** Title-case a snake_case attribute name for list/detail labels. */
+export function attribute_display_label(name_snake: string): string {
+  return name_snake
+    .split("_")
     .filter((part) => part.length > 0)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
@@ -70,10 +70,9 @@ export function attribute_display_label(name_kebab: string): string {
 function attribute_to_column(attr: AttributeFieldMeta): ListColumn {
   return {
     name_snake: attr.name_snake,
-    name_kebab: attr.name_kebab,
     type_name: attr.type_name,
     references: attr.references,
-    label: attribute_display_label(attr.name_kebab),
+    label: attribute_display_label(attr.name_snake),
     is_friendly_id: attr.type_name === "friendly_id",
     order: attr.order,
   };

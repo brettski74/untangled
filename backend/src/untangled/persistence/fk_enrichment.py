@@ -74,7 +74,7 @@ def resolve_fk_fields(
 
 def build_enriched_read_plan(
     definition: ClassDefinition,
-    definitions_by_kebab: Mapping[str, ClassDefinition],
+    definitions_by_name: Mapping[str, ClassDefinition],
     projected_columns: list[str],
 ) -> EnrichedReadPlan:
     """Build SELECT list + FROM/JOIN for projected columns with FK enrichment."""
@@ -88,15 +88,15 @@ def build_enriched_read_plan(
         for col in projected_columns
     ]
 
-    for source_column, target_kebab in fk_fields:
+    for source_column, target_name in fk_fields:
         try:
-            target = definitions_by_kebab[target_kebab]
+            target = definitions_by_name[target_name]
         except KeyError as exc:
             raise RuntimeError(
-                f"FK {definition.name_kebab}.{source_column} references unknown "
-                f"class {target_kebab!r}"
+                f"FK {definition.name_snake}.{source_column} references unknown "
+                f"class {target_name!r}"
             ) from exc
-        if target_kebab == "user" and target.name_snake != AUDIT_USER_TABLE:
+        if target_name == "user" and target.name_snake != AUDIT_USER_TABLE:
             raise RuntimeError("audit FK target must resolve to system user class")
 
         join_alias = f"fk__{source_column}"
@@ -209,7 +209,7 @@ def target_class_kebab_for_column(
     definition: ClassDefinition,
     column: str,
 ) -> str | None:
-    """Return the referenced class kebab name for a column, if it is an FK."""
+    """Return the referenced class name for a column, if it is an FK."""
     if column in AUDIT_FK_COLUMNS:
         return "user"
     for attr in definition.attributes:
@@ -221,7 +221,7 @@ def target_class_kebab_for_column(
 def definitions_index(
     definitions: list[ClassDefinition] | Mapping[str, ClassDefinition],
 ) -> dict[str, ClassDefinition]:
-    """Index definitions by kebab-case class name."""
+    """Index definitions by snake_case class name."""
     if isinstance(definitions, Mapping):
         return dict(definitions)
-    return {d.name_kebab: d for d in definitions}
+    return {d.name_snake: d for d in definitions}

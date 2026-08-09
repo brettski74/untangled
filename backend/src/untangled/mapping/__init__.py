@@ -1,11 +1,11 @@
 """Convention-based class definition loading and model generation."""
 
-from untangled.mapping.definition_snake import (
+from untangled.mapping.definition import (
     ClassDefinition,
     load_definitions,
     validate_platform_definitions,
 )
-from untangled.mapping.generate_snake import generate_models_snake as generate_models
+from untangled.mapping.generate import generate_models
 from untangled.mapping.naming import (
     kebab_to_pascal,
     kebab_to_snake,

@@ -27,7 +27,6 @@ function slot(
     Pick<DetailFieldSlot, "name_snake" | "kind">,
 ): DetailFieldSlot {
   return {
-    name_kebab: partial.name_snake.replace(/_/g, "-"),
     type_name: "compact_text",
     label: partial.name_snake,
     references: null,

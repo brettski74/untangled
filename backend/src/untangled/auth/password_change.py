@@ -24,7 +24,7 @@ def _schema_password_maximum_chars_bound() -> int:
     """Attribute max-value of ``password-maximum-chars`` (not live config)."""
     defn = class_definition("system_config")
     for attr in defn.attributes:
-        if attr.name_kebab == "password-maximum-chars":
+        if attr.name_snake == "password_maximum_chars":
             if attr.max_value is None:
                 break
             return int(attr.max_value)
