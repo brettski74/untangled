@@ -39,7 +39,7 @@ export COMPOSE
 export COMPOSE_WAIT_FLAG
 export COMPOSE_SUPPORTS_WAIT
 
-.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test models migrate seed clean clean-models clean-run
+.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test e2e e2e-smoke models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -143,10 +143,14 @@ models: backend-install ## Generate Pydantic, Zod, and field-meta from YAML clas
 	$(BACKEND_PYTHON) -m untangled.mapping
 
 migrate: backend-install ## Apply YAML schema intent to PostgreSQL (intentional; not part of up)
-	$(BACKEND_PYTHON) -m untangled.schema $(MIGRATE_ARGS)
+	@mkdir -p $(RUN_DIR)/audit
+	UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
+		$(BACKEND_PYTHON) -m untangled.schema $(MIGRATE_ARGS)
 
 seed: backend-install ## Idempotent local user seed (intentional; after migrate; not part of up)
-	$(BACKEND_PYTHON) -m untangled.seed
+	@mkdir -p $(RUN_DIR)/audit
+	UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
+		$(BACKEND_PYTHON) -m untangled.seed
 
 lint: backend-lint frontend-lint ## Run backend and frontend lint checks
 
@@ -179,6 +183,14 @@ frontend-lint: frontend-install models ## Typecheck the frontend (minimal lint u
 frontend-test: frontend-install models ## Run frontend unit tests and SSR production build smoke
 	cd $(FRONTEND_DIR) && CI=1 npm test
 	cd $(FRONTEND_DIR) && CI=1 npm run build
+
+# Playwright browser E2E. Requires a live web+API stack (e.g. make up && make migrate && make seed)
+# or host-dev API on :8000 + web on :5173. Does not start services.
+e2e: frontend-install ## Run full Playwright suite against PLAYWRIGHT_BASE_URL (default :5173)
+	cd $(FRONTEND_DIR) && npx playwright test
+
+e2e-smoke: frontend-install ## Run Playwright @smoke suite (CI gate)
+	cd $(FRONTEND_DIR) && npx playwright test --grep @smoke
 
 clean-models: ## Remove generated Pydantic/Zod artefacts
 	rm -rf $(BACKEND_DIR)/src/untangled/generated $(FRONTEND_DIR)/app/generated

@@ -255,27 +255,18 @@ def test_authenticated_fetch_without_read_permission(
     tickets_client: TestClient,
 ) -> None:
     headers = _headers(tickets_client, "readonly")
-    legacy = tickets_client.get(f"/system-configs/{SYSTEM_CONFIG_ID}", headers=headers)
-    assert legacy.status_code == 200
-    assert legacy.json()["id"] == str(SYSTEM_CONFIG_ID)
-    assert legacy.json()["max_search_nesting_length"] == 20
-
-    v1 = tickets_client.get(
-        f"/api/v1/system-configs/{SYSTEM_CONFIG_ID}",
+    response = tickets_client.get(
+        f"/api/v2/system_config/{SYSTEM_CONFIG_ID}",
         headers=headers,
     )
-    assert v1.status_code == 200
-    assert v1.json()["id"] == str(SYSTEM_CONFIG_ID)
+    assert response.status_code == 200
+    assert response.json()["id"] == str(SYSTEM_CONFIG_ID)
+    assert response.json()["max_search_nesting_length"] == 20
 
 
 def test_unauthenticated_fetch_is_401(tickets_client: TestClient) -> None:
     assert (
-        tickets_client.get(f"/system-configs/{SYSTEM_CONFIG_ID}").status_code == 401
-    )
-    assert (
-        tickets_client.get(
-            f"/api/v1/system-configs/{SYSTEM_CONFIG_ID}"
-        ).status_code
+        tickets_client.get(f"/api/v2/system_config/{SYSTEM_CONFIG_ID}").status_code
         == 401
     )
 
@@ -283,21 +274,30 @@ def test_unauthenticated_fetch_is_401(tickets_client: TestClient) -> None:
 def test_update_requires_admin_among_seed_roles(tickets_client: TestClient) -> None:
     readonly = _headers(tickets_client, "readonly")
     denied = tickets_client.patch(
-        f"/system-configs/{SYSTEM_CONFIG_ID}",
+        f"/api/v2/system_config/{SYSTEM_CONFIG_ID}",
         headers=readonly,
         json={"max_search_nesting_depth": 4},
     )
     assert denied.status_code == 403
 
+    admin_seed = next(s for s in SEED_USERS if s.username == "admin")
     admin = _headers(tickets_client, "admin")
     updated = tickets_client.patch(
-        f"/system-configs/{SYSTEM_CONFIG_ID}",
+        f"/api/v2/system_config/{SYSTEM_CONFIG_ID}",
         headers=admin,
         json={"max_search_nesting_depth": 4},
     )
     assert updated.status_code == 200
-    assert updated.json()["max_search_nesting_depth"] == 4
-    assert isinstance(updated.json()["updated_by"], str)
+    body = updated.json()
+    assert body["max_search_nesting_depth"] == 4
+    created = body["created_by"]
+    assert isinstance(created, dict)
+    assert created["id"] == str(SYSTEM_USER_ID)
+    assert created["display_name"] == "System"
+    updated_by = body["updated_by"]
+    assert isinstance(updated_by, dict)
+    assert updated_by["id"] == str(admin_seed.id)
+    assert updated_by["display_name"] == admin_seed.display_name
 
 
 def test_update_publishes_coherence_invalidate(
@@ -326,7 +326,7 @@ def test_update_publishes_coherence_invalidate(
     try:
         admin = _headers(tickets_client, "admin")
         updated = tickets_client.patch(
-            f"/system-configs/{SYSTEM_CONFIG_ID}",
+            f"/api/v2/system_config/{SYSTEM_CONFIG_ID}",
             headers=admin,
             json={"max_search_nesting_depth": 6},
         )
@@ -338,63 +338,35 @@ def test_update_publishes_coherence_invalidate(
         set_default_bus_for_tests(None)
 
 
-def test_v1_update_enriches_audit_fks_and_requires_admin(
-    tickets_client: TestClient,
-) -> None:
-    readonly = _headers(tickets_client, "readonly")
-    denied = tickets_client.patch(
-        f"/api/v1/system-configs/{SYSTEM_CONFIG_ID}",
-        headers=readonly,
-        json={"max_search_nesting_depth": 5},
-    )
-    assert denied.status_code == 403
-
-    admin_seed = next(s for s in SEED_USERS if s.username == "admin")
-    admin = _headers(tickets_client, "admin")
-    updated = tickets_client.patch(
-        f"/api/v1/system-configs/{SYSTEM_CONFIG_ID}",
-        headers=admin,
-        json={"max_search_nesting_depth": 5},
-    )
-    assert updated.status_code == 200, updated.text
-    body = updated.json()
-    assert body["max_search_nesting_depth"] == 5
-    created = body["created_by"]
-    assert isinstance(created, dict)
-    assert created["id"] == str(SYSTEM_USER_ID)
-    assert created["display_name"] == "System"
-    updated_by = body["updated_by"]
-    assert isinstance(updated_by, dict)
-    assert updated_by["id"] == str(admin_seed.id)
-    assert updated_by["display_name"] == admin_seed.display_name
-
-
 def test_create_delete_search_routes_absent(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "admin")
-    assert tickets_client.post("/system-configs", headers=headers, json={}).status_code in {
+    assert tickets_client.post(
+        "/api/v2/system_config", headers=headers, json={}
+    ).status_code in {
         404,
         405,
     }
     assert tickets_client.post(
-        "/system-configs/search",
+        "/api/v2/system_config/search",
         headers=headers,
-        json={"predicate": {"op": "eq", "attribute": "id", "value": str(SYSTEM_CONFIG_ID)}},
+        json={
+            "predicate": {
+                "op": "eq",
+                "attribute": "id",
+                "value": str(SYSTEM_CONFIG_ID),
+            }
+        },
     ).status_code in {404, 405}
     assert tickets_client.delete(
-        f"/system-configs/{SYSTEM_CONFIG_ID}",
+        f"/api/v2/system_config/{SYSTEM_CONFIG_ID}",
         headers=headers,
-    ).status_code in {404, 405}
-    assert tickets_client.post(
-        "/api/v1/system-configs/search",
-        headers=headers,
-        json={"predicate": {"op": "eq", "attribute": "id", "value": str(SYSTEM_CONFIG_ID)}},
     ).status_code in {404, 405}
 
 
 def test_update_rejects_out_of_range(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "admin")
     response = tickets_client.patch(
-        f"/system-configs/{SYSTEM_CONFIG_ID}",
+        f"/api/v2/system_config/{SYSTEM_CONFIG_ID}",
         headers=headers,
         json={"max_search_nesting_depth": 99},
     )
@@ -407,7 +379,7 @@ def test_update_password_max_not_greater_than_min_is_422_not_500(
     """CHECK on password bounds → semantic 422 with primary text, no row dump."""
     headers = _headers(tickets_client, "admin")
     response = tickets_client.patch(
-        f"/system-configs/{SYSTEM_CONFIG_ID}",
+        f"/api/v2/system_config/{SYSTEM_CONFIG_ID}",
         headers=headers,
         json={
             "password_minimum_chars": 20,
@@ -467,7 +439,7 @@ def test_helpers_clamp_out_of_range(
     # HTTP fetch returns stored values as-is (no clamp).
     with TestClient(app) as client:
         headers = _headers(client, "readonly")
-        raw = client.get(f"/system-configs/{SYSTEM_CONFIG_ID}", headers=headers)
+        raw = client.get(f"/api/v2/system_config/{SYSTEM_CONFIG_ID}", headers=headers)
         assert raw.status_code == 200
         assert raw.json()["max_search_nesting_depth"] == 99
         assert raw.json()["system_config_cache_ttl_seconds"] == 0

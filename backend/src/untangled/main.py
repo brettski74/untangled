@@ -13,15 +13,7 @@ from untangled.audit.file_sink import FileAuditLogger
 from untangled.audit.middleware import AuditCorrelationMiddleware
 from untangled.auth import auth_router
 from untangled.coherence import start_system_config_subscriber
-from untangled.records import (
-    change_requests_router,
-    change_requests_v1_router,
-    incidents_router,
-    incidents_v1_router,
-    system_configs_router,
-    system_configs_v1_router,
-    v2_record_routers,
-)
+from untangled.records.mounts import v2_record_routers
 from untangled.request_validation import register_request_validation_handlers
 
 
@@ -47,12 +39,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Untangled ITSM",
     description=(
-        "Backend API for Milestone 1. Public domain contracts that change use "
-        "path versions under /api/v{major}. /api/v2/{class_name} is the live "
-        "in-app record contract (path tracks live class name; no pluralization). "
-        "Unversioned /incidents, /change-requests, and /system-configs routes "
-        "and /api/v1 plural mounts are pre-cutover legacy compatibility "
-        "surfaces (removal tracked by epic #150 child #192)."
+        "Backend API for Milestone 1. Public domain record CRUD uses path "
+        "versions under /api/v{major}. /api/v2/{class_name} is the sole record "
+        "collection contract (path tracks live class name; no pluralization)."
     ),
     version="0.1.0",
     lifespan=lifespan,
@@ -62,12 +51,6 @@ _wire_audit_logger()
 app.add_middleware(AuditCorrelationMiddleware)
 register_request_validation_handlers(app)
 app.include_router(auth_router)
-app.include_router(incidents_router)
-app.include_router(change_requests_router)
-app.include_router(system_configs_router)
-app.include_router(incidents_v1_router)
-app.include_router(change_requests_v1_router)
-app.include_router(system_configs_v1_router)
 for _v2_router in v2_record_routers:
     app.include_router(_v2_router)
 

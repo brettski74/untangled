@@ -42,7 +42,7 @@ def _headers(client: TestClient, username: str) -> dict[str, str]:
 def test_incident_crud_uuid_and_friendly_locator(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "readwrite")
     created = tickets_client.post(
-        "/incidents",
+        "/api/v2/incident",
         headers=headers,
         json={
             "summary": "Printer jam",
@@ -56,16 +56,16 @@ def test_incident_crud_uuid_and_friendly_locator(tickets_client: TestClient) -> 
     assert body["summary"] == "Printer jam"
     assert "created_by" in body
 
-    by_id = tickets_client.get(f"/incidents/{body['id']}", headers=headers)
+    by_id = tickets_client.get(f"/api/v2/incident/{body['id']}", headers=headers)
     assert by_id.status_code == 200
     assert by_id.json()["number"] == body["number"]
 
-    by_num = tickets_client.get(f"/incidents/{body['number']}", headers=headers)
+    by_num = tickets_client.get(f"/api/v2/incident/{body['number']}", headers=headers)
     assert by_num.status_code == 200
     assert by_num.json()["id"] == body["id"]
 
     updated = tickets_client.patch(
-        f"/incidents/{body['number']}",
+        f"/api/v2/incident/{body['number']}",
         headers=headers,
         json={"status": "in-progress"},
     )
@@ -74,13 +74,13 @@ def test_incident_crud_uuid_and_friendly_locator(tickets_client: TestClient) -> 
     assert updated.json()["number"] == body["number"]
 
     # readwrite cannot delete
-    denied = tickets_client.delete(f"/incidents/{body['id']}", headers=headers)
+    denied = tickets_client.delete(f"/api/v2/incident/{body['id']}", headers=headers)
     assert denied.status_code == 403
 
     admin = _headers(tickets_client, "admin")
-    deleted = tickets_client.delete(f"/incidents/{body['id']}", headers=admin)
+    deleted = tickets_client.delete(f"/api/v2/incident/{body['id']}", headers=admin)
     assert deleted.status_code == 204
-    missing = tickets_client.get(f"/incidents/{body['id']}", headers=admin)
+    missing = tickets_client.get(f"/api/v2/incident/{body['id']}", headers=admin)
     assert missing.status_code == 404
 
 
@@ -91,7 +91,7 @@ def test_change_request_create_requires_schedule(tickets_client: TestClient) -> 
     start = (now + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     end = (now + timedelta(days=1, hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
     created = tickets_client.post(
-        "/change-requests",
+        "/api/v2/change_request",
         headers=headers,
         json={
             "summary": "Swap switch",
@@ -114,22 +114,22 @@ def test_change_request_create_requires_schedule(tickets_client: TestClient) -> 
 def test_junk_locator_is_422(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "readonly")
     for locator in ("not-a-locator", "256"):
-        response = tickets_client.get(f"/incidents/{locator}", headers=headers)
+        response = tickets_client.get(f"/api/v2/incident/{locator}", headers=headers)
         assert response.status_code == 422, locator
 
 
 def test_unauthenticated_junk_locator_is_401(tickets_client: TestClient) -> None:
-    assert tickets_client.get("/incidents/256").status_code == 401
+    assert tickets_client.get("/api/v2/incident/256").status_code == 401
 
 
 def test_unauthenticated_is_401(tickets_client: TestClient) -> None:
-    assert tickets_client.get(f"/incidents/{SEED_INCIDENT_1_ID}").status_code == 401
+    assert tickets_client.get(f"/api/v2/incident/{SEED_INCIDENT_1_ID}").status_code == 401
 
 
 def test_readonly_cannot_create(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "readonly")
     response = tickets_client.post(
-        "/incidents",
+        "/api/v2/incident",
         headers=headers,
         json={"summary": "Nope", "status": "new", "severity": "Low"},
     )
@@ -139,7 +139,7 @@ def test_readonly_cannot_create(tickets_client: TestClient) -> None:
 def test_reject_client_supplied_number(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "admin")
     response = tickets_client.post(
-        "/incidents",
+        "/api/v2/incident",
         headers=headers,
         json={
             "summary": "Nope",
@@ -154,7 +154,7 @@ def test_reject_client_supplied_number(tickets_client: TestClient) -> None:
 def test_create_missing_required_field_is_400(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "admin")
     response = tickets_client.post(
-        "/incidents",
+        "/api/v2/incident",
         headers=headers,
         json={"status": "new", "severity": "Low"},
     )
@@ -165,7 +165,7 @@ def test_create_missing_required_field_is_400(tickets_client: TestClient) -> Non
 def test_create_invalid_json_is_400(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "admin")
     response = tickets_client.post(
-        "/incidents",
+        "/api/v2/incident",
         content=b'{"summary":',
         headers={**headers, "content-type": "application/json"},
     )
@@ -175,7 +175,7 @@ def test_create_invalid_json_is_400(tickets_client: TestClient) -> None:
 
 def test_seed_incident_fetchable(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "readonly")
-    response = tickets_client.get(f"/incidents/{SEED_INCIDENT_1_ID}", headers=headers)
+    response = tickets_client.get(f"/api/v2/incident/{SEED_INCIDENT_1_ID}", headers=headers)
     assert response.status_code == 200
     assert response.json()["summary"]
     assert response.json()["number"].startswith("INC")

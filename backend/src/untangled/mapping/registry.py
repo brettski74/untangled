@@ -11,7 +11,6 @@ from untangled.mapping.definition import (
     load_definitions,
     validate_platform_definitions,
 )
-from untangled.mapping.naming import kebab_to_snake
 
 DEFINITIONS_DIR_ENV = "UNTANGLED_DEFINITIONS_DIR"
 
@@ -82,21 +81,10 @@ def definitions_by_name() -> dict[str, ClassDefinition]:
     return {d.name_snake: d for d in definitions}
 
 
-def definitions_by_kebab() -> dict[str, ClassDefinition]:
-    """Compatibility alias for ``definitions_by_name`` (legacy call-site name)."""
-    return definitions_by_name()
-
-
 def class_definition(class_name: str) -> ClassDefinition:
-    """Return the loaded class definition for live class ``name``.
-
-    Temporary #188 bridge (remove in #192): one-way ``kebab_to_snake`` so
-    transitional callers that still pass historical kebab mount strings resolve
-    to the live name. The cache itself is keyed only by live ``name``.
-    """
-    live_name = kebab_to_snake(class_name)
+    """Return the loaded class definition for live class ``name``."""
     try:
-        return definitions_by_name()[live_name]
+        return definitions_by_name()[class_name]
     except KeyError as exc:
         raise RuntimeError(f"unknown class definition: {class_name}") from exc
 

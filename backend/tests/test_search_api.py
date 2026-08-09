@@ -49,7 +49,7 @@ def _search(
 
 
 def test_search_match_all_defaults(tickets_client: TestClient) -> None:
-    response = _search(tickets_client, "/incidents/search", {})
+    response = _search(tickets_client, "/api/v2/incident/search", {})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["limit"] == 20
@@ -61,7 +61,7 @@ def test_search_match_all_defaults(tickets_client: TestClient) -> None:
 
 
 def test_search_null_predicate_match_all(tickets_client: TestClient) -> None:
-    response = _search(tickets_client, "/incidents/search", {"predicate": None})
+    response = _search(tickets_client, "/api/v2/incident/search", {"predicate": None})
     assert response.status_code == 200
     assert response.json()["total"] >= 2
 
@@ -69,7 +69,7 @@ def test_search_null_predicate_match_all(tickets_client: TestClient) -> None:
 def test_search_eq_and_projection(tickets_client: TestClient) -> None:
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "eq",
@@ -92,7 +92,7 @@ def test_search_and_or_not_ne_empty(tickets_client: TestClient) -> None:
     # Seed incident 2 has description NULL and status in-progress.
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "and",
@@ -138,7 +138,7 @@ def test_search_and_or_not_ne_empty(tickets_client: TestClient) -> None:
 def test_search_not_empty(tickets_client: TestClient) -> None:
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {"op": "not_empty", "attribute": "description"},
             "attributes": ["description"],
@@ -153,12 +153,12 @@ def test_search_not_empty(tickets_client: TestClient) -> None:
 def test_search_pagination_and_total(tickets_client: TestClient) -> None:
     page1 = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {"limit": 1, "offset": 0, "attributes": ["summary"]},
     )
     page2 = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {"limit": 1, "offset": 1, "attributes": ["summary"]},
     )
     assert page1.status_code == 200 and page2.status_code == 200
@@ -172,7 +172,7 @@ def test_search_pagination_and_total(tickets_client: TestClient) -> None:
 def test_search_sort_stability_and_explicit_created_at(tickets_client: TestClient) -> None:
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "sort": [{"attribute": "status", "direction": "asc"}],
             "attributes": ["status"],
@@ -186,7 +186,7 @@ def test_search_sort_stability_and_explicit_created_at(tickets_client: TestClien
     # Explicit created_at / id directions are respected (no duplicate append).
     response2 = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "sort": [
                 {"attribute": "created_at", "direction": "asc"},
@@ -205,22 +205,22 @@ def test_search_sort_direction_defaults_to_asc(tickets_client: TestClient) -> No
     body_common = {"attributes": ["status"], "limit": 50}
     omit = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {**body_common, "sort": [{"attribute": "status"}]},
     )
     null_direction = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {**body_common, "sort": [{"attribute": "status", "direction": None}]},
     )
     explicit_asc = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {**body_common, "sort": [{"attribute": "status", "direction": "asc"}]},
     )
     explicit_desc = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {**body_common, "sort": [{"attribute": "status", "direction": "desc"}]},
     )
     assert omit.status_code == 200, omit.text
@@ -242,7 +242,7 @@ def test_search_sort_direction_defaults_to_asc(tickets_client: TestClient) -> No
     for bad in ("ASC", "DESC", "Asc", "deSc"):
         response = _search(
             tickets_client,
-            "/incidents/search",
+            "/api/v2/incident/search",
             {**body_common, "sort": [{"attribute": "status", "direction": bad}]},
         )
         assert response.status_code == 422, (bad, response.text)
@@ -251,7 +251,7 @@ def test_search_sort_direction_defaults_to_asc(tickets_client: TestClient) -> No
 def test_search_empty_result_is_200(tickets_client: TestClient) -> None:
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "eq",
@@ -269,7 +269,7 @@ def test_search_empty_result_is_200(tickets_client: TestClient) -> None:
 def test_search_change_requests_endpoint(tickets_client: TestClient) -> None:
     response = _search(
         tickets_client,
-        "/change-requests/search",
+        "/api/v2/change_request/search",
         {
             "predicate": {"op": "eq", "attribute": "status", "value": "draft"},
             "attributes": ["number", "status"],
@@ -286,7 +286,7 @@ def test_search_ordered_ops(tickets_client: TestClient) -> None:
     # string gt on seed incident status vocabulary
     status_gt = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {"op": "gt", "attribute": "status", "value": "m"},
             "attributes": ["status"],
@@ -300,7 +300,7 @@ def test_search_ordered_ops(tickets_client: TestClient) -> None:
     # friendly_id starts_with-style bound via gte on INC numbers
     number_gte = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {"op": "gte", "attribute": "number", "value": "INC"},
             "attributes": ["number"],
@@ -312,7 +312,7 @@ def test_search_ordered_ops(tickets_client: TestClient) -> None:
     # datetime lt far-future created_at matches existing rows
     created = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "lt",
@@ -328,7 +328,7 @@ def test_search_ordered_ops(tickets_client: TestClient) -> None:
     # integer ordered ops on change-requests (shared factory path)
     high_risk = _search(
         tickets_client,
-        "/change-requests/search",
+        "/api/v2/change_request/search",
         {
             "predicate": {"op": "gte", "attribute": "risk_score", "value": 50},
             "attributes": ["risk_score", "summary"],
@@ -341,7 +341,7 @@ def test_search_ordered_ops(tickets_client: TestClient) -> None:
 
     low_risk = _search(
         tickets_client,
-        "/change-requests/search",
+        "/api/v2/change_request/search",
         {
             "predicate": {"op": "lt", "attribute": "risk_score", "value": 50},
             "attributes": ["risk_score"],
@@ -363,7 +363,7 @@ def test_search_ordered_text_uses_c_collation(tickets_client: TestClient) -> Non
     """
     headers = _headers(tickets_client, "readwrite")
     created = tickets_client.post(
-        "/incidents",
+        "/api/v2/incident",
         headers=headers,
         json={
             "summary": "Zebra",
@@ -376,7 +376,7 @@ def test_search_ordered_text_uses_c_collation(tickets_client: TestClient) -> Non
 
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {"op": "lt", "attribute": "summary", "value": "apple"},
             "attributes": ["summary"],
@@ -391,7 +391,7 @@ def test_search_ordered_null_does_not_match(tickets_client: TestClient) -> None:
     # Seed incident 2 has description NULL — ordered ops must not match it.
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "and",
@@ -416,7 +416,7 @@ def test_search_ordered_type_rejection(tickets_client: TestClient) -> None:
     ):
         response = _search(
             tickets_client,
-            "/incidents/search",
+            "/api/v2/incident/search",
             {"predicate": {"op": "gt", "attribute": attribute, "value": value}},
         )
         assert response.status_code == 422, (attribute, response.text)
@@ -426,7 +426,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
     # contains / starts_with / ends_with / regexp against seed incident 1.
     contains = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "contains",
@@ -442,7 +442,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
 
     starts = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "starts_with",
@@ -457,7 +457,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
 
     ends = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "ends_with",
@@ -472,7 +472,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
 
     regexp = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "regexp",
@@ -488,7 +488,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
     # friendly_id starts_with on change-requests (shared factory path).
     chg = _search(
         tickets_client,
-        "/change-requests/search",
+        "/api/v2/change_request/search",
         {
             "predicate": {
                 "op": "starts_with",
@@ -507,7 +507,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
 def test_search_text_pattern_case_sensitive(tickets_client: TestClient) -> None:
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "contains",
@@ -523,7 +523,7 @@ def test_search_text_pattern_case_sensitive(tickets_client: TestClient) -> None:
 def test_search_text_pattern_like_literals(tickets_client: TestClient) -> None:
     headers = _headers(tickets_client, "readwrite")
     created = tickets_client.post(
-        "/incidents",
+        "/api/v2/incident",
         headers=headers,
         json={
             "summary": "100%_done marker",
@@ -537,7 +537,7 @@ def test_search_text_pattern_like_literals(tickets_client: TestClient) -> None:
     # Wildcard chars in the value must match literally, not as LIKE wildcards.
     response = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "contains",
@@ -554,7 +554,7 @@ def test_search_text_pattern_like_literals(tickets_client: TestClient) -> None:
     # A lone % must not match every row as a LIKE wildcard.
     wild = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "contains",
@@ -578,7 +578,7 @@ def test_search_text_pattern_type_rejection_and_invalid_regexp(
     for attribute in ("id", "created_at"):
         response = _search(
             tickets_client,
-            "/incidents/search",
+            "/api/v2/incident/search",
             {
                 "predicate": {
                     "op": "contains",
@@ -591,7 +591,7 @@ def test_search_text_pattern_type_rejection_and_invalid_regexp(
 
     bad_re = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {
             "predicate": {
                 "op": "regexp",
@@ -605,7 +605,7 @@ def test_search_text_pattern_type_rejection_and_invalid_regexp(
 
 
 def test_search_unauthenticated_401(tickets_client: TestClient) -> None:
-    assert tickets_client.post("/incidents/search", json={}).status_code == 401
+    assert tickets_client.post("/api/v2/incident/search", json={}).status_code == 401
 
 
 def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> None:
@@ -615,7 +615,7 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         deep = {"op": "not", "predicate": deep}
     # depth: root=1, three nots → depth 4 at leaf → exceed max 3
     deep = {"op": "not", "predicate": deep}
-    deep_resp = _search(tickets_client, "/incidents/search", {"predicate": deep})
+    deep_resp = _search(tickets_client, "/api/v2/incident/search", {"predicate": deep})
     assert deep_resp.status_code == 422
     assert "max_search_nesting_depth" in deep_resp.json()["detail"]
 
@@ -626,7 +626,7 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
             {"op": "eq", "attribute": "status", "value": "new"} for _ in range(21)
         ],
     }
-    wide_resp = _search(tickets_client, "/incidents/search", {"predicate": too_wide})
+    wide_resp = _search(tickets_client, "/api/v2/incident/search", {"predicate": too_wide})
     assert wide_resp.status_code == 422
     assert "max_search_nesting_length" in wide_resp.json()["detail"]
 
@@ -646,7 +646,7 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
             for _ in range(17)
         ],
     }
-    many_resp = _search(tickets_client, "/incidents/search", {"predicate": too_many})
+    many_resp = _search(tickets_client, "/api/v2/incident/search", {"predicate": too_many})
     assert many_resp.status_code == 422
     assert "max_search_total_predicates" in many_resp.json()["detail"]
 
@@ -661,7 +661,7 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         ],
     }
     regexp_resp = _search(
-        tickets_client, "/incidents/search", {"predicate": too_regexp}
+        tickets_client, "/api/v2/incident/search", {"predicate": too_regexp}
     )
     assert regexp_resp.status_code == 422
     assert "max_search_total_regexp" in regexp_resp.json()["detail"]
@@ -687,7 +687,7 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         {"sort": [{"attribute": "not_a_real_field", "direction": "asc"}]},
     ]
     for body in semantic_cases:
-        response = _search(tickets_client, "/incidents/search", body)
+        response = _search(tickets_client, "/api/v2/incident/search", body)
         assert response.status_code == 422, (body, response.text)
 
     # Malformed predicate shape / unexpected keys / absent required children → 400.
@@ -701,13 +701,13 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         {"attributes": "status"},
     ]
     for body in structural_cases:
-        response = _search(tickets_client, "/incidents/search", body)
+        response = _search(tickets_client, "/api/v2/incident/search", body)
         assert response.status_code == 400, (body, response.text)
 
     # Framework / Pydantic validation (enum) → 422 (data / value error).
     bad_direction = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {"sort": [{"attribute": "status", "direction": "sideways"}]},
     )
     assert bad_direction.status_code == 422, bad_direction.text
@@ -715,7 +715,7 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
     # Typed-field scalar mismatch on the envelope → 422.
     bad_limit_type = _search(
         tickets_client,
-        "/incidents/search",
+        "/api/v2/incident/search",
         {"limit": "twenty"},
     )
     assert bad_limit_type.status_code == 422, bad_limit_type.text
@@ -730,10 +730,10 @@ def test_search_unreadable_system_config_503(
         raise SystemConfigUnreadableError("system_config singleton could not be read")
 
     monkeypatch.setattr(
-        "untangled.records.router_factory.get_system_config",
+        "untangled.records.v2_router_factory.get_system_config",
         _boom,
     )
-    response = _search(tickets_client, "/incidents/search", {})
+    response = _search(tickets_client, "/api/v2/incident/search", {})
     assert response.status_code == 503, response.text
     detail = response.json()["detail"].lower()
     assert "system configuration" in detail

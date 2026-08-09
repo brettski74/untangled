@@ -38,16 +38,16 @@ def test_v2_suppress_flags_omit_create_search_delete(
         ),
     )
     v2 = build_v2_class_router(
-        class_kebab="singleton-item",
-        prefix="/api/v2/singleton-item",
+        class_name="singleton_item",
+        prefix="/api/v2/singleton_item",
         tags=["singleton-v2"],
     )
     keys = _route_keys(v2)
-    assert ("POST", "/api/v2/singleton-item") not in keys
-    assert ("POST", "/api/v2/singleton-item/search") not in keys
-    assert ("DELETE", "/api/v2/singleton-item/{locator}") not in keys
-    assert ("GET", "/api/v2/singleton-item/{locator}") in keys
-    assert ("PATCH", "/api/v2/singleton-item/{locator}") in keys
+    assert ("POST", "/api/v2/singleton_item") not in keys
+    assert ("POST", "/api/v2/singleton_item/search") not in keys
+    assert ("DELETE", "/api/v2/singleton_item/{locator}") not in keys
+    assert ("GET", "/api/v2/singleton_item/{locator}") in keys
+    assert ("PATCH", "/api/v2/singleton_item/{locator}") in keys
 
 
 def test_v2_full_crud_routes_use_singular_class_name(
@@ -66,7 +66,7 @@ def test_v2_full_crud_routes_use_singular_class_name(
         ),
     )
     v2 = build_v2_class_router(
-        class_kebab="change_request",
+        class_name="change_request",
         prefix="/api/v2/change_request",
         tags=["change_request-v2"],
     )

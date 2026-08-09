@@ -22,7 +22,7 @@ def note_search(
     window_seconds: int,
     max_searches: int,
     ip_address: str | None,
-    class_kebab: str,
+    class_name: str,
 ) -> None:
     """Count a successful search; emit volume signal once per window when over max."""
     if window_seconds <= 0 or max_searches <= 0:
@@ -51,7 +51,7 @@ def note_search(
                 user_id=user_id,
                 ip_address=ip_address,
                 data={
-                    "class": class_kebab,
+                    "class": class_name,
                     "window_seconds": window_seconds,
                     "max_searches": max_searches,
                     "count": count,

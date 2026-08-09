@@ -188,7 +188,7 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
     recorder.events.clear()
 
     unauth = client.post(
-        "/api/v1/incidents/search",
+        "/api/v2/incident/search",
         headers={"Authorization": "Bearer not-a-jwt"},
         json={},
     )
@@ -202,7 +202,7 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
     readonly = _login(client, username="readonly", password="readonly-change-me")
     assert readonly.status_code == 200
     ro_headers = {"Authorization": f"Bearer {readonly.json()['access_token']}"}
-    forbidden = client.post("/incidents", headers=ro_headers, json=_incident_body())
+    forbidden = client.post("/api/v2/incident", headers=ro_headers, json=_incident_body())
     assert forbidden.status_code == 403
     assert any(
         e.event_type == EventType.RECORD_AUTHZ_DENIED
@@ -215,14 +215,14 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
     admin_token = _login(client).json()["access_token"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     seed_incident = client.post(
-        "/incidents", headers=admin_headers, json=_incident_body()
+        "/api/v2/incident", headers=admin_headers, json=_incident_body()
     )
     assert seed_incident.status_code == 201
     seed_locator = seed_incident.json()["id"]
 
     recorder.events.clear()
     update_denied = client.patch(
-        f"/incidents/{seed_locator}",
+        f"/api/v2/incident/{seed_locator}",
         headers=ro_headers,
         json={"summary": "nope"},
     )
@@ -238,7 +238,7 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
     assert readwrite.status_code == 200
     rw_headers = {"Authorization": f"Bearer {readwrite.json()['access_token']}"}
     recorder.events.clear()
-    delete_denied = client.delete(f"/incidents/{seed_locator}", headers=rw_headers)
+    delete_denied = client.delete(f"/api/v2/incident/{seed_locator}", headers=rw_headers)
     assert delete_denied.status_code == 403
     assert any(
         e.event_type == EventType.RECORD_AUTHZ_DENIED
@@ -250,26 +250,26 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
     headers = admin_headers
     recorder.events.clear()
 
-    created = client.post("/incidents", headers=headers, json=_incident_body())
+    created = client.post("/api/v2/incident", headers=headers, json=_incident_body())
     assert created.status_code == 201
     locator = created.json()["id"]
     assert any(e.event_type == EventType.RECORD_CREATE for e in recorder.events)
 
     recorder.events.clear()
-    assert client.get(f"/api/v1/incidents/{locator}", headers=headers).status_code == 200
+    assert client.get(f"/api/v2/incident/{locator}", headers=headers).status_code == 200
     assert any(
         e.event_type == EventType.RECORD_FETCH and e.data.get("locator") == locator
         for e in recorder.events
     )
 
     recorder.events.clear()
-    assert client.post("/api/v1/incidents/search", headers=headers, json={}).status_code == 200
+    assert client.post("/api/v2/incident/search", headers=headers, json={}).status_code == 200
     assert any(e.event_type == EventType.RECORD_SEARCH for e in recorder.events)
 
     recorder.events.clear()
     assert (
         client.patch(
-            f"/incidents/{locator}",
+            f"/api/v2/incident/{locator}",
             headers=headers,
             json={"summary": "audit-test-updated"},
         ).status_code
@@ -278,19 +278,19 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
     assert any(e.event_type == EventType.RECORD_UPDATE for e in recorder.events)
 
     recorder.events.clear()
-    assert client.delete(f"/incidents/{locator}", headers=headers).status_code == 204
+    assert client.delete(f"/api/v2/incident/{locator}", headers=headers).status_code == 204
     assert any(
         e.event_type == EventType.RECORD_DELETE and e.data.get("locator") == locator
         for e in recorder.events
     )
-    assert client.get(f"/api/v1/incidents/{locator}", headers=headers).status_code == 404
+    assert client.get(f"/api/v2/incident/{locator}", headers=headers).status_code == 404
     _assert_no_secrets(recorder.events)
 
 
 def test_delete_fail_closed_prevents_delete(client: TestClient) -> None:
     token = _login(client).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
-    created = client.post("/incidents", headers=headers, json=_incident_body())
+    created = client.post("/api/v2/incident", headers=headers, json=_incident_body())
     assert created.status_code == 201
     locator = created.json()["id"]
     set_audit_logger(
@@ -299,30 +299,30 @@ def test_delete_fail_closed_prevents_delete(client: TestClient) -> None:
             and not e.data.get("compensate")
         )
     )
-    deleted = client.delete(f"/incidents/{locator}", headers=headers)
+    deleted = client.delete(f"/api/v2/incident/{locator}", headers=headers)
     assert deleted.status_code == 500
     set_audit_logger(RecordingAuditLogger())
-    still = client.get(f"/incidents/{locator}", headers=headers)
+    still = client.get(f"/api/v2/incident/{locator}", headers=headers)
     assert still.status_code == 200
 
 
 def test_update_fail_closed_restores_row(client: TestClient) -> None:
     token = _login(client).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
-    created = client.post("/incidents", headers=headers, json=_incident_body())
+    created = client.post("/api/v2/incident", headers=headers, json=_incident_body())
     assert created.status_code == 201
     locator = created.json()["id"]
     set_audit_logger(
         ConditionalFailAuditLogger(lambda e: e.event_type == EventType.RECORD_UPDATE)
     )
     updated = client.patch(
-        f"/incidents/{locator}",
+        f"/api/v2/incident/{locator}",
         headers=headers,
         json={"summary": "should-not-stick"},
     )
     assert updated.status_code == 500
     set_audit_logger(RecordingAuditLogger())
-    still = client.get(f"/incidents/{locator}", headers=headers)
+    still = client.get(f"/api/v2/incident/{locator}", headers=headers)
     assert still.status_code == 200
     assert still.json()["summary"] == "audit-test"
 
@@ -331,16 +331,16 @@ def test_create_compensate_on_audit_failure(client: TestClient) -> None:
     """Create audit failure must compensate-delete the row (recovery, not fail-closed)."""
     token = _login(client).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
-    before = client.post("/api/v1/incidents/search", headers=headers, json={})
+    before = client.post("/api/v2/incident/search", headers=headers, json={})
     assert before.status_code == 200
     before_total = before.json()["total"]
     set_audit_logger(
         ConditionalFailAuditLogger(lambda e: e.event_type == EventType.RECORD_CREATE)
     )
-    created = client.post("/incidents", headers=headers, json=_incident_body())
+    created = client.post("/api/v2/incident", headers=headers, json=_incident_body())
     assert created.status_code == 500
     set_audit_logger(RecordingAuditLogger())
-    after = client.post("/api/v1/incidents/search", headers=headers, json={})
+    after = client.post("/api/v2/incident/search", headers=headers, json={})
     assert after.status_code == 200
     assert after.json()["total"] == before_total
 
@@ -393,7 +393,7 @@ def test_bulk_read_volume_signal(client: TestClient, db_conn: Connection) -> Non
     token = _login(client).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     for _ in range(3):
-        response = client.post("/incidents/search", headers=headers, json={})
+        response = client.post("/api/v2/incident/search", headers=headers, json={})
         assert response.status_code == 200
     assert any(
         e.event_type == EventType.AUDIT_BULK_READ_VOLUME for e in recorder.events
