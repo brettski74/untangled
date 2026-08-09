@@ -21,7 +21,6 @@ function col(
 ): ListColumn {
   return {
     name_snake,
-    name_kebab: name_snake.replaceAll("_", "-"),
     type_name,
     references: null,
     label: name_snake,

@@ -97,8 +97,8 @@ export function editor_filterable_attributes(
     )
     .sort((left, right) =>
       compare_display_name(
-        attribute_display_label(left.name_kebab),
-        attribute_display_label(right.name_kebab),
+        attribute_display_label(left.name_snake),
+        attribute_display_label(right.name_snake),
       ),
     );
 }

@@ -43,7 +43,7 @@ function attribute_render_context(
   const labels = new Map<string, string>();
   const types = new Map<string, string>();
   for (const attr of attributes) {
-    labels.set(attr.name_snake, attribute_display_label(attr.name_kebab));
+    labels.set(attr.name_snake, attribute_display_label(attr.name_snake));
     types.set(attr.name_snake, attr.type_name);
   }
   return { labels, types };
@@ -161,7 +161,7 @@ function attr_name(
   }
   return (
     ctx.labels.get(attribute) ??
-    attribute_display_label(attribute.replace(/_/g, "-"))
+    attribute_display_label(attribute)
   );
 }
 

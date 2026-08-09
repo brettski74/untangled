@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from untangled.mapping.datetime_utc import format_utc_iso_z, utc_now
 from untangled.mapping.definition import ClassDefinition
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
-from untangled.mapping.types_snake import format_friendly_id, friendly_id_sequence_name
+from untangled.mapping.types import format_friendly_id, friendly_id_sequence_name
 from untangled.persistence.actor import SYSTEM_USER_ID
 from untangled.persistence.fk_enrichment import (
     RelatedIdentity,
@@ -40,16 +40,16 @@ class RecordStore[T: BaseModel]:
         model_cls: type[T],
         *,
         actor_id: UUID = SYSTEM_USER_ID,
-        definitions_by_kebab: Mapping[str, ClassDefinition] | None = None,
+        definitions_by_name: Mapping[str, ClassDefinition] | None = None,
     ) -> None:
         self._conn = conn
         self._definition = definition
         self._model_cls = model_cls
         self._actor_id = actor_id
-        self._definitions_by_kebab = (
-            dict(definitions_by_kebab)
-            if definitions_by_kebab is not None
-            else {definition.name_kebab: definition}
+        self._definitions_by_name = (
+            dict(definitions_by_name)
+            if definitions_by_name is not None
+            else {definition.name_snake: definition}
         )
         self._user_columns = tuple(attr.name_snake for attr in definition.attributes)
         self._all_columns = (
@@ -218,7 +218,7 @@ class RecordStore[T: BaseModel]:
             limit=limit,
             offset=offset,
             enrich_fk_identity=enrich_fk_identity,
-            definitions_by_kebab=self._definitions_by_kebab,
+            definitions_by_name=self._definitions_by_name,
         )
 
     def _fetch_enriched(
@@ -226,7 +226,7 @@ class RecordStore[T: BaseModel]:
     ) -> dict[str, Any] | None:
         plan = build_enriched_read_plan(
             self._definition,
-            self._definitions_by_kebab,
+            self._definitions_by_name,
             list(self._all_columns),
         )
         query = sql.SQL("SELECT {} FROM {} WHERE {}.{} = {}").format(

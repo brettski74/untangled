@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from untangled.mapping.generate_snake import generate_models_snake as generate_models
+from untangled.mapping.generate import generate_models
 from untangled.mapping.system_fields import SYSTEM_FIELD_NAMES
 from untangled.seed.users import SEED_ADMIN_ID
 
@@ -226,7 +226,7 @@ def test_generate_demo_zod_accepts_and_rejects(
 def test_field_meta_order_and_create_defaults(
     repo_definitions: Path, tmp_path: Path
 ) -> None:
-    from untangled.mapping.definition_snake import load_definitions
+    from untangled.mapping.definition import load_definitions
     from untangled.mapping.emit_field_meta import emit_field_meta_module
 
     definitions = load_definitions(repo_definitions)
@@ -256,9 +256,9 @@ def test_field_meta_order_and_create_defaults(
 def test_min_max_on_create_update_not_full_model(tmp_path: Path) -> None:
     from pydantic import ValidationError
 
-    from untangled.mapping.definition_snake import load_definition
-    from untangled.mapping.emit_field_meta_snake import emit_field_meta_module
-    from untangled.mapping.emit_pydantic_snake import emit_pydantic_module
+    from untangled.mapping.definition import load_definition
+    from untangled.mapping.emit_field_meta import emit_field_meta_module
+    from untangled.mapping.emit_pydantic import emit_pydantic_module
 
     path = tmp_path / "bounded_item.yaml"
     path.write_text(

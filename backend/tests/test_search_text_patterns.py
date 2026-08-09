@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from untangled.mapping.definition_snake import load_definition
+from untangled.mapping.definition import load_definition
 from untangled.persistence.search import (
     SearchNestingLimits,
     SearchSemanticError,

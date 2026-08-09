@@ -28,7 +28,6 @@ function attr(
     Pick<AttributeFieldMeta, "name_snake" | "type_name" | "order">,
 ): AttributeFieldMeta {
   return {
-    name_kebab: overrides.name_kebab ?? overrides.name_snake.replace(/_/g, "-"),
     name_snake: overrides.name_snake,
     type_name: overrides.type_name,
     required: overrides.required ?? false,
@@ -111,7 +110,6 @@ describe("quick_filterable_attributes", () => {
     expect(() =>
       quick_filterable_attributes([
         {
-          name_kebab: "summary",
           name_snake: "summary",
           type_name: "text",
           required: true,

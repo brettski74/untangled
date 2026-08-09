@@ -200,7 +200,7 @@ export function ListContextBar({
             >
               {filterable.map((attr) => (
                 <option key={attr.name_snake} value={attr.name_snake}>
-                  {attribute_display_label(attr.name_kebab)}
+                  {attribute_display_label(attr.name_snake)}
                 </option>
               ))}
             </select>

@@ -12,7 +12,6 @@ function sample_meta(
   friendly_id_attr: string | null,
 ): ClassFieldMeta {
   return {
-    name_kebab: "sample",
     name_snake: "sample",
     display_name: "Sample",
     attributes,
@@ -31,7 +30,6 @@ describe("list_display_columns", () => {
       sample_meta(
         [
           {
-            name_kebab: "summary",
             name_snake: "summary",
             type_name: "text",
             required: true,
@@ -39,7 +37,6 @@ describe("list_display_columns", () => {
             order: 0,
           },
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,
@@ -58,7 +55,6 @@ describe("list_display_columns", () => {
       sample_meta(
         [
           {
-            name_kebab: "summary",
             name_snake: "summary",
             type_name: "text",
             required: true,
@@ -66,7 +62,6 @@ describe("list_display_columns", () => {
             order: 0,
           },
           {
-            name_kebab: "number",
             name_snake: "number",
             type_name: "friendly_id",
             required: true,
@@ -74,7 +69,6 @@ describe("list_display_columns", () => {
             order: 1,
           },
           {
-            name_kebab: "status",
             name_snake: "status",
             type_name: "status",
             required: true,
@@ -99,7 +93,6 @@ describe("list_display_columns", () => {
       sample_meta(
         [
           {
-            name_kebab: "number",
             name_snake: "number",
             type_name: "friendly_id",
             required: true,
@@ -107,7 +100,6 @@ describe("list_display_columns", () => {
             order: 0,
           },
           {
-            name_kebab: "summary",
             name_snake: "summary",
             type_name: "text",
             required: true,
@@ -126,7 +118,6 @@ describe("attributes_in_declaration_order", () => {
   it("sorts by order ordinal even when array is shuffled", () => {
     const sorted = attributes_in_declaration_order([
       {
-        name_kebab: "status",
         name_snake: "status",
         type_name: "status",
         required: true,
@@ -134,7 +125,6 @@ describe("attributes_in_declaration_order", () => {
         order: 1,
       },
       {
-        name_kebab: "summary",
         name_snake: "summary",
         type_name: "text",
         required: true,
@@ -149,7 +139,6 @@ describe("attributes_in_declaration_order", () => {
     expect(() =>
       attributes_in_declaration_order([
         {
-          name_kebab: "summary",
           name_snake: "summary",
           type_name: "text",
           required: true,
@@ -163,7 +152,7 @@ describe("attributes_in_declaration_order", () => {
 
 describe("attribute_display_label", () => {
   it("humanizes kebab attribute names", () => {
-    expect(attribute_display_label("assigned-user-id")).toBe("Assigned User Id");
+    expect(attribute_display_label("assigned_user_id")).toBe("Assigned User Id");
     expect(attribute_display_label("number")).toBe("Number");
   });
 });

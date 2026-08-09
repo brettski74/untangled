@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from untangled.mapping.generate_snake import generate_models_snake
-from untangled.mapping.well_known_snake import SYSTEM_CONFIG_ID
+from untangled.mapping.generate import generate_models
+from untangled.mapping.well_known import SYSTEM_CONFIG_ID
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def test_generate_snake_writes_artifacts(
 ) -> None:
     pydantic_out = tmp_path / "pydantic"
     zod_out = tmp_path / "zod"
-    result = generate_models_snake(snake_definitions, pydantic_out, zod_out)
+    result = generate_models(snake_definitions, pydantic_out, zod_out)
 
     assert {d.name_snake for d in result.definitions} == {
         "user",
@@ -81,7 +81,7 @@ def test_generate_snake_pydantic_accepts_payload(
 ) -> None:
     pydantic_out = tmp_path / "pydantic"
     zod_out = tmp_path / "zod"
-    generate_models_snake(snake_definitions, pydantic_out, zod_out)
+    generate_models(snake_definitions, pydantic_out, zod_out)
     module = _load_module(pydantic_out / "sample_item.py", "snake_sample_item")
     payload = {
         "id": "01901234-5678-7abc-89ab-cdef01234567",

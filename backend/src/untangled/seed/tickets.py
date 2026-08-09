@@ -8,7 +8,7 @@ from uuid import UUID
 from psycopg import Connection
 
 from untangled.mapping.datetime_utc import utc_now
-from untangled.mapping.definition_snake import load_definition
+from untangled.mapping.definition import load_definition
 from untangled.persistence.store import RecordStore
 from untangled.records.deps import definitions_dir, model
 from untangled.seed.users import SEED_ADMIN_ID, SEED_READWRITE_ID

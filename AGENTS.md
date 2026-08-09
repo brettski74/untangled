@@ -191,14 +191,16 @@ Validation layers:
 | Python     | snake_case |
 | JSON/API   | snake_case |
 | JavaScript | snake_case |
-| YAML       | kebab-case |
-| Classes    | PascalCase |
+| YAML       | snake_case for **functional identifiers** (class/attribute names, structural keys, type tokens, and other names that may appear as identifiers in code or code-like expressions); display/aesthetic text and classified data values are not forced to snake |
+| Classes    | PascalCase (language/runtime type names; already identifier-compatible and distinct in meaning) |
 
 Goals:
 
 * Zero mental translation
 * Minimal mapping logic
 * Consistency across the entire system
+
+Functional identifiers must use naming compatible with identifier use in the languages we ship. In-scope former kebab surfaces use `snake_case`. Do **not** apply snake enforcement to display labels, display-derived list URL slugs, role names, or nav data values.
 
 ---
 

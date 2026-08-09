@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from untangled.mapping.definition_snake import (
+from untangled.mapping.definition import (
     DefinitionError,
     DeprecatedStringTypeWarning,
     load_definition,
@@ -217,7 +217,7 @@ def test_first_party_definitions_have_no_deprecated_string(
     for defn in definitions:
         for attr in defn.attributes:
             assert attr.type_name != "string", (
-                f"{defn.name_kebab}.{attr.name_kebab} still uses deprecated string"
+                f"{defn.name_snake}.{attr.name_snake} still uses deprecated string"
             )
 
 

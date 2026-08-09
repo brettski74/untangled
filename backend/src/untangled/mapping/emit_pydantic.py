@@ -1,4 +1,4 @@
-"""Emit Pydantic model modules from class definitions."""
+"""Emit Pydantic models from class definitions."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from untangled.mapping.system_fields import SYSTEM_FIELDS
 from untangled.mapping.types import SUPPORTED_TYPES
 
 _HEADER = '''\
-"""Generated Pydantic models. Do not edit by hand; run `make models`."""
+"""Generated Pydantic models. Do not edit by hand; run ``make models``."""
 
 from __future__ import annotations
 
@@ -40,18 +40,18 @@ def _require_utc(value: datetime) -> datetime:
 
 _PYDANTIC_TYPE: dict[str, str] = {
     "string": "str",
-    "compact-text": "str",
+    "compact_text": "str",
     "choice": "str",
     "status": "str",
     "text": "str",
-    "multiline-text": "str",
+    "multiline_text": "str",
     "boolean": "bool",
     "integer": "int",
     "float": "float",
     "decimal": "Decimal",
     "uuid": "UUID",
     "datetime": "UtcDatetime",
-    "friendly-id": "str",
+    "friendly_id": "str",
 }
 
 assert set(_PYDANTIC_TYPE) == SUPPORTED_TYPES
@@ -60,7 +60,7 @@ assert set(_PYDANTIC_TYPE) == SUPPORTED_TYPES
 def emit_pydantic_module(definition: ClassDefinition) -> str:
     """Return Python source for one class's Pydantic module (full + create + update)."""
     class_name = snake_to_pascal(definition.name_snake)
-    writable = [a for a in definition.attributes if a.type_name != "friendly-id"]
+    writable = [a for a in definition.attributes if a.type_name != "friendly_id"]
     lines: list[str] = [_HEADER]
 
     lines.extend(_emit_full_model(definition, class_name))
@@ -97,7 +97,6 @@ def _emit_write_model(
     *,
     variant: str,
 ) -> list[str]:
-    """Create (required as YAML) or Update (all optional) writable-field models."""
     name = f"{class_name}{variant}"
     lines: list[str] = [
         f"class {name}(BaseModel):",
@@ -183,7 +182,6 @@ def _field_line(
 
 
 def _python_class_docstring(definition: ClassDefinition) -> list[str]:
-    """Emit an indented triple-quoted docstring from display-name + description."""
     body = f"{definition.display_name}\n\n{definition.description}"
     safe = body.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
     return [f'    """{safe}"""']
@@ -209,7 +207,7 @@ def write_pydantic_models(definitions: list[ClassDefinition], output_dir: Path) 
         )
 
     init_lines = [
-        '"""Generated Pydantic models. Do not edit by hand; run `make models`."""',
+        '"""Generated Pydantic models. Do not edit by hand; run snake generate."""',
         "",
     ]
     all_names: list[str] = []

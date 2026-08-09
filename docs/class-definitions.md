@@ -17,8 +17,13 @@ Human-authored YAML files live under:
 backend/class-definitions/
 ```
 
-Filenames and YAML keys use **kebab-case**. Ship one file per class (for example
-`demo-item.yaml`).
+Filenames and YAML **functional identifiers** (structural keys, class `name`,
+attribute map keys, type tokens, well-known `${…}` names) use **snake_case**.
+The live loader **fails closed** on non-snake forms for those fields. Ship one
+file per class (for example `demo_item.yaml`). Display labels, display-derived
+list URL slugs, role names, and nav data values are **not** snake-enforced.
+PascalCase language/runtime type names stay as a distinct identifier-compatible
+convention.
 
 The generator and migrate CLI take a **definitions directory path** as an input.
 Core fixtures and a later custom-class feature can invoke the same pipelines with
@@ -31,17 +36,17 @@ Each file declares at least:
 
 | Key | Meaning |
 | --- | ------- |
-| `name` | Logical class name (kebab-case), e.g. `demo-item` |
-| `display-name` | Human-readable **class label** (not a table/column identifier; not related-record display identity) |
+| `name` | Logical class name (snake_case), e.g. `demo_item` |
+| `display_name` | Human-readable **class label** (not a table/column identifier; not related-record display identity) |
 | `description` | Purpose and other details configurers/users should know |
-| `display-attribute` | Optional. Kebab-case attribute name used as limited related-record display identity (see below) |
+| `display_attribute` | Optional. Snake_case attribute name used as limited related-record display identity (see below) |
 | `public` | Optional boolean, default `false`. When `true`, every **authenticated** caller may **read** without `{class}:read`. Writes still use `{class}:{op}` / `admin`. Unauthenticated callers still have no access. This is standard class-access behaviour, not a seed permission grant. |
-| `suppress-create` / `suppress-delete` / `suppress-search` | Optional booleans, default `false`. When `true`, the shared router factory omits that operation (search suppression applies to legacy and v1). Fetch and update are not suppressible here. |
-| `check-constraint` | Optional SQL CHECK expression (string) or list of expressions. Snake_case SQL identifiers. `${kebab-name}` literals are substituted at definition load. |
+| `suppress_create` / `suppress_delete` / `suppress_search` | Optional booleans, default `false`. When `true`, the shared router factory omits that operation (search suppression applies to legacy and v1). Fetch and update are not suppressible here. |
+| `check_constraint` | Optional SQL CHECK expression (string) or list of expressions. Snake_case SQL identifiers. `${snake_name}` literals are substituted at definition load. |
 | `attributes` | Map of attribute name → `{ type, required, … }` |
 
-Attribute names in YAML are kebab-case. They map mechanically to snake_case in
-SQL, JSON, Python, and JavaScript.
+Attribute names in YAML are snake_case. The same spelling is used in SQL,
+JSON, Python, and JavaScript — no identity translation on the live path.
 
 Attribute declaration order under `attributes` is **semantic** (default
 presentation order). See
@@ -54,24 +59,24 @@ missing — do not invent a sort. Tooling must not alphabetize attribute maps.
 
 | YAML `type` | Meaning | PostgreSQL |
 | ----------- | ------- | ---------- |
-| `compact-text` | Free-form UTF-8 text (compact UI section) | `text` |
+| `compact_text` | Free-form UTF-8 text (compact UI section) | `text` |
 | `choice` | Restricted value set later; M1 unconstrained text (compact UI) | `text` |
 | `status` | Special choice later; M1 unconstrained text (compact UI) | `text` |
 | `text` | UTF-8 text (full-width single-line UI section) | `text` |
-| `multiline-text` | UTF-8 text (full-width multiline UI section) | `text` |
-| `string` | **Deprecated** alias for `compact-text` (still accepted) | `text` |
+| `multiline_text` | UTF-8 text (full-width multiline UI section) | `text` |
+| `string` | **Deprecated** alias for `compact_text` (still accepted) | `text` |
 | `boolean` | True/false | `boolean` |
 | `integer` | Whole number | `integer` |
 | `float` | Floating-point number | `double precision` |
 | `decimal` | Fixed-point decimal (exact; JSON string at boundaries) | `numeric` |
 | `uuid` | UUID (hyphenated string at JSON boundaries) | `uuid` |
 | `datetime` | Timezone-aware timestamp; **UTC** in storage and mapped attributes | `timestamptz` |
-| `friendly-id` | Server-assigned operational id (`prefix` + zero-padded sequence) | `text` |
+| `friendly_id` | Server-assigned operational id (`prefix` + zero-padded sequence) | `text` |
 
 Keep this vocabulary small.
 
-**Text storage family:** `compact-text`, `choice`, `status`, `text`,
-`multiline-text`, and deprecated `string` are storage-equivalent (all
+**Text storage family:** `compact_text`, `choice`, `status`, `text`,
+`multiline_text`, and deprecated `string` are storage-equivalent (all
 PostgreSQL `text`). Intra-family type renames must **not** emit migrate DDL.
 UI / search semantics follow the YAML type; migrate Schema IR stores only
 the PostgreSQL type.
@@ -83,28 +88,28 @@ descriptions, not validator enums yet.
 
 **Deprecating `string`:** still accepted so external/custom trees do not
 hard-break. The loader emits a visible warning (`DeprecatedStringTypeWarning`)
-when `string` appears; behaviour matches `compact-text`. Prefer migrating
+when `string` appears; behaviour matches `compact_text`. Prefer migrating
 definitions off `string`.
 
 ### Create-time attribute defaults
 
-Optional YAML key **`create-default`** on an attribute declares a create-form
+Optional YAML key **`create_default`** on an attribute declares a create-form
 prefill (and values the generic new-record path must include in create POST
 bodies for non-editable fields). It is **not** a lasting PostgreSQL column
 DEFAULT. For **required** attributes, the same literal is also the migrate
 add-time backfill: `ADD COLUMN … NOT NULL DEFAULT <value>` then `DROP DEFAULT`
 in the same transaction so existing rows receive the value
-([ADR 012](../architecture/decisions/012-create-default-migrate-backfill.md);
+([ADR 012](../architecture/decisions/012-create_default-migrate-backfill.md);
 ADD-COLUMN half of [#62](https://github.com/brettski74/untangled/issues/62)).
-Required adds **without** `create-default` still use `ADD … NOT NULL` with no
+Required adds **without** `create_default` still use `ADD … NOT NULL` with no
 DEFAULT and fail on non-empty tables.
 
-- Omit the key when there is no default (do not write `create-default: null`).
+- Omit the key when there is no default (do not write `create_default: null`).
 - Generated field meta exposes `create_default` only when declared.
 - Persistence create does not auto-apply these yet; callers (SSR new-record
   action, API clients) must supply them until a later server-apply story.
-- `friendly-id` cannot have `create-default` (server-assigned).
-- Declaring `create-default` on a required attribute backfills **all existing
+- `friendly_id` cannot have `create_default` (server-assigned).
+- Declaring `create_default` on a required attribute backfills **all existing
   rows** when the column is added — treat that as data-migration intent.
 
 M1 Change Request `requested-by` uses the baseline seed-catalog admin UUID
@@ -115,25 +120,25 @@ defaults to other actor-typed attributes.
 
 ### Friendly-id attributes
 
-At most **one** `friendly-id` attribute per class. Across the definitions tree,
+At most **one** `friendly_id` attribute per class. Across the definitions tree,
 `prefix` values must be unique **case-insensitively** (sequence names use the
 lowercased prefix).
 
 | YAML key | Required | Meaning |
 | -------- | -------- | ------- |
 | `prefix` | yes | Literal prefix stored on every value (e.g. `INC`, `CHG`) |
-| `pad-width` | no | Zero-pad width; **default 8**; reject values **&lt; 4** |
-| `start-at` | no | Sequence start when first created; if omitted, migrate uses max(numeric portion of matching existing values)+1, or 1 |
+| `pad_width` | no | Zero-pad width; **default 8**; reject values **&lt; 4** |
+| `start_at` | no | Sequence start when first created; if omitted, migrate uses max(numeric portion of matching existing values)+1, or 1 |
 
 Sequence name: `friendly_id_{prefix_lower}` (e.g. prefix `CHG` → `friendly_id_chg`).
 Migrate owns `CREATE SEQUENCE` (and the unique index on the column). Persistence
-owns `nextval` + formatting on create. Clients must not supply the friendly-id
+owns `nextval` + formatting on create. Clients must not supply the friendly_id
 on create or update.
 
-**Pad overflow:** if the decimal body is longer than `pad-width`, emit the full
+**Pad overflow:** if the decimal body is longer than `pad_width`, emit the full
 digits (no truncate/wrap/modulo). Padding only left-zero-fills shorter values.
 
-**Start policy:** `start-at` / max+1 applies only when the sequence is **created**.
+**Start policy:** `start_at` / max+1 applies only when the sequence is **created**.
 Re-migrate does not rewrite live sequence starts. Do not race writers during
 migrate when relying on max+1.
 
@@ -141,7 +146,7 @@ migrate when relying on max+1.
 **environment-local** (sequences diverge across databases).
 
 **Locators:** fetch / update / delete may use either the UUID `id` or the class’s
-friendly-id value as a single path locator. Junk locators → 422.
+friendly_id value as a single path locator. Junk locators → 422.
 
 ### Injected system fields
 
@@ -157,7 +162,7 @@ rejected:
 | `created_by` | Creating user id (uuid; FK to required system `user.id`) |
 | `updated_by` | Last updating user id (uuid; FK to required system `user.id`) |
 
-### `display-attribute` (class-scoped related-record identity)
+### `display_attribute` (class-scoped related-record identity)
 
 Optional top-level key naming which attribute may appear as limited related-record
 identity when another class’s foreign key points at this class (for example on
@@ -165,12 +170,12 @@ identity when another class’s foreign key points at this class (for example on
 
 | YAML | Effective result |
 | ---- | ---------------- |
-| omitted | If the class declares an attribute literally named `display-name` with type **exactly** `compact-text`, that attribute is used; otherwise the class has no display attribute |
-| `display-attribute: null` | Explicit opt-out: no display identity (suppresses the implicit `display-name` default) |
-| `display-attribute: some-attr` | Must be a declared kebab-case attribute whose type is exactly `compact-text` |
+| omitted | If the class declares an attribute literally named `display_name` with type **exactly** `compact_text`, that attribute is used; otherwise the class has no display attribute |
+| `display_attribute: null` | Explicit opt-out: no display identity (suppresses the implicit `display_name` default) |
+| `display_attribute: some_attr` | Must be a declared snake_case attribute whose type is exactly `compact_text` |
 
 Invalid explicit values (missing attribute, wrong type including deprecated
-`string` / `text` / `friendly-id`, non-kebab, non-string) fail definition
+`string` / `text` / `friendly_id`, non-snake, non-string) fail definition
 loading/generation with an error that identifies the class, value, and reason.
 
 This metadata is **presentation/protocol only**: it is emitted on generated
@@ -182,11 +187,11 @@ constraints, schema hashes, migrate plans, or DDL.
 API exposure decision. Callers who may read a *referencing* record receive that
 one target field as limited identity even without permission to read the target
 record itself. Do not point it at secret material merely because the field is
-`compact-text` (for example never `password-hash`). Use explicit `null` when
+`compact_text` (for example never `password_hash`). Use explicit `null` when
 exposure is inappropriate.
 
 On the wire, the stable member name is always `display_name` regardless of which
-`compact-text` attribute the metadata names.
+`compact_text` attribute the metadata names.
 
 The platform definition set **requires** the system `user` class. Missing `user`
 fails full-platform generation, migrate planning/application, and API/runtime
@@ -195,27 +200,27 @@ bootstrap. Audit foreign keys always target `user`.
 Optional attribute flag: `unique: true` adds a unique index on that column
 (e.g. `user.username`).
 
-Optional numeric bounds: `min-value` / `max-value` on `integer`, `float`, or
+Optional numeric bounds: `min_value` / `max_value` on `integer`, `float`, or
 `decimal` attributes. Enforced on generated Pydantic/Zod **create and update**
 models only (not on the full/read model). Omit either key independently; reject
-`min-value` > `max-value` at definition load.
+`min_value` > `max_value` at definition load.
 
 ### Well-known substitution (`${…}`)
 
-YAML string values that opt into substitution may contain `${kebab-name}` tokens
+YAML string values that opt into substitution may contain `${snake_name}` tokens
 resolved from a single catalog (`untangled.mapping.well_known`).
 
-- **Names** are kebab-case. Registered now:
-  - `${system-config-id}` (stable singleton UUID
+- **Names** are snake_case. Registered now:
+  - `${system_config_id}` (stable singleton UUID
     `01900000-0000-7000-8000-000000000050`)
-  - `${system-user-id}` (platform attribution principal UUID
+  - `${system_user_id}` (platform attribution principal UUID
     `01900000-0000-7000-8000-000000000006`; not available in substitution
     contexts yet)
 - **Resolution is per context**, not per variable. Each context declares which
   names are available and when evaluation runs.
-  - `check-constraint`: available `${system-config-id}`; evaluate at definition
+  - `check_constraint`: available `${system_config_id}`; evaluate at definition
     load (before Schema IR / migrate DDL).
-  - `nav-bar`: available `${system-config-id}`; evaluate when product nav YAML
+  - `nav_bar`: available `${system_config_id}`; evaluate when product nav YAML
     is loaded (`load_default_nav`). Generated `WELL_KNOWN` /
     `SUBSTITUTION_CONTEXTS` in `frontend/app/generated/well_known.ts` are the
     allowlist source; the FE apply helper fails closed like Python.
@@ -228,35 +233,35 @@ resolved from a single catalog (`untangled.mapping.well_known`).
   copy the UUID literal.
 
 SQL check expressions stay snake_case identifiers with `${…}` only for literals,
-for example `id = '${system-config-id}'::uuid`.
+for example `id = '${system_config_id}'::uuid`.
 
 ### Many-to-many joins
 
 There is no dedicated M2M YAML syntax. Model join tables as **first-class
 classes** with their own UUID primary keys and `references:` foreign keys (see
-`user-role.yaml` / `role-permission.yaml`). Composite uniqueness on join pairs
+`user_role.yaml` / `role_permission.yaml`). Composite uniqueness on join pairs
 is not expressible in YAML today; seeds and application logic keep pairs
 idempotent via stable row ids.
 
 Non-HTTP writes stamp `created_by` / `updated_by` with `SYSTEM_USER_ID`
-(`${system-user-id}` / `untangled.mapping.well_known`). That is a **platform
+(`${system_user_id}` / `untangled.mapping.well_known`). That is a **platform
 attribution principal**, not a login account and not the seeded admin. Migrate
 always ensures the `system` user row (including no-op schema plans): inactive,
 unusable password verifier, no roles. It also upserts before audit `ADD FOREIGN
 KEY` so existing system-actor stamps do not block the constraint. Do not
 activate this principal; future user-admin UI must not treat it as a
 reactivatable deactivated human. Migrate also insert-once ensures the
-`system-config` singleton (`SYSTEM_CONFIG_ID`), attributed with this principal,
+`system_config` singleton (`SYSTEM_CONFIG_ID`), attributed with this principal,
 and never overwrites operator updates on re-migrate. Full local **login**
 credentials still come from **`make seed`**. Protected domain APIs should pass
 the authenticated principal.
 
 ### System configuration class
 
-`system-config` is the durable home for **general, non-sensitive,
+`system_config` is the durable home for **general, non-sensitive,
 environment-local system settings** (operators may tune per deployment without
 a Git promote cycle). It is `public: true` (authenticated read without
-`system-config:read`), with create/delete/search suppressed. Fetch and
+`system_config:read`), with create/delete/search suppressed. Fetch and
 unversioned update use the shared router factory like other mounted classes.
 Among seed roles, only `admin` can update (no dedicated permission grants).
 
@@ -268,7 +273,7 @@ Initial attributes (YAML min/max on create/update; list will grow):
 | `max-search-nesting-length` | 20 | Max children in one logical `and`/`or` predicates array |
 | `max-search-total-predicates` | 50 | Max predicates counted recursively |
 | `max-search-total-regexp` | 3 | Max regexp predicates in a search tree |
-| `system-config-cache-ttl-seconds` | 900 | In-process helper cache TTL |
+| `system_config-cache-ttl-seconds` | 900 | In-process helper cache TTL |
 
 In-process helpers (`untangled.system_config`) always address the well-known id,
 **fail closed** if the row is unreadable (no fabricated defaults), and **clamp**
@@ -282,7 +287,7 @@ total regexp): breach → **422**; unreadable config → search refuses (**503**
 Search-editor progressive limit UX remains #152. The product nav includes a
 top-level **System Configuration**
 `section-type: object` entry with a real detail href to the singleton
-(`${system-config-id}`), visible when the user can read the class (`public` /
+(`${system_config_id}`), visible when the user can read the class (`public` /
 `{class}:read` / `admin`). Default post-login landing remains list-oriented and
 does not treat object sections as a home route.
 
@@ -294,11 +299,11 @@ Relevant follow-ups: #117 (legacy read removal), #139 (audit), #146 (auto-mount)
 
 | Layer | Convention | Example |
 | ----- | ---------- | ------- |
-| YAML keys / filenames / `name` | kebab-case | `demo-item`, `display-name` |
+| YAML keys / filenames / `name` | snake_case | `demo_item`, `display_name` |
 | SQL / JSON / JS / Python identifiers | snake_case | `demo_item`, `created_at` |
 | Generated class / schema type names | PascalCase | `DemoItem`, `DemoItemSchema` |
 
-Maps: `demo-item` ↔ `demo_item` ↔ `DemoItem`.
+Class `name` and attribute names use snake_case end-to-end; generated language types use PascalCase (`DemoItem`).
 
 ## Define or update a class
 
@@ -385,9 +390,9 @@ not automate dumps or retention.
 ## Persistence write rules
 
 - **Create:** generate UUIDv7 `id`; stamp `created_at`, `updated_at`, `created_by`,
-  `updated_by`; assign `friendly-id` via sequence when the class defines one.
+  `updated_by`; assign `friendly_id` via sequence when the class defines one.
 - **Update:** stamp `updated_at` and `updated_by` only; leave `id`, `created_*`,
-  and friendly-id unchanged.
+  and friendly_id unchanged.
 - Datetimes are stored as `timestamptz` UTC and exposed as UTC on mapped
   attributes / JSON.
 

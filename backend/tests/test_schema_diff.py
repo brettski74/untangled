@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from untangled.mapping.types_snake import TEXT_STORAGE_FAMILY
+from untangled.mapping.types import TEXT_STORAGE_FAMILY
 from untangled.persistence.sql_types import postgres_type
 from untangled.schema.diff import diff_schemas
 from untangled.schema.ir import CheckIR, ColumnIR, ForeignKeyIR, SchemaIR, TableIR
@@ -228,7 +228,7 @@ def test_display_attribute_metadata_does_not_change_schema_hash(
 ) -> None:
     from dataclasses import replace
 
-    from untangled.mapping.definition_snake import load_definitions
+    from untangled.mapping.definition import load_definitions
     from untangled.schema.from_yaml import desired_schema_from_classes
     from untangled.schema.hash import schema_hash
 
@@ -250,7 +250,7 @@ def test_string_to_text_family_retarget_preserves_schema_hash(
     """Whole-tree retarget from deprecated ``string`` keeps migrate Schema IR identical."""
     from dataclasses import replace
 
-    from untangled.mapping.definition_snake import load_definitions
+    from untangled.mapping.definition import load_definitions
     from untangled.schema.from_yaml import desired_schema_from_classes
     from untangled.schema.hash import schema_hash
 

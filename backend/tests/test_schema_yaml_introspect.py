@@ -36,7 +36,7 @@ _MANAGED = {
 def test_desired_schema_includes_yaml_check_constraints(repo_definitions: Path) -> None:
     from dataclasses import replace
 
-    from untangled.mapping.definition_snake import load_definitions
+    from untangled.mapping.definition import load_definitions
     from untangled.schema.from_yaml import desired_schema_from_classes
     from untangled.schema.ir import CheckIR
 

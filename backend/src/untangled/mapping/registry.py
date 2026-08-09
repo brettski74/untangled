@@ -6,7 +6,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from untangled.mapping.definition_snake import (
+from untangled.mapping.definition import (
     ClassDefinition,
     load_definitions,
     validate_platform_definitions,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from untangled.mapping.types_snake import SUPPORTED_TYPES, TEXT_STORAGE_FAMILY
+from untangled.mapping.types import SUPPORTED_TYPES, TEXT_STORAGE_FAMILY
 
 # Keep in lockstep with docs/class-definitions.md type vocabulary.
 YAML_TO_POSTGRES: dict[str, str] = {
