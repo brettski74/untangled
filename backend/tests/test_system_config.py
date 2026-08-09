@@ -69,9 +69,7 @@ def _drop_managed(conn: Connection, repo_definitions: Path) -> None:
 def test_system_config_definition_flags(repo_definitions: Path) -> None:
     defn = load_definition(repo_definitions / "system_config.yaml")
     assert defn.public is True
-    assert defn.suppress_create is True
-    assert defn.suppress_delete is True
-    assert defn.suppress_search is True
+    assert defn.permissions == ("read", "update")
     assert defn.check_constraints == (
         f"id = '{SYSTEM_CONFIG_ID}'::uuid",
         "password_maximum_chars > password_minimum_chars",

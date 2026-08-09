@@ -6,6 +6,12 @@ display_name: Demo Item
 description: >
   Minimal fixture class used to prove YAML definitions through Pydantic/Zod
   generation and PostgreSQL persistence. Not a product ticket type.
+permissions:
+  - create
+  - read
+  - search
+  - update
+  - delete
 attributes:
   title:
     type: compact_text

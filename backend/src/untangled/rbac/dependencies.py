@@ -68,10 +68,11 @@ def require_class_operation(
     class_name: str,
     operation: str,
 ) -> Callable[..., dict[str, Any]]:
-    """Dependency factory: require ``{class}:{operation}`` (or ``admin`` / ``public`` read).
+    """Dependency factory: require ``{class}:{operation}`` (or ``admin`` / ``public``).
 
     ``class_name`` is the live class ``name``; used unaltered for permission keys
-    and definition lookup.
+    and definition lookup. ``public`` classes grant authenticated read and search
+    without the matching ``{class}:{op}`` grant.
     """
 
     def _dependency(
@@ -80,7 +81,7 @@ def require_class_operation(
         permissions: EffectivePermissions,
     ) -> dict[str, Any]:
         public = False
-        if operation == "read":
+        if operation in ("read", "search"):
             public = class_definition(class_name).public
         if not class_operation_granted(
             permissions, class_name, operation, public=public

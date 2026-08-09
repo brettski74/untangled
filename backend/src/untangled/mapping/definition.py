@@ -63,6 +63,14 @@ class AttributeDefinition:
     start_at: int | None = None
 
 
+# Standard record operations: declaring one mounts the matching generic endpoint
+# and seeds ``{class}:{op}``. Additional snake_case names are class-scoped custom
+# permissions (catalog only; no generic mount).
+STANDARD_PERMISSIONS: frozenset[str] = frozenset(
+    {"create", "read", "update", "delete", "search"}
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ClassDefinition:
     """Normalized class definition loaded from YAML."""
@@ -75,9 +83,8 @@ class ClassDefinition:
     # Class-scoped display identity attribute (exact compact_text), or None.
     display_attribute: AttributeDefinition | None = None
     public: bool = False
-    suppress_create: bool = False
-    suppress_delete: bool = False
-    suppress_search: bool = False
+    # Declared permission names (standard ops and optional custom snake_case).
+    permissions: tuple[str, ...] = ()
     # Resolved SQL check expressions (``${…}`` already substituted).
     check_constraints: tuple[str, ...] = ()
 
@@ -87,6 +94,10 @@ class ClassDefinition:
             if attr.type_name == "friendly_id":
                 return attr
         return None
+
+    def has_permission(self, name: str) -> bool:
+        """Return True if ``name`` is in the declared permissions list."""
+        return name in self.permissions
 
 
 def load_definitions(definitions_dir: Path) -> list[ClassDefinition]:
@@ -347,9 +358,7 @@ def load_definition(path: Path) -> ClassDefinition:
         "attributes",
         "display_attribute",
         "public",
-        "suppress_create",
-        "suppress_delete",
-        "suppress_search",
+        "permissions",
         "check_constraint",
     }
     if unknown_top:
@@ -359,9 +368,12 @@ def load_definition(path: Path) -> ClassDefinition:
         path, name, attributes, raw.get("display_attribute", _DISPLAY_ATTRIBUTE_OMITTED)
     )
     public = _parse_optional_bool(path, "public", raw)
-    suppress_create = _parse_optional_bool(path, "suppress_create", raw)
-    suppress_delete = _parse_optional_bool(path, "suppress_delete", raw)
-    suppress_search = _parse_optional_bool(path, "suppress_search", raw)
+    permissions = _parse_permissions(path, raw)
+    if public and "read" not in permissions and "search" not in permissions:
+        raise DefinitionError(
+            f"{path}: public: true requires declaring 'read' and/or 'search' "
+            f"in permissions"
+        )
     check_constraints = _parse_check_constraints(path, raw)
 
     return ClassDefinition(
@@ -372,9 +384,7 @@ def load_definition(path: Path) -> ClassDefinition:
         source_path=path,
         display_attribute=display_attribute,
         public=public,
-        suppress_create=suppress_create,
-        suppress_delete=suppress_delete,
-        suppress_search=suppress_search,
+        permissions=permissions,
         check_constraints=check_constraints,
     )
 
@@ -464,6 +474,35 @@ def _parse_optional_bool(path: Path, key: str, raw: dict[object, object]) -> boo
     if not isinstance(value, bool):
         raise DefinitionError(f"{path}: '{key}' must be a boolean")
     return value
+
+
+def _parse_permissions(path: Path, raw: dict[object, object]) -> tuple[str, ...]:
+    if "permissions" not in raw:
+        return ()
+    value = raw["permissions"]
+    if not isinstance(value, list):
+        raise DefinitionError(f"{path}: 'permissions' must be a list of strings")
+    names: list[str] = []
+    seen: set[str] = set()
+    for index, entry in enumerate(value, start=1):
+        if not isinstance(entry, str) or not entry.strip():
+            raise DefinitionError(
+                f"{path}: 'permissions' entry {index} must be a non-empty string"
+            )
+        name = entry.strip()
+        try:
+            _require_snake(name, path, f"permissions[{index}]")
+        except DefinitionError as exc:
+            raise DefinitionError(
+                f"{path}: 'permissions' entry {index} {name!r} is not snake_case"
+            ) from exc
+        if name in seen:
+            raise DefinitionError(
+                f"{path}: duplicate permission name {name!r} in permissions"
+            )
+        seen.add(name)
+        names.append(name)
+    return tuple(names)
 
 
 def _parse_check_constraints(path: Path, raw: dict[object, object]) -> tuple[str, ...]:

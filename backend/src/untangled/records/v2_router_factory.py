@@ -14,7 +14,8 @@ from untangled.audit.volume import note_search
 from untangled.auth.dependencies import DbConn
 from untangled.coherence import notify_system_config_changed
 from untangled.persistence.search import SearchNestingLimits
-from untangled.rbac.dependencies import require_class_operation
+from untangled.rbac.dependencies import EffectivePermissions, require_class_operation
+from untangled.rbac.keys import class_operation_granted
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
 from untangled.records.read_protocol import (
     EnrichedSearchResponse,
@@ -52,8 +53,9 @@ def build_v2_class_router(
     update_cls: type[BaseModel] = model(class_name, "Update")
     definition = class_definition(class_name)
     router = APIRouter(prefix=prefix, tags=tags)
+    declared = frozenset(definition.permissions)
 
-    if not definition.suppress_create:
+    if "create" in declared:
 
         @router.post(
             "",
@@ -98,15 +100,11 @@ def build_v2_class_router(
                             event_type=EventType.RECORD_DELETE,
                             actor_channel=ActorChannel.SYSTEM,
                             outcome=Outcome.SUCCESS,
-                            reason="compensate_audit_failure",
+                            reason="compensate_delete_after_audit_failure",
                             severity=Severity.ERROR,
                             user_id=user["id"],
                             ip_address=client_ip(request),
-                            data={
-                                "class": class_name,
-                                "locator": str(row_id),
-                                "compensate": True,
-                            },
+                            data={"class": class_name, "locator": str(row_id)},
                         )
                     )
                     store.delete(row_id)
@@ -122,7 +120,7 @@ def build_v2_class_router(
             assert isinstance(row, dict)
             return serialize_enriched_record(row)
 
-    if not definition.suppress_search:
+    if "search" in declared:
 
         @router.post(
             "/search",
@@ -131,7 +129,8 @@ def build_v2_class_router(
             description=(
                 "Versioned search. Projected foreign-key fields are identity "
                 "objects with canonical id plus configured display_name / "
-                "friendly_id. Path tracks live class name."
+                "friendly_id when the caller has effective class read. Path "
+                "tracks live class name."
             ),
             operation_id=f"{class_name}_v2_search",
         )
@@ -140,8 +139,9 @@ def build_v2_class_router(
             body: SearchRequest,
             conn: DbConn,
             user: Annotated[
-                dict[str, Any], Depends(require_class_operation(class_name, "read"))
+                dict[str, Any], Depends(require_class_operation(class_name, "search"))
             ],
+            permissions: EffectivePermissions,
         ) -> EnrichedSearchResponse:
             store = record_store(conn, class_name, actor_id=user["id"])
             sort_keys = (
@@ -154,6 +154,12 @@ def build_v2_class_router(
                 ]
                 if body.sort is not None
                 else None
+            )
+            effective_read = class_operation_granted(
+                permissions,
+                class_name,
+                "read",
+                public=definition.public,
             )
             try:
                 config = get_system_config(conn)
@@ -170,7 +176,8 @@ def build_v2_class_router(
                     attributes=body.attributes,
                     limit=body.limit,
                     offset=body.offset,
-                    enrich_fk_identity=True,
+                    enrich_fk_identity=effective_read,
+                    id_only_attributes=not effective_read,
                 )
             except SystemConfigUnreadableError as exc:
                 raise HTTPException(
@@ -227,128 +234,132 @@ def build_v2_class_router(
             )
             return response
 
-    @router.get(
-        "/{locator}",
-        summary="Fetch one record with FK identity enrichment",
-        description=(
-            "Versioned fetch. All foreign-key fields (including audit "
-            "created_by / updated_by) are identity objects. Path tracks live "
-            "class name."
-        ),
-        operation_id=f"{class_name}_v2_fetch",
-    )
-    def fetch_record(
-        request: Request,
-        locator: str,
-        conn: DbConn,
-        user: Annotated[
-            dict[str, Any], Depends(require_class_operation(class_name, "read"))
-        ],
-    ) -> Any:
-        record_def = class_definition(class_name)
-        store = record_store(conn, class_name, actor_id=user["id"])
-        row = fetch_by_locator(
-            store, record_def, locator, enrich_fk_identity=True
-        )
-        emit_best_effort(
-            make_event(
-                event_type=EventType.RECORD_FETCH,
-                actor_channel=ActorChannel.HUMAN,
-                outcome=Outcome.SUCCESS,
-                reason="fetch_ok",
-                severity=Severity.INFO,
-                user_id=user["id"],
-                ip_address=client_ip(request),
-                data={"class": class_name, "locator": locator},
-            )
-        )
-        assert isinstance(row, dict)
-        return serialize_enriched_record(row)
+    if "read" in declared:
 
-    @router.patch(
-        "/{locator}",
-        summary="Update one record with FK identity enrichment",
-        description=(
-            "Versioned update. Request body uses scalar foreign-key UUIDs. The "
-            "response is the full updated record with the same FK identity "
-            "enrichment as versioned fetch (including audit created_by / "
-            "updated_by). Path tracks live class name."
-        ),
-        operation_id=f"{class_name}_v2_update",
-    )
-    def update_record(
-        request: Request,
-        locator: str,
-        body: update_cls,
-        conn: DbConn,
-        user: Annotated[
-            dict[str, Any], Depends(require_class_operation(class_name, "update"))
-        ],
-    ) -> Any:
-        record_def = class_definition(class_name)
-        store = record_store(conn, class_name, actor_id=user["id"])
-        existing = fetch_by_locator(store, record_def, locator)
-        before = existing.model_dump()
-        patch = body.model_dump(exclude_unset=True)
-        try:
-            updated = store.update(existing.id, patch)
-        except KeyError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"{class_name} not found",
-            ) from exc
-        if class_name == "system_config":
-            notify_system_config_changed()
-        try:
-            emit_fail_closed(
+        @router.get(
+            "/{locator}",
+            summary="Fetch one record with FK identity enrichment",
+            description=(
+                "Versioned fetch. All foreign-key fields (including audit "
+                "created_by / updated_by) are identity objects. Path tracks live "
+                "class name."
+            ),
+            operation_id=f"{class_name}_v2_fetch",
+        )
+        def fetch_record(
+            request: Request,
+            locator: str,
+            conn: DbConn,
+            user: Annotated[
+                dict[str, Any], Depends(require_class_operation(class_name, "read"))
+            ],
+        ) -> Any:
+            record_def = class_definition(class_name)
+            store = record_store(conn, class_name, actor_id=user["id"])
+            row = fetch_by_locator(
+                store, record_def, locator, enrich_fk_identity=True
+            )
+            emit_best_effort(
                 make_event(
-                    event_type=EventType.RECORD_UPDATE,
+                    event_type=EventType.RECORD_FETCH,
                     actor_channel=ActorChannel.HUMAN,
                     outcome=Outcome.SUCCESS,
-                    reason="update_ok",
+                    reason="fetch_ok",
                     severity=Severity.INFO,
                     user_id=user["id"],
                     ip_address=client_ip(request),
-                    data={
-                        "class": class_name,
-                        "locator": str(existing.id),
-                        "fields": sorted(patch.keys()),
-                    },
+                    data={"class": class_name, "locator": locator},
                 )
             )
-        except AuditWriteError as exc:
+            assert isinstance(row, dict)
+            return serialize_enriched_record(row)
+
+    if "update" in declared:
+
+        @router.patch(
+            "/{locator}",
+            summary="Update one record with FK identity enrichment",
+            description=(
+                "Versioned update. Request body uses scalar foreign-key UUIDs. The "
+                "response is the full updated record with the same FK identity "
+                "enrichment as versioned fetch (including audit created_by / "
+                "updated_by). Path tracks live class name."
+            ),
+            operation_id=f"{class_name}_v2_update",
+        )
+        def update_record(
+            request: Request,
+            locator: str,
+            body: update_cls,
+            conn: DbConn,
+            user: Annotated[
+                dict[str, Any], Depends(require_class_operation(class_name, "update"))
+            ],
+        ) -> Any:
+            record_def = class_definition(class_name)
+            store = record_store(conn, class_name, actor_id=user["id"])
+            existing = fetch_by_locator(store, record_def, locator)
+            before = existing.model_dump()
+            patch = body.model_dump(exclude_unset=True)
             try:
-                restore = {
-                    k: before[k]
-                    for k in patch
-                    if k in before and k not in ("id", "created_at", "created_by")
-                }
-                store.update(existing.id, restore)
+                updated = store.update(existing.id, patch)
+            except KeyError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"{class_name} not found",
+                ) from exc
+            if class_name == "system_config":
+                notify_system_config_changed()
+            try:
                 emit_fail_closed(
                     make_event(
-                        event_type=EventType.AUDIT_COMPENSATE,
-                        actor_channel=ActorChannel.SYSTEM,
+                        event_type=EventType.RECORD_UPDATE,
+                        actor_channel=ActorChannel.HUMAN,
                         outcome=Outcome.SUCCESS,
-                        reason="compensate_restore_after_audit_failure",
-                        severity=Severity.ERROR,
+                        reason="update_ok",
+                        severity=Severity.INFO,
                         user_id=user["id"],
                         ip_address=client_ip(request),
-                        data={"class": class_name, "locator": str(existing.id)},
+                        data={
+                            "class": class_name,
+                            "locator": str(existing.id),
+                            "fields": sorted(patch.keys()),
+                        },
                     )
                 )
-            except Exception:
-                pass
-            raise _audit_http_500(exc) from exc
-        row = store.fetch_by_id(updated.id, enrich_fk_identity=True)
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"{class_name} not found",
-            )
-        assert isinstance(row, dict)
-        return serialize_enriched_record(row)
+            except AuditWriteError as exc:
+                try:
+                    restore = {
+                        k: before[k]
+                        for k in patch
+                        if k in before and k not in ("id", "created_at", "created_by")
+                    }
+                    store.update(existing.id, restore)
+                    emit_fail_closed(
+                        make_event(
+                            event_type=EventType.AUDIT_COMPENSATE,
+                            actor_channel=ActorChannel.SYSTEM,
+                            outcome=Outcome.SUCCESS,
+                            reason="compensate_restore_after_audit_failure",
+                            severity=Severity.ERROR,
+                            user_id=user["id"],
+                            ip_address=client_ip(request),
+                            data={"class": class_name, "locator": str(existing.id)},
+                        )
+                    )
+                except Exception:
+                    pass
+                raise _audit_http_500(exc) from exc
+            row = store.fetch_by_id(updated.id, enrich_fk_identity=True)
+            if row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"{class_name} not found",
+                )
+            assert isinstance(row, dict)
+            return serialize_enriched_record(row)
 
-    if not definition.suppress_delete:
+    if "delete" in declared:
 
         @router.delete(
             "/{locator}",

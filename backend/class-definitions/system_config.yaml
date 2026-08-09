@@ -8,9 +8,9 @@ description: >
   Search-limit attributes are the initial contents; the class is expected to
   grow. Secrets must not live here.
 public: true
-suppress_create: true
-suppress_delete: true
-suppress_search: true
+permissions:
+  - read
+  - update
 check_constraint:
   - "id = '${system_config_id}'::uuid"
   - "password_maximum_chars > password_minimum_chars"

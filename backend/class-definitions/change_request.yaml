@@ -6,6 +6,12 @@ description: >
   string in M1; documented status vocabulary (progression) is draft →
   scheduled → in-progress → implemented → closed, plus terminal off-ramp
   cancelled.
+permissions:
+  - create
+  - read
+  - search
+  - update
+  - delete
 attributes:
   number:
     type: friendly_id
