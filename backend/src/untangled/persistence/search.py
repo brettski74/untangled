@@ -40,10 +40,10 @@ IMPLEMENTED_OPS: frozenset[str] = frozenset(
         "lt",
         "lte",
         "empty",
-        "not-empty",
+        "not_empty",
         "contains",
-        "starts-with",
-        "ends-with",
+        "starts_with",
+        "ends_with",
         "regexp",
     }
 )
@@ -80,8 +80,7 @@ _ORDERED_SQL = {
     "lt": sql.SQL("<"),
     "lte": sql.SQL("<="),
 }
-# Search ``op`` tokens remain kebab until child 4 (#189).
-_TEXT_PATTERN_OPS = frozenset({"contains", "starts-with", "ends-with", "regexp"})
+_TEXT_PATTERN_OPS = frozenset({"contains", "starts_with", "ends_with", "regexp"})
 _TEXT_PATTERN_TYPES = frozenset({*_TEXT_FAMILY_SEARCH_TYPES, "friendly_id"})
 _LIKE_ESCAPE_CHAR = "\\"
 
@@ -546,7 +545,7 @@ def _compile_comparison(
     raw = node["value"]
     if raw is None:
         raise SearchSemanticError(
-            f"{op!r} does not accept value: null; use empty / not-empty for null checks"
+            f"{op!r} does not accept value: null; use empty / not_empty for null checks"
         )
     typed = _coerce_value(attr, raw)
     params.append(typed)
@@ -578,7 +577,7 @@ def _compile_ordered_comparison(
     raw = node["value"]
     if raw is None:
         raise SearchSemanticError(
-            f"{op!r} does not accept value: null; use empty / not-empty for null checks"
+            f"{op!r} does not accept value: null; use empty / not_empty for null checks"
         )
     typed = _coerce_value(attr, raw)
     params.append(typed)
@@ -629,7 +628,7 @@ def _compile_text_pattern(
     raw = node["value"]
     if raw is None:
         raise SearchSemanticError(
-            f"{op!r} does not accept value: null; use empty / not-empty for null checks"
+            f"{op!r} does not accept value: null; use empty / not_empty for null checks"
         )
     typed = _coerce_value(attr, raw)
     if not isinstance(typed, str):
@@ -644,7 +643,7 @@ def _compile_text_pattern(
     escaped = _escape_like_literal(typed)
     if op == "contains":
         pattern = f"%{escaped}%"
-    elif op == "starts-with":
+    elif op == "starts_with":
         pattern = f"{escaped}%"
     else:
         pattern = f"%{escaped}"

@@ -18,11 +18,11 @@ export const OPERATOR_DISPLAY_NAMES: Record<string, string> = {
   lt: "Less than",
   lte: "Less than or equal",
   contains: "Contains",
-  "starts-with": "Starts with",
-  "ends-with": "Ends with",
+  starts_with: "Starts with",
+  ends_with: "Ends with",
   regexp: "Matches regexp",
   empty: "Is empty",
-  "not-empty": "Is not empty",
+  not_empty: "Is not empty",
 };
 
 const TEXT_FAMILY = new Set([
@@ -45,7 +45,7 @@ const ORDERED_TYPES = new Set([
 
 const TEXT_PATTERN_TYPES = new Set([...TEXT_FAMILY, "friendly_id"]);
 
-const NULL_CHECK_OPS = ["empty", "not-empty"] as const;
+const NULL_CHECK_OPS = ["empty", "not_empty"] as const;
 const NO_VALUE_OPS = new Set<string>(NULL_CHECK_OPS);
 
 export type EditorLeaf = {
@@ -115,7 +115,7 @@ export function compare_display_name(left: string, right: string): number {
  * Leaf / empty-group ops valid for an attribute type (excludes and/or/not).
  */
 export function leaf_ops_for_type(type_name: string): string[] {
-  const ops = new Set<string>(["eq", "ne", "empty", "not-empty"]);
+  const ops = new Set<string>(["eq", "ne", "empty", "not_empty"]);
   if (ORDERED_TYPES.has(type_name)) {
     ops.add("gt");
     ops.add("gte");
@@ -124,8 +124,8 @@ export function leaf_ops_for_type(type_name: string): string[] {
   }
   if (TEXT_PATTERN_TYPES.has(type_name)) {
     ops.add("contains");
-    ops.add("starts-with");
-    ops.add("ends-with");
+    ops.add("starts_with");
+    ops.add("ends_with");
     ops.add("regexp");
   }
   return [...ops].sort((a, b) =>
@@ -200,14 +200,14 @@ function eligible_ops_for_empty_or_leaf(args: {
       "eq",
       "ne",
       "empty",
-      "not-empty",
+      "not_empty",
       "gt",
       "gte",
       "lt",
       "lte",
       "contains",
-      "starts-with",
-      "ends-with",
+      "starts_with",
+      "ends_with",
       "regexp",
     ]) {
       ops.add(op);

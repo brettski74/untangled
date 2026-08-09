@@ -74,13 +74,13 @@ function render_node(node: SearchPredicate, ctx: AttrRenderCtx): string {
       return render_regexp(node, ctx);
     case "contains":
       return render_text_pattern("contains", node, ctx);
-    case "ends-with":
-      return render_text_pattern("ends-with", node, ctx);
-    case "starts-with":
-      return render_text_pattern("starts-with", node, ctx);
+    case "ends_with":
+      return render_text_pattern("ends_with", node, ctx);
+    case "starts_with":
+      return render_text_pattern("starts_with", node, ctx);
     case "empty":
       return `${attr_name(node.attribute, ctx)} is empty`;
-    case "not-empty":
+    case "not_empty":
       return `${attr_name(node.attribute, ctx)} is not empty`;
     default:
       return "";

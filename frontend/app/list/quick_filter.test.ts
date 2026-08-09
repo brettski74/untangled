@@ -217,7 +217,7 @@ describe("and_predicates", () => {
 });
 
 describe("build_quick_filter_predicates", () => {
-  it("builds contains for text and ends-with for friendly_id", () => {
+  it("builds contains for text and ends_with for friendly_id", () => {
     expect(
       build_quick_filter_predicates(
         attr({ name_snake: "summary", type_name: "text", order: 0 }),
@@ -237,7 +237,7 @@ describe("build_quick_filter_predicates", () => {
     ).toEqual({
       ok: true,
       predicates: [
-        { op: "ends-with", attribute: "number", value: "0001" },
+        { op: "ends_with", attribute: "number", value: "0001" },
       ],
     });
   });

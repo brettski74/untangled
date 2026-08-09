@@ -203,7 +203,7 @@ export function build_quick_filter_predicates(
       return {
         ok: true,
         predicates: [
-          { op: "ends-with", attribute: attr.name_snake, value: text },
+          { op: "ends_with", attribute: attr.name_snake, value: text },
         ],
       };
     }
