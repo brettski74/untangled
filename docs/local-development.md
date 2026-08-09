@@ -6,7 +6,7 @@ For iterative coding with hot reload, use `make backend-dev` / `make frontend-de
 
 Schema apply and baseline seed are **intentional**: after `make up`, run `make migrate` then `make seed`. Neither runs automatically on Compose start.
 
-Published GHCR images (optional; not used by default Compose `build:`) and GitHub Actions product CI are documented in [container-images.md](./container-images.md). Shared Rocky deploy automation (separate from local Compose) is in [rocky-deploy.md](./rocky-deploy.md).
+Shared-host GHCR publish / Rocky deploy notes are local-only (gitignored): `docs/container-images.md` and `docs/rocky-deploy.md` when present on your machine.
 
 ## Prerequisites
 
