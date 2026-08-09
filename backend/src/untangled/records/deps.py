@@ -94,32 +94,32 @@ class _DefinitionsByName:
 _definitions_by_name = _DefinitionsByName()
 
 
-def class_definition(class_kebab: str) -> ClassDefinition:
-    """Return the loaded class definition for ``class_kebab``."""
-    return class_registry.class_definition(class_kebab)
+def class_definition(class_name: str) -> ClassDefinition:
+    """Return the loaded class definition for live class ``name``."""
+    return class_registry.class_definition(class_name)
 
 
-def model(class_kebab: str, suffix: str = "") -> type[BaseModel]:
+def model(class_name: str, suffix: str = "") -> type[BaseModel]:
     """Return a generated Pydantic model (full, Create, or Update)."""
     ensure_generated_package()
     from untangled import generated as gen  # type: ignore[attr-defined]
 
-    pascal = snake_to_pascal(class_definition(class_kebab).name_snake)
+    pascal = snake_to_pascal(class_definition(class_name).name_snake)
     return getattr(gen, f"{pascal}{suffix}")
 
 
 def record_store(
     conn: Connection,
-    class_kebab: str,
+    class_name: str,
     *,
     actor_id: UUID,
 ) -> RecordStore[Any]:
-    """Build a RecordStore for ``class_kebab`` with the authenticated actor."""
-    definition = class_definition(class_kebab)
+    """Build a RecordStore for ``class_name`` with the authenticated actor."""
+    definition = class_definition(class_name)
     return RecordStore(
         conn,
         definition,
-        model(class_kebab),
+        model(class_name),
         actor_id=actor_id,
         definitions_by_name=_definitions_by_name(),
     )

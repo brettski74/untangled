@@ -22,7 +22,7 @@ def build_v2_record_routers() -> list[APIRouter]:
         name = definition.name_snake
         routers.append(
             build_v2_class_router(
-                class_kebab=name,
+                class_name=name,
                 prefix=f"/api/v2/{name}",
                 tags=[f"{name}-v2"],
             )

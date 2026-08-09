@@ -1,4 +1,4 @@
-"""Hand-authored v1 read-protocol models for FK identity enrichment."""
+"""FK identity enrichment wire models for record read responses."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from untangled.records.search_models import SearchResponse
 
 
 class FkIdentity(BaseModel):
-    """Wire identity object for a non-null foreign key on ``/api/v1`` reads."""
+    """Wire identity object for a non-null foreign key on enriched reads."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -22,8 +22,8 @@ class FkIdentity(BaseModel):
     friendly_id: str | None = None
 
 
-class V1SearchResponse(SearchResponse):
-    """Search envelope for ``/api/v1`` (items may nest ``FkIdentity`` objects)."""
+class EnrichedSearchResponse(SearchResponse):
+    """Search envelope whose items may nest ``FkIdentity`` objects."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -36,7 +36,7 @@ class V1SearchResponse(SearchResponse):
 
 
 def related_identity_to_wire(value: RelatedIdentity) -> dict[str, Any]:
-    """Convert a neutral RelatedIdentity into the v1 wire object."""
+    """Convert a neutral RelatedIdentity into the FK identity wire object."""
     out: dict[str, Any] = {"id": str(value.id)}
     if value.has_display:
         out["display_name"] = value.display_value
@@ -45,8 +45,8 @@ def related_identity_to_wire(value: RelatedIdentity) -> dict[str, Any]:
     return out
 
 
-def serialize_v1_record(record: dict[str, Any]) -> dict[str, Any]:
-    """Map persistence enriched row values to v1 wire shapes."""
+def serialize_enriched_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Map persistence enriched row values to FK identity wire shapes."""
     out: dict[str, Any] = {}
     for key, value in record.items():
         if isinstance(value, RelatedIdentity):
@@ -56,6 +56,6 @@ def serialize_v1_record(record: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def serialize_v1_search_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Map enriched search items to v1 wire shapes."""
-    return [serialize_v1_record(item) for item in items]
+def serialize_enriched_search_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Map enriched search items to FK identity wire shapes."""
+    return [serialize_enriched_record(item) for item in items]

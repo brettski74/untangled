@@ -57,7 +57,7 @@ def resolve_fk_fields(
     definition: ClassDefinition,
     projected_columns: list[str],
 ) -> list[tuple[str, str]]:
-    """Return ``(source_column, target_class_kebab)`` for projected FK fields."""
+    """Return ``(source_column, target_class_name)`` for projected FK fields."""
     projected = set(projected_columns)
     out: list[tuple[str, str]] = []
     for attr in definition.attributes:
@@ -205,7 +205,7 @@ def map_enriched_row(
     return out
 
 
-def target_class_kebab_for_column(
+def target_class_name_for_column(
     definition: ClassDefinition,
     column: str,
 ) -> str | None:
