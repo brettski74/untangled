@@ -33,7 +33,7 @@ Cookie `maxAge` is derived from the access JWT `exp` claim (no separate web TTL 
 | `frontend/app/shell/` | Operator chrome (header, nav rail, context bar host, YAML nav). Context bar mount: routes portal chrome via `ShellContextBar` into one always-present layout host (inert when empty). Binding contract: ADR `architecture/decisions/005-portal-shell-context-bars.md`. |
 | `frontend/app/list/` | Schema-driven list chrome (#13): context bar, quick filter, filter row + nested editor (`filter_chrome.tsx`), shared predicate text renderer (`predicate_text.ts`) |
 | `frontend/app/detail/` | Schema-driven detail read/edit (#81–#82) + new-record (#83); `TESTPLAN.md` / `TESTPLAN-83.md` |
-| `frontend/app/records/` | SSR search/fetch/update seams (Bearer via session). Fetch/search/update use `/api/v1` with FK identity enrichment on responses. Shared helpers in `fk_identity.ts`. |
+| `frontend/app/records/` | SSR search/fetch/update/create seams (Bearer via session). Record CRUD uses `/api/v2/{class_name}` with FK identity enrichment on responses. Shared helpers in `fk_identity.ts`. |
 | `frontend/app/config/nav-bar.yaml` | M1 product-default nav (instance override later) |
 | `frontend/app/root.tsx` | HTML shell / root layout |
 | `frontend/app/routes/` | Route modules (loaders, actions, components) |

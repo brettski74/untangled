@@ -13,7 +13,7 @@ describe("update_record", () => {
     api_fetch_with_token.mockReset();
   });
 
-  it("U1: returns parsed v1 record on 200 PATCH", async () => {
+  it("U1: returns parsed enriched record on 200 PATCH", async () => {
     api_fetch_with_token.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -28,7 +28,7 @@ describe("update_record", () => {
       ),
     );
     const { update_record } = await import("./update.server");
-    const record = await update_record("token", "incidents", "INC00000001", {
+    const record = await update_record("token", "incident", "INC00000001", {
       status: "in-progress",
     });
     expect(record).toEqual({
@@ -41,7 +41,7 @@ describe("update_record", () => {
     });
     expect(api_fetch_with_token).toHaveBeenCalledWith(
       "token",
-      "/api/v1/incidents/INC00000001",
+      "/api/v2/incident/INC00000001",
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -62,7 +62,7 @@ describe("update_record", () => {
     );
     const { update_record } = await import("./update.server");
     await expect(
-      update_record("token", "incidents", "INC00000001", { status: "x" }),
+      update_record("token", "incident", "INC00000001", { status: "x" }),
     ).rejects.toThrow();
   });
 
@@ -77,7 +77,7 @@ describe("update_record", () => {
         }),
       );
       await expect(
-        update_record("token", "incidents", "INC999", { status: "x" }),
+        update_record("token", "incident", "INC999", { status: "x" }),
       ).rejects.toMatchObject({ status });
     }
   });
@@ -86,7 +86,7 @@ describe("update_record", () => {
     api_fetch_with_token.mockRejectedValue(new ApiForbiddenError());
     const { update_record } = await import("./update.server");
     await expect(
-      update_record("token", "incidents", "INC00000001", { status: "x" }),
+      update_record("token", "incident", "INC00000001", { status: "x" }),
     ).rejects.toBeInstanceOf(ApiForbiddenError);
   });
 
@@ -94,13 +94,13 @@ describe("update_record", () => {
     api_fetch_with_token.mockRejectedValue(new ApiUnauthorizedError());
     const { update_record } = await import("./update.server");
     await expect(
-      update_record("token", "incidents", "INC00000001", { status: "x" }),
+      update_record("token", "incident", "INC00000001", { status: "x" }),
     ).rejects.toBeInstanceOf(ApiUnauthorizedError);
   });
 });
 
 describe("update.server posture", () => {
-  it("U5: lives in a .server.ts module and targets /api/v1", async () => {
+  it("U5: lives in a .server.ts module and targets /api/v2", async () => {
     const { readFile } = await import("node:fs/promises");
     const source = await readFile(
       new URL("./update.server.ts", import.meta.url),
@@ -108,7 +108,7 @@ describe("update.server posture", () => {
     );
     expect(source).toMatch(/api_fetch_with_token/);
     expect(source).toMatch(/method: "PATCH"/);
-    expect(source).toMatch(/\/api\/v1\/\$\{collection\}/);
-    expect(source).toMatch(/parse_v1_record/);
+    expect(source).toMatch(/\/api\/v2\/\$\{class_name\}/);
+    expect(source).toMatch(/parse_enriched_record/);
   });
 });

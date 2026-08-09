@@ -65,7 +65,6 @@ export type ListLoaderData = {
   class_name: string;
   class_display_name: string;
   path: string;
-  collection: string;
   columns: ListColumn[];
   attributes: AttributeFieldMeta[];
   baseline_predicate: SearchPredicate | null;
@@ -99,13 +98,13 @@ async function run_list_search(
   limit: number = DEFAULT_PER_PAGE,
   offset: number = DEFAULT_OFFSET,
 ): Promise<ListLoaderData> {
-  const collection = params.collection;
+  const class_name = params.class_name;
   const list_id = params.list_id;
-  if (collection == null || list_id == null) {
+  if (class_name == null || list_id == null) {
     throw new Response("Not Found", { status: 404 });
   }
 
-  const match = find_list_option(load_default_nav(), collection, list_id);
+  const match = find_list_option(load_default_nav(), class_name, list_id);
   if (match == null) {
     throw new Response("Not Found", { status: 404 });
   }
@@ -124,7 +123,7 @@ async function run_list_search(
   const attributes = columns.map((column) => column.name_snake);
 
   try {
-    const result = await search_collection(access_token, collection, {
+    const result = await search_collection(access_token, class_name, {
       predicate,
       attributes,
       limit,
@@ -138,7 +137,6 @@ async function run_list_search(
       class_name: match.section.class_name,
       class_display_name: meta.display_name,
       path: match.path,
-      collection,
       columns,
       attributes: [...meta.attributes],
       baseline_predicate:
@@ -167,13 +165,13 @@ async function run_list_search(
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const collection = params.collection;
+  const class_name = params.class_name;
   const list_id = params.list_id;
-  if (collection == null || list_id == null) {
+  if (class_name == null || list_id == null) {
     throw new Response("Not Found", { status: 404 });
   }
 
-  const match = find_list_option(load_default_nav(), collection, list_id);
+  const match = find_list_option(load_default_nav(), class_name, list_id);
   if (match == null) {
     throw new Response("Not Found", { status: 404 });
   }
@@ -533,7 +531,7 @@ export default function DestinationListPage({
       <ShellContextBar>
         <ListContextBar
           class_display_name={loaderData.class_display_name}
-          collection={loaderData.collection}
+          class_name={loaderData.class_name}
           list_path={loaderData.path}
           can_create={can_create}
           attributes={loaderData.attributes}
@@ -568,7 +566,7 @@ export default function DestinationListPage({
       ) : null}
 
       <BasicList
-        collection={loaderData.collection}
+        class_name={loaderData.class_name}
         columns={display_columns}
         widths={column_layout.widths}
         sort={sort}

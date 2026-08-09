@@ -8,7 +8,7 @@ import { forbidden_response, login_redirect_url } from "./gate.server";
 describe("safe_next_path", () => {
   it("allows same-origin relative paths", () => {
     expect(safe_next_path("/")).toBe("/");
-    expect(safe_next_path("/incidents")).toBe("/incidents");
+    expect(safe_next_path("/incident")).toBe("/incident");
     expect(safe_next_path("/a?b=1")).toBe("/a?b=1");
   });
 

@@ -1,7 +1,9 @@
 /**
  * Stable path mapping for nav options and object sections.
- * M1 option identity is kebab-case display-name (renames are breaking URLs).
+ * Class URL segments are live class `name` (snake). List option identity is
+ * display-name-derived slug (renames are breaking URLs).
  */
+import { class_field_meta } from "../generated/field_meta";
 import { record_detail_path } from "../records/record_paths";
 import type {
   NavBarView,
@@ -11,18 +13,6 @@ import type {
   NavSectionView,
 } from "./nav_schema";
 
-const CLASS_COLLECTION: Record<string, string> = {
-  change_request: "change-requests",
-  incident: "incidents",
-  system_config: "system-configs",
-};
-
-const COLLECTION_CLASS: Record<string, string> = {
-  "change-requests": "change_request",
-  incidents: "incident",
-  "system-configs": "system_config",
-};
-
 export function display_name_to_slug(display_name: string): string {
   return display_name
     .trim()
@@ -31,40 +21,35 @@ export function display_name_to_slug(display_name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export function collection_for_class(class_name: string): string | null {
-  return CLASS_COLLECTION[class_name] ?? null;
-}
-
-export function class_for_collection(collection: string): string | null {
-  return COLLECTION_CLASS[collection] ?? null;
+/** True when `class_name` is a known schema class (fail-closed for paths/links). */
+export function is_known_class(class_name: string): boolean {
+  return class_field_meta(class_name) != null;
 }
 
 export function option_path(
   section: NavClassSectionView,
   option: NavOptionView,
 ): string | null {
-  const collection = collection_for_class(section.class_name);
-  if (collection == null) {
+  if (!is_known_class(section.class_name)) {
     return null;
   }
   if (option.option_type === "new") {
-    return `/${collection}/new`;
+    return `/${section.class_name}/new`;
   }
   const slug = display_name_to_slug(option.display_name);
   if (slug === "") {
     return null;
   }
-  return `/${collection}/lists/${slug}`;
+  return `/${section.class_name}/lists/${slug}`;
 }
 
 export function object_section_path(
   section: NavObjectSectionView,
 ): string | null {
-  const collection = collection_for_class(section.class_name);
-  if (collection == null) {
+  if (!is_known_class(section.class_name)) {
     return null;
   }
-  return record_detail_path(collection, section.id);
+  return record_detail_path(section.class_name, section.id);
 }
 
 export type NavMatch = {
@@ -96,13 +81,14 @@ export function find_match_for_path(
  *
  * Rule order (do not reorder casually):
  * 1. Exact list/new option path → that option's section class.
- * 2. Else exactly two non-empty segments `/{collection}/{locator}` whose
- *    collection maps to a **class** section present in `nav` → that class.
- *    Object sections use link active state, not accordion open state.
- *    Today only `/new` and `/:locator` share that shape under a collection;
- *    `/new` is covered by (1). Three-segment list paths (`/lists/...`) are
- *    never treated as detail. A future two-segment collection route that is
- *    neither an option path nor detail must update this helper deliberately.
+ * 2. Else exactly two non-empty segments `/{class_name}/{locator}` whose
+ *    class_name is known and maps to a **class** section present in `nav`
+ *    → that class. Object sections use link active state, not accordion
+ *    open state. Today only `/new` and `/:locator` share that shape under
+ *    a class; `/new` is covered by (1). Three-segment list paths
+ *    (`/lists/...`) are never treated as detail. A future two-segment
+ *    class route that is neither an option path nor detail must update
+ *    this helper deliberately.
  * 3. Otherwise null (no route-forced open section).
  */
 export function open_class_for_path(
@@ -118,12 +104,8 @@ export function open_class_for_path(
   if (segments.length !== 2) {
     return null;
   }
-  const [collection, _locator] = segments;
-  if (collection == null) {
-    return null;
-  }
-  const class_name = class_for_collection(collection);
-  if (class_name == null) {
+  const [class_name, _locator] = segments;
+  if (class_name == null || !is_known_class(class_name)) {
     return null;
   }
   return nav.some(
@@ -136,11 +118,10 @@ export function open_class_for_path(
 
 export function find_list_option(
   nav: NavBarView,
-  collection: string,
+  class_name: string,
   list_id: string,
 ): NavMatch | null {
-  const class_name = class_for_collection(collection);
-  if (class_name == null) {
+  if (!is_known_class(class_name)) {
     return null;
   }
   const section = nav.find(
@@ -167,10 +148,9 @@ export function find_list_option(
 
 export function find_new_option(
   nav: NavBarView,
-  collection: string,
+  class_name: string,
 ): NavMatch | null {
-  const class_name = class_for_collection(collection);
-  if (class_name == null) {
+  if (!is_known_class(class_name)) {
     return null;
   }
   const section = nav.find(

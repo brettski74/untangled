@@ -13,7 +13,7 @@ describe("create_record", () => {
     api_fetch_with_token.mockReset();
   });
 
-  it("C1: returns parsed record on 201 POST to unversioned collection path", async () => {
+  it("C1: returns parsed record on 201 POST to /api/v2/{class_name}", async () => {
     api_fetch_with_token.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -26,7 +26,7 @@ describe("create_record", () => {
       ),
     );
     const { create_record } = await import("./create.server");
-    const record = await create_record("token", "incidents", {
+    const record = await create_record("token", "incident", {
       summary: "Created",
       status: "new",
       severity: "High",
@@ -37,18 +37,19 @@ describe("create_record", () => {
       status: "new",
       summary: "Created",
     });
-    expect(api_fetch_with_token).toHaveBeenCalledWith("token", "/incidents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        summary: "Created",
-        status: "new",
-        severity: "High",
-      }),
-    });
-    const path = api_fetch_with_token.mock.calls[0]?.[1];
-    expect(path).toBe("/incidents");
-    expect(path).not.toMatch(/^\/api\/v1\//);
+    expect(api_fetch_with_token).toHaveBeenCalledWith(
+      "token",
+      "/api/v2/incident",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summary: "Created",
+          status: "new",
+          severity: "High",
+        }),
+      },
+    );
   });
 
   it("C2: propagates 404 / 422 / 400 as Response", async () => {
@@ -62,7 +63,7 @@ describe("create_record", () => {
         }),
       );
       await expect(
-        create_record("token", "incidents", { summary: "x" }),
+        create_record("token", "incident", { summary: "x" }),
       ).rejects.toMatchObject({ status });
     }
   });
@@ -71,7 +72,7 @@ describe("create_record", () => {
     api_fetch_with_token.mockRejectedValue(new ApiForbiddenError());
     const { create_record } = await import("./create.server");
     await expect(
-      create_record("token", "incidents", { summary: "x" }),
+      create_record("token", "incident", { summary: "x" }),
     ).rejects.toBeInstanceOf(ApiForbiddenError);
   });
 
@@ -79,13 +80,13 @@ describe("create_record", () => {
     api_fetch_with_token.mockRejectedValue(new ApiUnauthorizedError());
     const { create_record } = await import("./create.server");
     await expect(
-      create_record("token", "incidents", { summary: "x" }),
+      create_record("token", "incident", { summary: "x" }),
     ).rejects.toBeInstanceOf(ApiUnauthorizedError);
   });
 });
 
 describe("create.server posture", () => {
-  it("C5: lives in a .server.ts module; POST not under /api/v1", async () => {
+  it("C5: lives in a .server.ts module and targets /api/v2 with enriched parse", async () => {
     const { readFile } = await import("node:fs/promises");
     const source = await readFile(
       new URL("./create.server.ts", import.meta.url),
@@ -93,8 +94,8 @@ describe("create.server posture", () => {
     );
     expect(source).toMatch(/api_fetch_with_token/);
     expect(source).toMatch(/method: "POST"/);
-    expect(source).toMatch(/`\/\$\{collection\}`/);
+    expect(source).toMatch(/\/api\/v2\/\$\{class_name\}/);
+    expect(source).toMatch(/parse_enriched_record/);
     expect(source).not.toMatch(/\/api\/v1/);
-    expect(source).not.toMatch(/parse_v1_record/);
   });
 });

@@ -48,13 +48,11 @@ import {
   zod_error_http_status,
 } from "../records/zod_http_status";
 import { can_create_class } from "../shell/nav_filter";
-import { class_for_collection } from "../shell/nav_paths";
 import { ShellContextBar } from "../shell/shell_context_bar";
 import type { AuthenticatedOutletContext } from "./authenticated";
 import type { Route } from "./+types/destination_new";
 
 export type NewLoaderData = {
-  collection: string;
   class_name: string;
   class_display_name: string;
   title_token: string;
@@ -79,12 +77,7 @@ export function meta({ loaderData: loader_data }: Route.MetaArgs) {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const collection = params.collection;
-  if (collection == null) {
-    throw new Response("Not Found", { status: 404 });
-  }
-
-  const class_name = class_for_collection(collection);
+  const class_name = params.class_name;
   if (class_name == null) {
     throw new Response("Not Found", { status: 404 });
   }
@@ -112,11 +105,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     const seed_record = record_from_create_defaults(field_meta);
 
     return data({
-      collection,
       class_name,
       class_display_name: field_meta.display_name,
       title_token: "(new)",
-      copy_path: `/${collection}/new`,
+      copy_path: `/${class_name}/new`,
       seed_record,
       layout,
     } satisfies NewLoaderData);
@@ -138,12 +130,7 @@ export async function action({
   request,
   params,
 }: Route.ActionArgs): Promise<ReturnType<typeof data<NewSaveActionResult>>> {
-  const collection = params.collection;
-  if (collection == null) {
-    throw new Response("Not Found", { status: 404 });
-  }
-
-  const class_name = class_for_collection(collection);
+  const class_name = params.class_name;
   if (class_name == null) {
     throw new Response("Not Found", { status: 404 });
   }
@@ -220,7 +207,7 @@ export async function action({
   }
 
   try {
-    const record = await create_record(access_token, collection, merged);
+    const record = await create_record(access_token, class_name, merged);
     return data({ ok: true, record } satisfies NewSaveActionResult);
   } catch (error) {
     if (error instanceof ApiUnauthorizedError) {
@@ -330,7 +317,7 @@ export default function DestinationNewPage({
             ? fetcher.data.record.id
             : null;
       if (locator != null) {
-        void navigate(record_detail_path(loaderData.collection, locator));
+        void navigate(record_detail_path(loaderData.class_name, locator));
       } else {
         set_save_error("Create succeeded but record locator is missing");
       }
@@ -342,7 +329,6 @@ export default function DestinationNewPage({
     fetcher.data,
     fetcher.formAction,
     loaderData.class_name,
-    loaderData.collection,
     navigate,
   ]);
 

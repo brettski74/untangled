@@ -16,7 +16,7 @@ describe("DetailContextBar functional chrome (#113)", () => {
       <DetailContextBar
         class_display_name="Incident"
         title_token="(new)"
-        copy_url="/incidents/new"
+        copy_url="/incident/new"
         dirty={false}
         save_enabled={true}
         on_save={on_save}
@@ -41,7 +41,7 @@ describe("DetailContextBar functional chrome (#113)", () => {
       <DetailContextBar
         class_display_name="Incident"
         title_token="(new)"
-        copy_url="/incidents/new"
+        copy_url="/incident/new"
         dirty={true}
         save_enabled={true}
         on_save={on_save}
@@ -58,7 +58,7 @@ describe("DetailContextBar functional chrome (#113)", () => {
       <DetailContextBar
         class_display_name="Incident"
         title_token="(new)"
-        copy_url="/incidents/new"
+        copy_url="/incident/new"
         dirty={false}
         save_enabled={false}
         on_save={vi.fn()}
@@ -78,7 +78,7 @@ describe("DetailContextBar functional chrome (#113)", () => {
       <DetailContextBar
         class_display_name="Incident"
         title_token="(new)"
-        copy_url="/incidents/new"
+        copy_url="/incident/new"
         dirty={true}
         save_enabled={true}
         on_save={on_save}
@@ -96,7 +96,7 @@ describe("DetailContextBar functional chrome (#113)", () => {
       <DetailContextBar
         class_display_name="Change Request"
         title_token="(new)"
-        copy_url="/change-requests/new"
+        copy_url="/change_request/new"
         dirty={false}
         save_enabled={true}
         on_save={vi.fn()}

@@ -21,11 +21,11 @@ describe("fetch_record", () => {
       }),
     );
     const { fetch_record } = await import("./fetch.server");
-    const record = await fetch_record("token", "incidents", "INC00000001");
+    const record = await fetch_record("token", "incident", "INC00000001");
     expect(record).toEqual({ id: "u1", number: "INC00000001" });
     expect(api_fetch_with_token).toHaveBeenCalledWith(
       "token",
-      "/api/v1/incidents/INC00000001",
+      "/api/v2/incident/INC00000001",
       { method: "GET" },
     );
   });
@@ -37,14 +37,14 @@ describe("fetch_record", () => {
       new Response("missing", { status: 404, statusText: "Not Found" }),
     );
     await expect(
-      fetch_record("token", "incidents", "INC999"),
+      fetch_record("token", "incident", "INC999"),
     ).rejects.toMatchObject({ status: 404 });
 
     api_fetch_with_token.mockResolvedValue(
       new Response("junk", { status: 422, statusText: "Unprocessable Entity" }),
     );
     await expect(
-      fetch_record("token", "incidents", "not-a-locator"),
+      fetch_record("token", "incident", "not-a-locator"),
     ).rejects.toMatchObject({ status: 422 });
   });
 
@@ -52,7 +52,7 @@ describe("fetch_record", () => {
     api_fetch_with_token.mockRejectedValue(new ApiForbiddenError());
     const { fetch_record } = await import("./fetch.server");
     await expect(
-      fetch_record("token", "incidents", "INC00000001"),
+      fetch_record("token", "incident", "INC00000001"),
     ).rejects.toBeInstanceOf(ApiForbiddenError);
   });
 
@@ -60,7 +60,7 @@ describe("fetch_record", () => {
     api_fetch_with_token.mockRejectedValue(new ApiUnauthorizedError());
     const { fetch_record } = await import("./fetch.server");
     await expect(
-      fetch_record("token", "incidents", "INC00000001"),
+      fetch_record("token", "incident", "INC00000001"),
     ).rejects.toBeInstanceOf(ApiUnauthorizedError);
   });
 
@@ -73,7 +73,7 @@ describe("fetch_record", () => {
     );
     const { fetch_record } = await import("./fetch.server");
     await expect(
-      fetch_record("token", "incidents", "INC00000001"),
+      fetch_record("token", "incident", "INC00000001"),
     ).rejects.toThrow();
   });
 });

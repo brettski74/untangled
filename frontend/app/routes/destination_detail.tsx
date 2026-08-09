@@ -37,13 +37,11 @@ import { fetch_record } from "../records/fetch.server";
 import { record_detail_path } from "../records/record_paths";
 import { is_json_object, update_record } from "../records/update.server";
 import { can_update_class } from "../shell/nav_filter";
-import { class_for_collection } from "../shell/nav_paths";
 import { ShellContextBar } from "../shell/shell_context_bar";
 import type { AuthenticatedOutletContext } from "./authenticated";
 import type { Route } from "./+types/destination_detail";
 
 export type DetailLoaderData = {
-  collection: string;
   class_name: string;
   class_display_name: string;
   locator: string;
@@ -69,19 +67,14 @@ export function meta({ loaderData: loader_data }: Route.MetaArgs) {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const collection = params.collection;
+  const class_name = params.class_name;
   const locator = params.locator;
-  if (collection == null || locator == null || locator === "") {
+  if (class_name == null || locator == null || locator === "") {
     throw new Response("Not Found", { status: 404 });
   }
 
   // Reserved path segments are registered as static routes; still fail closed.
   if (locator === "new" || locator === "lists") {
-    throw new Response("Not Found", { status: 404 });
-  }
-
-  const class_name = class_for_collection(collection);
-  if (class_name == null) {
     throw new Response("Not Found", { status: 404 });
   }
 
@@ -99,7 +92,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   try {
-    const record = await fetch_record(access_token, collection, locator);
+    const record = await fetch_record(access_token, class_name, locator);
     const layout = partition_detail_layout(meta);
     const title_token = detail_title_token(meta.friendly_id_attr, record);
     const preferred_locator =
@@ -112,12 +105,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
           : locator;
 
     return data({
-      collection,
       class_name,
       class_display_name: meta.display_name,
       locator,
       title_token,
-      copy_path: record_detail_path(collection, preferred_locator),
+      copy_path: record_detail_path(class_name, preferred_locator),
       record,
       layout,
     } satisfies DetailLoaderData);
@@ -141,17 +133,16 @@ export async function action({
 }: Route.ActionArgs): Promise<
   ReturnType<typeof data<DetailSaveActionResult>>
 > {
-  const collection = params.collection;
+  const class_name = params.class_name;
   const locator = params.locator;
-  if (collection == null || locator == null || locator === "") {
+  if (class_name == null || locator == null || locator === "") {
     throw new Response("Not Found", { status: 404 });
   }
   if (locator === "new" || locator === "lists") {
     throw new Response("Not Found", { status: 404 });
   }
 
-  const class_name = class_for_collection(collection);
-  if (class_name == null) {
+  if (class_field_meta(class_name) == null) {
     throw new Response("Not Found", { status: 404 });
   }
 
@@ -203,7 +194,7 @@ export async function action({
   try {
     const record = await update_record(
       access_token,
-      collection,
+      class_name,
       locator,
       patch_body,
     );

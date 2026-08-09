@@ -1,5 +1,5 @@
 /**
- * Shared FK identity helpers for /api/v1 enriched read responses.
+ * Shared FK identity helpers for /api/v2 enriched record responses.
  */
 import { z } from "zod";
 

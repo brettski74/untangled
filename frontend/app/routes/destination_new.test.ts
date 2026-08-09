@@ -72,18 +72,17 @@ describe("destination_new loader", () => {
     const { loader } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await loader({
-      request: new Request("http://web.test/incidents/new", {
+      request: new Request("http://web.test/incident/new", {
         headers: { Cookie: cookie },
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
 
     const body = result.data;
-    expect(body.collection).toBe("incidents");
     expect(body.class_name).toBe("incident");
     expect(body.title_token).toBe("(new)");
-    expect(body.copy_path).toBe("/incidents/new");
+    expect(body.copy_path).toBe("/incident/new");
     expect(body.seed_record.status).toBe("new");
     expect(body.seed_record.number).toBeNull();
     expect(body.layout.compact[0]?.name_snake).toBe("number");
@@ -103,10 +102,10 @@ describe("destination_new loader", () => {
     const { loader } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await loader({
-      request: new Request("http://web.test/change-requests/new", {
+      request: new Request("http://web.test/change_request/new", {
         headers: { Cookie: cookie },
       }),
-      params: { collection: "change-requests" },
+      params: { class_name: "change_request" },
       context: {},
     } as never);
     expect(result.data.seed_record.status).toBe("draft");
@@ -124,10 +123,10 @@ describe("destination_new loader", () => {
     const cookie = await session_cookie();
     await expect(
       loader({
-        request: new Request("http://web.test/incidents/new", {
+        request: new Request("http://web.test/incident/new", {
           headers: { Cookie: cookie },
         }),
-        params: { collection: "incidents" },
+        params: { class_name: "incident" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 403, statusText: "Forbidden" });
@@ -141,7 +140,7 @@ describe("destination_new loader", () => {
         request: new Request("http://web.test/widgets/new", {
           headers: { Cookie: cookie },
         }),
-        params: { collection: "widgets" },
+        params: { class_name: "widgets" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 404 });
@@ -152,8 +151,8 @@ describe("destination_new loader", () => {
     const { loader } = await import("../routes/destination_new");
     await expect(
       loader({
-        request: new Request("http://web.test/incidents/new"),
-        params: { collection: "incidents" },
+        request: new Request("http://web.test/incident/new"),
+        params: { class_name: "incident" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 302 });
@@ -169,10 +168,10 @@ describe("destination_new loader", () => {
     const { loader } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await loader({
-      request: new Request("http://web.test/incidents/new?view=custom", {
+      request: new Request("http://web.test/incident/new?view=custom", {
         headers: { Cookie: cookie },
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
     expect(result.data.title_token).toBe("(new)");
@@ -244,7 +243,7 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/new", {
+      request: new Request("http://web.test/incident/new", {
         method: "POST",
         headers: {
           Cookie: cookie,
@@ -255,13 +254,13 @@ describe("destination_new action", () => {
           severity: "High",
         }),
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
     expect(result.data).toEqual({ ok: true, record: CREATED_INC });
     expect(create_record).toHaveBeenCalledWith(
       expect.any(String),
-      "incidents",
+      "incident",
       expect.objectContaining({
         summary: "Outage",
         severity: "High",
@@ -286,7 +285,7 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     await action({
-      request: new Request("http://web.test/change-requests/new", {
+      request: new Request("http://web.test/change_request/new", {
         method: "POST",
         headers: {
           Cookie: cookie,
@@ -299,12 +298,12 @@ describe("destination_new action", () => {
           scheduled_end: "2026-02-01T01:00:00Z",
         }),
       }),
-      params: { collection: "change-requests" },
+      params: { class_name: "change_request" },
       context: {},
     } as never);
     expect(create_record).toHaveBeenCalledWith(
       expect.any(String),
-      "change-requests",
+      "change_request",
       expect.objectContaining({ requested_by: SEED_ADMIN }),
     );
   });
@@ -319,7 +318,7 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/new", {
+      request: new Request("http://web.test/incident/new", {
         method: "POST",
         headers: {
           Cookie: cookie,
@@ -331,7 +330,7 @@ describe("destination_new action", () => {
           severity: "High",
         }),
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
     expect(result.data).toEqual({
@@ -349,7 +348,7 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/new", {
+      request: new Request("http://web.test/incident/new", {
         method: "POST",
         headers: {
           Cookie: cookie,
@@ -361,7 +360,7 @@ describe("destination_new action", () => {
           severity: "High",
         }),
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
     expect(result.data).toEqual({
@@ -375,7 +374,7 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/new", {
+      request: new Request("http://web.test/incident/new", {
         method: "POST",
         headers: {
           Cookie: cookie,
@@ -388,7 +387,7 @@ describe("destination_new action", () => {
           major_incident: "not-a-boolean",
         }),
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
     expect(result.data).toMatchObject({ ok: false, status: 422 });
@@ -399,7 +398,7 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/new", {
+      request: new Request("http://web.test/incident/new", {
         method: "POST",
         headers: {
           Cookie: cookie,
@@ -407,7 +406,7 @@ describe("destination_new action", () => {
         },
         body: JSON.stringify({ status: "new" }),
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
     expect(result.data).toMatchObject({ ok: false, status: 422 });
@@ -418,12 +417,12 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     await expect(
       action({
-        request: new Request("http://web.test/incidents/new", {
+        request: new Request("http://web.test/incident/new", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ summary: "x" }),
         }),
-        params: { collection: "incidents" },
+        params: { class_name: "incident" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 302 });
@@ -439,7 +438,7 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/new", {
+      request: new Request("http://web.test/incident/new", {
         method: "POST",
         headers: {
           Cookie: cookie,
@@ -451,7 +450,7 @@ describe("destination_new action", () => {
           severity: "High",
         }),
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
     expect(result.data).toMatchObject({
@@ -466,7 +465,7 @@ describe("destination_new action", () => {
     const { action } = await import("../routes/destination_new");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/new", {
+      request: new Request("http://web.test/incident/new", {
         method: "POST",
         headers: {
           Cookie: cookie,
@@ -477,7 +476,7 @@ describe("destination_new action", () => {
           severity: "High",
         }),
       }),
-      params: { collection: "incidents" },
+      params: { class_name: "incident" },
       context: {},
     } as never);
     expect(result.data.ok).toBe(true);
@@ -493,8 +492,8 @@ describe("destination_new action", () => {
         result.data.record,
       );
       expect(locator).toBe("INC00000042");
-      expect(record_detail_path("incidents", locator!)).toBe(
-        "/incidents/INC00000042",
+      expect(record_detail_path("incident", locator!)).toBe(
+        "/incident/INC00000042",
       );
     }
   });

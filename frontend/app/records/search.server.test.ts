@@ -19,7 +19,7 @@ describe("search_collection error detail", () => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
 
     try {
-      await search_collection("token", "incidents", {
+      await search_collection("token", "incident", {
         predicate: { op: "and", predicates: [] },
         attributes: ["summary"],
       });
@@ -53,7 +53,7 @@ describe("search_collection error detail", () => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
 
     try {
-      await search_collection("token", "incidents", {
+      await search_collection("token", "incident", {
         predicate: { op: "and", predicates: [] },
         attributes: ["summary"],
       });
@@ -82,14 +82,14 @@ describe("search_collection error detail", () => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
 
     try {
-      await search_collection("token", "incidents", {
+      await search_collection("token", "incident", {
         attributes: ["summary"],
       });
-      await search_collection("token", "incidents", {
+      await search_collection("token", "incident", {
         attributes: ["summary"],
         sort: [],
       });
-      await search_collection("token", "incidents", {
+      await search_collection("token", "incident", {
         attributes: ["summary"],
         sort: [{ attribute: "summary", direction: "asc" }],
       });

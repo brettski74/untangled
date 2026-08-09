@@ -163,19 +163,20 @@ Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-orig
 3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
 4. Hit `GET /auth/rbac-probe` (requires `demo_item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo_item:read`) get **403**; a user with no roles gets **403**.
 5. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
-   - Prefer versioned reads: `GET /api/v1/incidents/{locator}` /
-     `GET /api/v1/change_requests/{locator}` (UUID or friendly number).
-   - Legacy (deprecated) scalar reads: `GET /incidents/{locator}` /
-     `GET /change_requests/{locator}`.
-   - `POST` create (omit `number` — server assigns it), `PATCH` update, `DELETE`
-     (admin only among seed roles) on **unversioned** routes.
+   - Prefer the live in-app contract: `GET /api/v2/incident/{locator}` /
+     `GET /api/v2/change_request/{locator}` (UUID or friendly number; path
+     segment is the class `name`, no pluralization).
+   - Legacy (deprecated) surfaces still mounted until epic #150 child 7:
+     `/api/v1/{plural-collection}/…` and unversioned `/{plural-collection}/…`.
+   - `POST` create / `PATCH` update / `DELETE` on `/api/v2/{class_name}`
+     (admin only among seed roles for delete).
    - Junk locators → **422**; missing records → **404**; readonly cannot create → **403**.
 6. Exercise predicate search (same Authorize token; requires `{class}:read`):
-   - Prefer `POST /api/v1/incidents/search` and
-     `POST /api/v1/change_requests/search` (see [Predicate search](#predicate-search)
+   - Prefer `POST /api/v2/incident/search` and
+     `POST /api/v2/change_request/search` (see [Predicate search](#predicate-search)
      and [API versioning](#api-versioning) below).
-   - Legacy `POST /incidents/search` / `POST /change_requests/search` remain for
-     compatibility (scalar FK UUIDs).
+   - Legacy `/api/v1/…/search` and unversioned `/{collection}/search` remain until
+     child 7 (scalar FK UUIDs on unversioned).
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
    - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
 7. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
@@ -188,21 +189,23 @@ Public domain API versions are **path-based**: `/api/v{major}/…`.
 - `/api/v1` is the first versioned contract. Existing unversioned
   `/{collection}/…` fetch and search routes are **pre-versioning legacy**
   compatibility surfaces — they are not retrospectively called v1.
+- `/api/v2/{class_name}/…` is the live in-app record contract (class `name`
+  as path segment; no pluralization). Create/update/delete/search/fetch are
+  versioned here with FK identity enrichment. Legacy unversioned and `/api/v1`
+  record mounts remain until epic #150 child 7.
 - Every new public domain endpoint, and every existing public domain endpoint
   whose contract is changed, must have an API-version path. Operational
   endpoints such as `/health` and `/` are exempt.
 - Backward-incompatible request/response changes increment the major path
   version and leave the previous version available for a documented
   compatibility period.
-- Versioned reads in M1: `GET /api/v1/{collection}/{locator}` and
-  `POST /api/v1/{collection}/search`. Create/update/delete/auth are not
-  bulk-copied under `/api/v1`.
-- Removal of the legacy unversioned fetch/search routes is tracked by
-  [#117](https://github.com/brettski74/untangled/issues/117).
+- Removal of the legacy unversioned and `/api/v1` record factories is tracked by
+  [#192](https://github.com/brettski74/untangled/issues/192).
 
-#### Versioned FK identity (v1 reads)
+#### Versioned FK identity (v2 reads; same shape on v1)
 
-On `/api/v1` fetch and search responses, each projected foreign-key field
+On `/api/v2` (and still on `/api/v1`) fetch, search, update, and create
+responses, each projected foreign-key field
 (including audit `created_by` / `updated_by`) is either JSON `null` or:
 
 ```json
@@ -231,11 +234,12 @@ Generic, definition-driven search for any class mounted via the class router fac
 
 | Method | Path | Permission |
 | ------ | ---- | ---------- |
-| `POST` | `/api/v1/{collection}/search` | `{class}:read` (preferred for new consumers) |
-| `POST` | `/{collection}/search` | `{class}:read` (legacy scalar FK responses; deprecated) |
+| `POST` | `/api/v2/{class_name}/search` | `{class}:read` (live in-app contract) |
+| `POST` | `/api/v1/{collection}/search` | `{class}:read` (legacy until #192) |
+| `POST` | `/{collection}/search` | `{class}:read` (legacy scalar FK responses; until #192) |
 
-Examples: `POST /api/v1/incidents/search`, `POST /api/v1/change_requests/search`.
-Legacy: `POST /incidents/search`, `POST /change_requests/search`.
+Examples: `POST /api/v2/incident/search`, `POST /api/v2/change_request/search`.
+Legacy: `POST /api/v1/incidents/search`, `POST /incidents/search`.
 
 #### Request envelope
 

@@ -166,7 +166,7 @@ rejected:
 
 Optional top-level key naming which attribute may appear as limited related-record
 identity when another class’s foreign key points at this class (for example on
-`/api/v1` fetch/search responses).
+`/api/v2` fetch/search/create/update responses).
 
 | YAML | Effective result |
 | ---- | ---------------- |

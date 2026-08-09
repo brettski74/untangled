@@ -78,7 +78,7 @@ describe("default nav YAML", () => {
     ]);
     expect(system_config.id).toBe(SYSTEM_CONFIG_ID);
     expect(object_section_path(system_config)).toBe(
-      `/system-configs/${SYSTEM_CONFIG_ID}`,
+      `/system_config/${SYSTEM_CONFIG_ID}`,
     );
     const open = change.options.find((o) => o.display_name === "Open");
     expect(open?.option_type).toBe("list");
@@ -163,37 +163,37 @@ describe("nav paths", () => {
       throw new Error("expected class section");
     }
     expect(option_path(section, section.options[0]!)).toBe(
-      "/change-requests/new",
+      "/change_request/new",
     );
     expect(option_path(section, section.options[1]!)).toBe(
-      "/change-requests/lists/all",
+      "/change_request/lists/all",
     );
   });
 
   it("finds list options by collection + slug", () => {
     reset_default_nav_cache_for_tests();
     const nav = load_default_nav();
-    const match = find_list_option(nav, "incidents", "closed");
+    const match = find_list_option(nav, "incident", "closed");
     expect(match?.option.display_name).toBe("Closed");
     expect(match?.option.predicate?.op).toBe("or");
-    expect(find_match_for_path(nav, "/change-requests/lists/all")?.path).toBe(
-      "/change-requests/lists/all",
+    expect(find_match_for_path(nav, "/change_request/lists/all")?.path).toBe(
+      "/change_request/lists/all",
     );
   });
 
   it("open_class_for_path expands list, new, and detail for known collections", () => {
     reset_default_nav_cache_for_tests();
     const nav = load_default_nav();
-    expect(open_class_for_path(nav, "/incidents/lists/all")).toBe("incident");
-    expect(open_class_for_path(nav, "/incidents/new")).toBe("incident");
-    expect(open_class_for_path(nav, "/incidents/INC00000001")).toBe("incident");
-    expect(open_class_for_path(nav, "/change-requests/lists/all")).toBe(
+    expect(open_class_for_path(nav, "/incident/lists/all")).toBe("incident");
+    expect(open_class_for_path(nav, "/incident/new")).toBe("incident");
+    expect(open_class_for_path(nav, "/incident/INC00000001")).toBe("incident");
+    expect(open_class_for_path(nav, "/change_request/lists/all")).toBe(
       "change_request",
     );
-    expect(open_class_for_path(nav, "/change-requests/new")).toBe(
+    expect(open_class_for_path(nav, "/change_request/new")).toBe(
       "change_request",
     );
-    expect(open_class_for_path(nav, "/change-requests/CRQ00000001")).toBe(
+    expect(open_class_for_path(nav, "/change_request/CRQ00000001")).toBe(
       "change_request",
     );
   });
@@ -202,7 +202,7 @@ describe("nav paths", () => {
     reset_default_nav_cache_for_tests();
     const nav = load_default_nav();
     expect(
-      open_class_for_path(nav, `/system-configs/${SYSTEM_CONFIG_ID}`),
+      open_class_for_path(nav, `/system_config/${SYSTEM_CONFIG_ID}`),
     ).toBeNull();
   });
 
@@ -214,11 +214,11 @@ describe("nav paths", () => {
     );
     expect(open_class_for_path(full, "/unknown-things/ABC")).toBeNull();
     expect(
-      open_class_for_path(incident_only, "/change-requests/CRQ00000001"),
+      open_class_for_path(incident_only, "/change_request/CRQ00000001"),
     ).toBeNull();
     expect(open_class_for_path(full, "/")).toBeNull();
-    expect(open_class_for_path(full, "/incidents")).toBeNull();
-    expect(open_class_for_path(full, "/incidents/lists/all/extra")).toBeNull();
+    expect(open_class_for_path(full, "/incident")).toBeNull();
+    expect(open_class_for_path(full, "/incident/lists/all/extra")).toBeNull();
   });
 });
 
@@ -338,14 +338,14 @@ describe("default_landing_path", () => {
   it("prefers Change Requests → All for admin", () => {
     reset_default_nav_cache_for_tests();
     expect(default_landing_path(load_default_nav(), ADMIN)).toBe(
-      "/change-requests/lists/all",
+      "/change_request/lists/all",
     );
   });
 
   it("falls back to first visible class list when preferred class is hidden", () => {
     reset_default_nav_cache_for_tests();
     expect(default_landing_path(load_default_nav(), INCIDENT_ONLY_READ)).toBe(
-      "/incidents/lists/all",
+      "/incident/lists/all",
     );
   });
 

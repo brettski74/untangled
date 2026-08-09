@@ -39,7 +39,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   try {
     const [me, record] = await Promise.all([
       fetch_me(access_token),
-      fetch_record(access_token, "system-configs", SYSTEM_CONFIG_ID),
+      fetch_record(access_token, "system_config", SYSTEM_CONFIG_ID),
     ]);
     const policy = parse_password_policy(record);
     return data(
