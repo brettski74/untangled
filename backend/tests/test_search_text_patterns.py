@@ -17,7 +17,7 @@ from untangled.persistence.search import (
     searchable_attributes,
 )
 
-# Seeded system-config defaults — explicit for unit compiles (no DB).
+# Seeded system_config defaults — explicit for unit compiles (no DB).
 _LIMITS = SearchNestingLimits(
     max_depth=3,
     max_length=20,
@@ -46,8 +46,8 @@ def test_escape_like_literal_escapes_metacharacters() -> None:
 def test_text_pattern_like_params_are_escaped_and_wrapped(incident_attrs: dict) -> None:
     cases = [
         ("contains", "100%_done", "%100\\%\\_done%"),
-        ("starts-with", "INC%", "INC\\%%"),
-        ("ends-with", "_end", "%\\_end"),
+        ("starts_with", "INC%", "INC\\%%"),
+        ("ends_with", "_end", "%\\_end"),
     ]
     for op, value, expected_pattern in cases:
         _where, params = _compile(
@@ -66,8 +66,8 @@ def test_regexp_binds_raw_pattern(incident_attrs: dict) -> None:
 
 
 def test_text_pattern_type_matrix(incident_attrs: dict) -> None:
-    # text-family + friendly-id accepted (summary is ``text`` after #80)
-    for op in ("contains", "starts-with", "ends-with", "regexp"):
+    # text-family + friendly_id accepted (summary is ``text`` after #80)
+    for op in ("contains", "starts_with", "ends_with", "regexp"):
         _compile(
             {"op": op, "attribute": "summary", "value": "x"},
             incident_attrs,
@@ -87,7 +87,7 @@ def test_text_pattern_type_matrix(incident_attrs: dict) -> None:
 
     # uuid / datetime rejected
     for attribute in ("id", "created_at", "assigned_user_id"):
-        for op in ("contains", "starts-with", "ends-with", "regexp"):
+        for op in ("contains", "starts_with", "ends_with", "regexp"):
             with pytest.raises(SearchSemanticError, match="not applicable"):
                 _compile(
                     {"op": op, "attribute": attribute, "value": "x"},
@@ -116,6 +116,17 @@ def test_text_pattern_structural_and_null_value(incident_attrs: dict) -> None:
             {"op": "contains", "attribute": "summary", "value": None},
             incident_attrs,
         )
+
+
+def test_legacy_kebab_ops_are_rejected(incident_attrs: dict) -> None:
+    for op in ("starts-with", "ends-with", "not-empty"):
+        with pytest.raises(SearchSemanticError, match="unknown operator"):
+            _compile(
+                {"op": op, "attribute": "summary", "value": "x"}
+                if op != "not-empty"
+                else {"op": op, "attribute": "summary"},
+                incident_attrs,
+            )
 
 
 def test_total_regexp_limit_enforced(incident_attrs: dict) -> None:

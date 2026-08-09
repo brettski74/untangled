@@ -23,7 +23,6 @@ function attr(
     Pick<AttributeFieldMeta, "name_snake" | "type_name" | "order">,
 ): AttributeFieldMeta {
   return {
-    name_kebab: overrides.name_kebab ?? overrides.name_snake.replace(/_/g, "-"),
     name_snake: overrides.name_snake,
     type_name: overrides.type_name,
     required: overrides.required ?? false,
@@ -43,7 +42,7 @@ describe("editor_filterable_attributes", () => {
         references: "user",
       }),
       attr({ name_snake: "status", type_name: "status", order: 2 }),
-      attr({ name_snake: "number", type_name: "friendly-id", order: 3 }),
+      attr({ name_snake: "number", type_name: "friendly_id", order: 3 }),
       attr({ name_snake: "id", type_name: "uuid", order: 4 }),
     ]);
     expect(filtered.map((a) => a.name_snake)).toEqual([
@@ -60,7 +59,7 @@ describe("leaf_ops_for_type", () => {
     expect(boolean_ops).toEqual([
       "eq",
       "empty",
-      "not-empty",
+      "not_empty",
       "ne",
     ].sort((a, b) =>
       operator_display_name(a).localeCompare(operator_display_name(b), undefined, {

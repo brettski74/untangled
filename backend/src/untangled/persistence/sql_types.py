@@ -7,18 +7,18 @@ from untangled.mapping.types import SUPPORTED_TYPES, TEXT_STORAGE_FAMILY
 # Keep in lockstep with docs/class-definitions.md type vocabulary.
 YAML_TO_POSTGRES: dict[str, str] = {
     "string": "text",
-    "compact-text": "text",
+    "compact_text": "text",
     "choice": "text",
     "status": "text",
     "text": "text",
-    "multiline-text": "text",
+    "multiline_text": "text",
     "boolean": "boolean",
     "integer": "integer",
     "float": "double precision",
     "decimal": "numeric",
     "uuid": "uuid",
     "datetime": "timestamptz",
-    "friendly-id": "text",
+    "friendly_id": "text",
 }
 
 assert set(YAML_TO_POSTGRES) == SUPPORTED_TYPES

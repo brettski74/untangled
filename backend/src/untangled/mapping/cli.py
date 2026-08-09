@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     result = generate_models(args.definitions, args.pydantic_out, args.zod_out)
     print(
         f"generated {len(result.definitions)} class(es): "
-        f"{', '.join(d.name_kebab for d in result.definitions)}"
+        f"{', '.join(d.name_snake for d in result.definitions)}"
     )
     print(f"  pydantic   → {args.pydantic_out}")
     print(f"  zod        → {args.zod_out}")

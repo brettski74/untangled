@@ -33,7 +33,7 @@ def classify_locator(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 f"locator {locator!r} is not a valid UUID and class "
-                f"{definition.name_kebab!r} has no friendly-id"
+                f"{definition.name_snake!r} has no friendly-id"
             ),
         )
 
@@ -49,6 +49,6 @@ def classify_locator(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=(
             f"locator {locator!r} is neither a valid id nor a valid "
-            f"{prefix}… friendly id for {definition.name_kebab}"
+            f"{prefix}… friendly id for {definition.name_snake}"
         ),
     )

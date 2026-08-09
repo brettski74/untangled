@@ -21,21 +21,21 @@ import {
 export type UpdateZodSchema = z.ZodType<Record<string, unknown>>;
 
 const UPDATE_SCHEMAS: Readonly<Record<string, UpdateZodSchema>> = {
-  "change-request": ChangeRequestUpdateSchema,
-  "demo-item": DemoItemUpdateSchema,
-  "demo-link": DemoLinkUpdateSchema,
+  change_request: ChangeRequestUpdateSchema,
+  demo_item: DemoItemUpdateSchema,
+  demo_link: DemoLinkUpdateSchema,
   incident: IncidentUpdateSchema,
   permission: PermissionUpdateSchema,
-  "refresh-token": RefreshTokenUpdateSchema,
-  "role-permission": RolePermissionUpdateSchema,
+  refresh_token: RefreshTokenUpdateSchema,
+  role_permission: RolePermissionUpdateSchema,
   role: RoleUpdateSchema,
-  "system-config": SystemConfigUpdateSchema,
-  "user-role": UserRoleUpdateSchema,
+  system_config: SystemConfigUpdateSchema,
+  user_role: UserRoleUpdateSchema,
   user: UserUpdateSchema,
 };
 
 /**
- * Returns the generated Update schema for a class kebab name, or null on miss.
+ * Returns the generated Update schema for a class name, or null on miss.
  */
 export function update_schema_for_class(
   class_name: string,

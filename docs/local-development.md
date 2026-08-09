@@ -104,20 +104,20 @@ Seed users (usernames are case-normalized to lowercase):
 | `admin` | `admin-change-me` | `01900000-0000-7000-8000-000000000001` | `admin` (permission `admin` = allow-all) |
 | `readonly` | `readonly-change-me` | `01900000-0000-7000-8000-000000000002` | `read-only` (`{class}:read`) |
 | `readwrite` | `readwrite-change-me` | `01900000-0000-7000-8000-000000000003` | `read-write` (create/read/update; **no** `:delete`, **no** `admin`) |
-| `change` | `change-change-me` | `01900000-0000-7000-8000-000000000004` | `change-request-read-write` (CHG create/read/update only) |
+| `change` | `change-change-me` | `01900000-0000-7000-8000-000000000004` | `change_request-read-write` (CHG create/read/update only) |
 | `incident` | `incident-change-me` | `01900000-0000-7000-8000-000000000005` | `incident-read-only` (`incident:read` only) |
 
 Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_READWRITE_PASSWORD`, `SEED_CHANGE_PASSWORD`, `SEED_INCIDENT_PASSWORD` when running `make seed`.
 
-`make migrate` also ensures username `system` (`${system-user-id}`) as a non-login platform attribution principal. It has no password, no roles, and must not be activated. Sample ticket rows are still attributed to seeded `admin`.
+`make migrate` also ensures username `system` (`${system_user_id}`) as a non-login platform attribution principal. It has no password, no roles, and must not be activated. Sample ticket rows are still attributed to seeded `admin`.
 
 ### Permission keys
 
-- Class+operation: `{class}:{operation}` where `class` is the YAML class `name` (kebab-case) and `operation` is one of `create`, `read`, `update`, `delete`. Example: `demo-item:read`.
+- Class+operation: `{class}:{operation}` where `class` is the YAML class `name` (snake_case) and `operation` is one of `create`, `read`, `update`, `delete`. Example: `demo_item:read`.
 - For M1, `read` covers list, fetch-by-id, and search.
 - Class YAML `public: true` grants **authenticated read** without `{class}:read` (standard class-access model via `require_class_operation` / `can_read_class`). Unauthenticated callers are still denied. Writes are unchanged.
 - Non-class key in M1: `admin` — grants all access in enforcement helpers.
-- Seeded catalog includes full CRUD keys for `demo-item`, `incident`, and `change-request` (including `:delete` rows). Pre-seeding `incident` / `change-request` permission **rows** does not create those domain tables.
+- Seeded catalog includes full CRUD keys for `demo_item`, `incident`, and `change_request` (including `:delete` rows). Pre-seeding `incident` / `change_request` permission **rows** does not create those domain tables.
 - Effective permissions are the **union** across all roles assigned to a user. Resolution is from the database per request (not JWT claims).
 
 ### Roles (stable seed UUIDs)
@@ -127,7 +127,7 @@ Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_R
 | `admin` | `01900000-0000-7000-8000-000000000011` | `admin` |
 | `read-only` | `01900000-0000-7000-8000-000000000012` | `{class}:read` for seeded classes |
 | `read-write` | `01900000-0000-7000-8000-000000000013` | `{class}:create`, `:read`, `:update` for seeded classes |
-| `change-request-read-write` | `01900000-0000-7000-8000-000000000014` | `change-request:create`, `:read`, `:update` |
+| `change_request-read-write` | `01900000-0000-7000-8000-000000000014` | `change_request:create`, `:read`, `:update` |
 | `incident-read-only` | `01900000-0000-7000-8000-000000000015` | `incident:read` |
 
 ### Enforcement helpers (for later domain routes)
@@ -172,20 +172,20 @@ Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-orig
 1. Open `http://127.0.0.1:8000/docs`.
 2. `POST /auth/login` (OAuth2 password form) with a seed username/password — copy `access_token`.
 3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
-4. Hit `GET /auth/rbac-probe` (requires `demo-item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo-item:read`) get **403**; a user with no roles gets **403**.
+4. Hit `GET /auth/rbac-probe` (requires `demo_item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo_item:read`) get **403**; a user with no roles gets **403**.
 5. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
    - Prefer versioned reads: `GET /api/v1/incidents/{locator}` /
-     `GET /api/v1/change-requests/{locator}` (UUID or friendly number).
+     `GET /api/v1/change_requests/{locator}` (UUID or friendly number).
    - Legacy (deprecated) scalar reads: `GET /incidents/{locator}` /
-     `GET /change-requests/{locator}`.
+     `GET /change_requests/{locator}`.
    - `POST` create (omit `number` — server assigns it), `PATCH` update, `DELETE`
      (admin only among seed roles) on **unversioned** routes.
    - Junk locators → **422**; missing records → **404**; readonly cannot create → **403**.
 6. Exercise predicate search (same Authorize token; requires `{class}:read`):
    - Prefer `POST /api/v1/incidents/search` and
-     `POST /api/v1/change-requests/search` (see [Predicate search](#predicate-search)
+     `POST /api/v1/change_requests/search` (see [Predicate search](#predicate-search)
      and [API versioning](#api-versioning) below).
-   - Legacy `POST /incidents/search` / `POST /change-requests/search` remain for
+   - Legacy `POST /incidents/search` / `POST /change_requests/search` remain for
      compatibility (scalar FK UUIDs).
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
    - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
@@ -228,8 +228,8 @@ Rules:
 
 - `id` is always present for a non-null FK (canonical hyphenated UUID).
 - `display_name` is included only when the target class has an effective
-  `display-attribute`; value may be string or `null`.
-- `friendly_id` is included only when the target class defines a `friendly-id`
+  `display_attribute`; value may be string or `null`.
+- `friendly_id` is included only when the target class defines a `friendly_id`
   attribute; value may be string or `null`.
 - Unsupported keys are omitted (not emitted as null).
 - Non-FK UUID attributes remain scalar UUID strings.
@@ -245,8 +245,8 @@ Generic, definition-driven search for any class mounted via the class router fac
 | `POST` | `/api/v1/{collection}/search` | `{class}:read` (preferred for new consumers) |
 | `POST` | `/{collection}/search` | `{class}:read` (legacy scalar FK responses; deprecated) |
 
-Examples: `POST /api/v1/incidents/search`, `POST /api/v1/change-requests/search`.
-Legacy: `POST /incidents/search`, `POST /change-requests/search`.
+Examples: `POST /api/v1/incidents/search`, `POST /api/v1/change_requests/search`.
+Legacy: `POST /incidents/search`, `POST /change_requests/search`.
 
 #### Request envelope
 
@@ -260,7 +260,7 @@ Legacy: `POST /incidents/search`, `POST /change-requests/search`.
 
 #### Predicate grammar (delivered)
 
-Every node has an `op` (kebab-case string values). Logical nodes:
+Every node has an `op` (snake_case string values). Logical nodes:
 
 | `op` | Children | Meaning |
 | ---- | -------- | ------- |
@@ -279,30 +279,30 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 | `lt` | `value` (required, non-null) | Less than |
 | `lte` | `value` (required, non-null) | Less than or equal |
 | `contains` | `value` (required, string) | Substring match (`LIKE`, case-sensitive) |
-| `starts-with` | `value` (required, string) | Prefix match (`LIKE`, case-sensitive) |
-| `ends-with` | `value` (required, string) | Suffix match (`LIKE`, case-sensitive) |
+| `starts_with` | `value` (required, string) | Prefix match (`LIKE`, case-sensitive) |
+| `ends_with` | `value` (required, string) | Suffix match (`LIKE`, case-sensitive) |
 | `regexp` | `value` (required, string) | POSIX regex match (`~`, case-sensitive) |
 | `empty` | *(none)* | `IS NULL` |
-| `not-empty` | *(none)* | `IS NOT NULL` |
+| `not_empty` | *(none)* | `IS NOT NULL` |
 
-- `eq` / `ne` / `empty` / `not-empty` apply to **all** mapped attribute types (including system fields).
+- `eq` / `ne` / `empty` / `not_empty` apply to **all** mapped attribute types (including system fields).
 - `gt` / `gte` / `lt` / `lte` apply to ordered types: **text-family** types
-  (`compact-text`, `choice`, `status`, `text`, `multiline-text`, and deprecated
+  (`compact_text`, `choice`, `status`, `text`, `multiline_text`, and deprecated
   `string`), plus **`integer`**, **`float`**, **`decimal`**, **`datetime`**,
-  **`friendly-id`**. **Not** `boolean` or `uuid` (including FK uuid attributes)
+  **`friendly_id`**. **Not** `boolean` or `uuid` (including FK uuid attributes)
   → **422**.
-- `contains` / `starts-with` / `ends-with` / `regexp` apply to the **text
-  family** and **`friendly-id`**. Other types → **422**.
-  **Note:** `multiline-text` keeps the same operator eligibility as short text
+- `contains` / `starts_with` / `ends_with` / `regexp` apply to the **text
+  family** and **`friendly_id`**. Other types → **422**.
+  **Note:** `multiline_text` keeps the same operator eligibility as short text
   for M1 consistency; pattern/ordered filters on long bodies may scan heavily
   and are tracked as follow-on performance debt (predicate model / U8).
 - Text comparisons are **case-sensitive**. No trim; no implicit casting across incompatible types.
 - **Ordered text filters** (`gt` / `gte` / `lt` / `lte` on text-family /
-  `friendly-id`) use PostgreSQL `COLLATE "C"` (byte/codepoint order) so results
+  `friendly_id`) use PostgreSQL `COLLATE "C"` (byte/codepoint order) so results
   are deterministic across database locales. Non-ASCII codepoints sort after all
   ASCII. This is not the same as Unicode locale ordering.
 - **Text `sort` collation** still uses the database default (may disagree with C-ordered filters in the same request). Aligning sort with filter collation and case-insensitive search is deferred ([#61](https://github.com/brettski74/untangled/issues/61)).
-- **NULL and ordered / equality ops:** rows with a NULL attribute do not match `eq` / `ne` / `gt` / `gte` / `lt` / `lte` (SQL three-valued logic). `lt X` and `gte X` therefore do **not** partition the table. Optional booleans are tri-state: unset (`NULL`) matches neither `eq true` nor `eq false` — use `empty` / `not-empty`, or prefer required booleans once schema defaults/backfill exist ([#62](https://github.com/brettski74/untangled/issues/62)). Use `empty` / `not-empty` for null checks — `value: null` on value-taking ops → **422**.
+- **NULL and ordered / equality ops:** rows with a NULL attribute do not match `eq` / `ne` / `gt` / `gte` / `lt` / `lte` (SQL three-valued logic). `lt X` and `gte X` therefore do **not** partition the table. Optional booleans are tri-state: unset (`NULL`) matches neither `eq true` nor `eq false` — use `empty` / `not_empty`, or prefer required booleans once schema defaults/backfill exist ([#62](https://github.com/brettski74/untangled/issues/62)). Use `empty` / `not_empty` for null checks — `value: null` on value-taking ops → **422**.
 - **`risk_score` (Change Request):** optional integer; M1 seed/docs convention is **0–100** (not yet range-validated by the API).
 - **Friendly-id ordered compares** are lexicographic on the stored text (prefix + digits). With consistent prefixes and pad width this usually tracks numeric order; pad-width differences dominate (e.g. `INC10` sorts before `INC9` if those were the literal stored values without zero-padding).
 - LIKE pattern ops treat `%`, `_`, and `\` in the search value as **literals** (escaped; SQL uses `ESCAPE '\'`).
@@ -379,9 +379,9 @@ Well-known catalog ids:
 | Name | UUID | Constant | Notes |
 | ---- | ---- | -------- | ----- |
 | `${system-config-id}` | `01900000-0000-7000-8000-000000000050` | `SYSTEM_CONFIG_ID` | Singleton row; migrate insert-once; `public` authenticated fetch; update = admin among seed roles |
-| `${system-user-id}` | `01900000-0000-7000-8000-000000000006` | `SYSTEM_USER_ID` | Platform attribution principal (`system`); migrate inserts it; **cannot log in**; not a seed login user |
+| `${system_user_id}` | `01900000-0000-7000-8000-000000000006` | `SYSTEM_USER_ID` | Platform attribution principal (`system`); migrate inserts it; **cannot log in**; not a seed login user |
 
-Six incident rows and fourteen change-request rows are seeded; full stable UUID constants live in `backend/src/untangled/seed/tickets.py`.
+Six incident rows and fourteen change_request rows are seeded; full stable UUID constants live in `backend/src/untangled/seed/tickets.py`.
 
 `GET /health` and `/docs` stay public. There is no “auth disabled” mode.
 
@@ -468,13 +468,13 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
 | Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI refresh (#14); hardening #33 / security review #67 |
-| Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly-id locator | — |
-| Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not-empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
+| Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
+| Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
 | `make redis-up` / Redis | Shared bus + cache instance (ephemeral) | Message bus (#161); authz cache (#162) |
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |
-| Persistence (`untangled.persistence`) | Thin SQL create/fetch/update/delete + friendly-id assign | Domain routes stamp authenticated actor |
+| Persistence (`untangled.persistence`) | Thin SQL create/fetch/update/delete + friendly_id assign | Domain routes stamp authenticated actor |
 | System principal (`SYSTEM_USER_ID`) | Distinct non-login actor for migrate/bootstrap/non-HTTP stamps | HTTP writes use the authenticated user; `#155` bootstrap uses this id |
 | Frontend SSR login + shell chrome | Real `/login`, httpOnly access JWT cookie, header/nav/context chrome | YAML nav (#66), refresh (#14) |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |

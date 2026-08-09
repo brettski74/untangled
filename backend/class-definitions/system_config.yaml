@@ -1,0 +1,89 @@
+# System Configuration — environment-local, non-sensitive runtime parameters.
+# Future class tier: system (#116). Tier field not invented here.
+name: system_config
+display_name: System Configuration
+description: >
+  Singleton holding general system settings operators may tune per deployment
+  without a Git promote cycle. Safe for authenticated read (public: true).
+  Search-limit attributes are the initial contents; the class is expected to
+  grow. Secrets must not live here.
+public: true
+suppress_create: true
+suppress_delete: true
+suppress_search: true
+check_constraint:
+  - "id = '${system_config_id}'::uuid"
+  - "password_maximum_chars > password_minimum_chars"
+attributes:
+  max_search_nesting_depth:
+    type: integer
+    required: true
+    create_default: 3
+    min_value: 1
+    max_value: 10
+  max_search_nesting_length:
+    type: integer
+    required: true
+    create_default: 20
+    min_value: 1
+    max_value: 100
+  max_search_total_predicates:
+    type: integer
+    required: true
+    create_default: 50
+    min_value: 1
+    max_value: 500
+  max_search_total_regexp:
+    type: integer
+    required: true
+    create_default: 3
+    min_value: 0
+    max_value: 20
+  system_config_cache_ttl_seconds:
+    type: integer
+    required: true
+    create_default: 900
+    min_value: 1
+    max_value: 86400
+  password_minimum_chars:
+    type: integer
+    required: true
+    create_default: 12
+    min_value: 1
+    max_value: 256
+  password_maximum_chars:
+    type: integer
+    required: true
+    create_default: 128
+    min_value: 1
+    max_value: 256
+  password_acceptable_crack_time_days:
+    type: integer
+    required: true
+    create_default: 1000
+    min_value: 100
+    max_value: 1000000
+  password_guess_per_second:
+    type: integer
+    required: true
+    create_default: 10000
+    min_value: 100
+    max_value: 1000000
+  password_estimate_drift_factor:
+    type: decimal
+    required: true
+    create_default: 1.1
+    min_value: 1
+    max_value: 10
+  audit_bulk_read_window_seconds:
+    type: integer
+    required: true
+    create_default: 600
+    min_value: 60
+    max_value: 86400
+  audit_bulk_read_max_searches:
+    type: integer
+    required: true
+    create_default: 100
+    min_value: 1
+    max_value: 100000

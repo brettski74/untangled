@@ -194,7 +194,7 @@ function TextField({
     ? (draft[slot.name_snake] ?? null)
     : record[slot.name_snake];
   const text = display_field_value(slot.type_name, value);
-  const multiline = slot.type_name === "multiline-text";
+  const multiline = slot.type_name === "multiline_text";
   const field_class = editable
     ? `w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 ${FOCUS_RING}`
     : "w-full rounded border border-slate-300 bg-slate-50 px-2 py-1.5 text-sm text-slate-900";

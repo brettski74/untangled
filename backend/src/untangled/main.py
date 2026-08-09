@@ -19,6 +19,7 @@ from untangled.records import (
     incidents_v1_router,
     system_configs_router,
     system_configs_v1_router,
+    v2_record_routers,
 )
 from untangled.request_validation import register_request_validation_handlers
 
@@ -42,12 +43,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Untangled ITSM",
     description=(
-        "Backend API for Milestone 1. Public domain read contracts that change "
-        "use path versions under /api/v{major}. Unversioned /incidents, "
-        "/change-requests, and /system-configs fetch/search routes are "
-        "pre-versioning legacy compatibility surfaces (removal tracked by "
-        "GitHub issue #117). Create/update/delete remain unversioned until "
-        "deliberately versioned."
+        "Backend API for Milestone 1. Public domain contracts that change use "
+        "path versions under /api/v{major}. /api/v2 is a versioned record "
+        "contract (path tracks live class name; spelling follows identity "
+        "rename); FE is not cut over to v2 yet. Unversioned /incidents, "
+        "/change-requests, and /system-configs routes are pre-versioning "
+        "legacy compatibility surfaces (removal tracked by GitHub issue #117 "
+        "and epic #150). /api/v1 remains the live in-app read/update contract "
+        "until FE cutover."
     ),
     version="0.1.0",
     lifespan=lifespan,
@@ -63,6 +66,8 @@ app.include_router(system_configs_router)
 app.include_router(incidents_v1_router)
 app.include_router(change_requests_v1_router)
 app.include_router(system_configs_v1_router)
+for _v2_router in v2_record_routers:
+    app.include_router(_v2_router)
 
 
 @app.get("/health")

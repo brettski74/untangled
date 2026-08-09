@@ -1,4 +1,4 @@
-"""Tests for friendly-id definition rules and formatting helpers."""
+"""Tests for friendly_id definition rules and formatting helpers."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def test_sequence_name_lowercases_prefix() -> None:
 
 def test_load_incident_friendly_id(repo_definitions: Path) -> None:
     definitions = load_definitions(repo_definitions)
-    incident = next(d for d in definitions if d.name_kebab == "incident")
+    incident = next(d for d in definitions if d.name_snake == "incident")
     attr = incident.friendly_id_attr()
     assert attr is not None
     assert attr.prefix == "INC"
@@ -42,11 +42,11 @@ def test_rejects_pad_width_below_min(tmp_path: Path) -> None:
         path,
         """
 name: ticket
-display-name: Ticket
+display_name: Ticket
 description: Bad pad.
 attributes:
   number:
-    type: friendly-id
+    type: friendly_id
     required: true
     prefix: TKT
     pad-width: 3
@@ -62,20 +62,20 @@ def test_rejects_two_friendly_ids(tmp_path: Path) -> None:
         path,
         """
 name: ticket
-display-name: Ticket
+display_name: Ticket
 description: Two friendly ids.
 attributes:
   number:
-    type: friendly-id
+    type: friendly_id
     required: true
     prefix: TKT
   alt:
-    type: friendly-id
+    type: friendly_id
     required: true
     prefix: ALT
 """,
     )
-    with pytest.raises(DefinitionError, match="at most one friendly-id"):
+    with pytest.raises(DefinitionError, match="at most one friendly_id"):
         load_definition(path)
 
 
@@ -83,11 +83,11 @@ def test_rejects_duplicate_prefixes_case_insensitive(tmp_path: Path) -> None:
     (tmp_path / "a.yaml").write_text(
         """
 name: alpha
-display-name: Alpha
+display_name: Alpha
 description: A.
 attributes:
   number:
-    type: friendly-id
+    type: friendly_id
     required: true
     prefix: INC
 """,
@@ -96,11 +96,11 @@ attributes:
     (tmp_path / "b.yaml").write_text(
         """
 name: beta
-display-name: Beta
+display_name: Beta
 description: B.
 attributes:
   number:
-    type: friendly-id
+    type: friendly_id
     required: true
     prefix: inc
 """,

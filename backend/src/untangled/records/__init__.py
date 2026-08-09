@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from untangled.records.deps import ensure_generated_package
 from untangled.records.router_factory import build_class_router
+from untangled.records.v2_mounts import build_v2_record_routers
 
 ensure_generated_package()
 
@@ -43,6 +44,7 @@ system_configs_v1_router = build_class_router(
     tags=["system-configs-v1"],
     surface="v1",
 )
+v2_record_routers = build_v2_record_routers()
 
 __all__ = [
     "change_requests_router",
@@ -51,4 +53,5 @@ __all__ = [
     "incidents_v1_router",
     "system_configs_router",
     "system_configs_v1_router",
+    "v2_record_routers",
 ]

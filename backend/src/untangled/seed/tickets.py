@@ -51,12 +51,12 @@ def seed_tickets(conn: Connection) -> dict[str, list[str]]:
     """Upsert sample INC/CHG rows via RecordStore. Returns created/skipped summaries."""
     defs = definitions_dir()
     incident_def = load_definition(defs / "incident.yaml")
-    change_def = load_definition(defs / "change-request.yaml")
+    change_def = load_definition(defs / "change_request.yaml")
     incident_store = RecordStore(
         conn, incident_def, model("incident"), actor_id=SEED_ADMIN_ID
     )
     change_store = RecordStore(
-        conn, change_def, model("change-request"), actor_id=SEED_ADMIN_ID
+        conn, change_def, model("change_request"), actor_id=SEED_ADMIN_ID
     )
 
     now = utc_now()

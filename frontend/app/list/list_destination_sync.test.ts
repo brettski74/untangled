@@ -8,7 +8,6 @@ function attr(
     Pick<AttributeFieldMeta, "name_snake" | "type_name" | "order">,
 ): AttributeFieldMeta {
   return {
-    name_kebab: overrides.name_kebab ?? overrides.name_snake.replace(/_/g, "-"),
     name_snake: overrides.name_snake,
     type_name: overrides.type_name,
     required: overrides.required ?? false,
@@ -19,7 +18,7 @@ function attr(
 
 describe("list_destination_ui_sync", () => {
   const attributes = [
-    attr({ name_snake: "number", type_name: "friendly-id", order: 0 }),
+    attr({ name_snake: "number", type_name: "friendly_id", order: 0 }),
     attr({ name_snake: "risk_score", type_name: "integer", order: 1 }),
   ];
 

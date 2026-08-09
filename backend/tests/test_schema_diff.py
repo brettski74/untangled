@@ -214,7 +214,7 @@ def test_intra_family_text_type_rename_emits_no_alter() -> None:
         "incident",
         (
             ColumnIR("id", "uuid", False),
-            ColumnIR("summary", "text", False),  # was string / compact-text
+            ColumnIR("summary", "text", False),  # was string / compact_text
             ColumnIR("status", "text", False),  # was string → status
         ),
     )

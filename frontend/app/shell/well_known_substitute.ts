@@ -1,5 +1,5 @@
 /**
- * Apply ``${kebab-name}`` substitution using the generated catalog.
+ * Apply ``${snake_name}`` substitution using the generated catalog.
  * Catalog values and context allowlists come from ``make models`` only.
  */
 import {
@@ -7,7 +7,7 @@ import {
   WELL_KNOWN,
 } from "../generated/well_known";
 
-const TOKEN_RE = /\$\{([a-z0-9]+(?:-[a-z0-9]+)*)\}/g;
+const TOKEN_RE = /\$\{([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\}/g;
 
 export class SubstitutionError extends Error {
   constructor(message: string) {
@@ -17,7 +17,7 @@ export class SubstitutionError extends Error {
 }
 
 /**
- * Replace ``${kebab-name}`` tokens for ``context``.
+ * Replace ``${snake_name}`` tokens for ``context``.
  * Fail closed on unknown context, undefined name, or wrong-context use.
  */
 export function substitute(text: string, context: string): string {
@@ -44,7 +44,7 @@ export function substitute(text: string, context: string): string {
   });
 }
 
-/** True when ``text`` still contains a ``${kebab-name}`` token. */
+/** True when ``text`` still contains a ``${snake_name}`` token. */
 export function has_substitution_token(text: string): boolean {
   TOKEN_RE.lastIndex = 0;
   return TOKEN_RE.test(text);

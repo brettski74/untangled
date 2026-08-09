@@ -43,7 +43,7 @@ def test_desired_schema_includes_yaml_check_constraints(repo_definitions: Path) 
     definitions = load_definitions(repo_definitions)
     patched = [
         replace(defn, check_constraints=("quantity >= 1",))
-        if defn.name_kebab == "demo-item"
+        if defn.name_snake == "demo_item"
         else defn
         for defn in definitions
     ]
@@ -193,7 +193,7 @@ def test_introspect_reads_foreign_keys(
     demo_schema: list[ClassDefinition],
 ) -> None:
     assert demo_schema
-    # Synthetic FK table for introspection naming (YAML FK demo lives on demo-link).
+    # Synthetic FK table for introspection naming (YAML FK demo lives on demo_link).
     with db_conn.cursor() as cur:
         cur.execute("DROP TABLE IF EXISTS schema_ir_fk_child CASCADE")
         cur.execute(

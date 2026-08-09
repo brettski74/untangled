@@ -1,6 +1,7 @@
 """Unit tests for naming-convention maps."""
 
 from untangled.mapping.naming import (
+    is_snake_case,
     kebab_to_pascal,
     kebab_to_snake,
     snake_to_kebab,
@@ -32,3 +33,15 @@ def test_kebab_to_pascal() -> None:
 def test_round_trip_kebab_snake() -> None:
     assert snake_to_kebab(kebab_to_snake("display-name")) == "display-name"
     assert kebab_to_snake(snake_to_kebab("display_name")) == "display_name"
+
+
+def test_is_snake_case() -> None:
+    assert is_snake_case("demo_item")
+    assert is_snake_case("title")
+    assert is_snake_case("user")
+    assert not is_snake_case("demo-item")
+    assert not is_snake_case("Demo_item")
+    assert not is_snake_case("_leading")
+    assert not is_snake_case("trailing_")
+    assert not is_snake_case("double__underscore")
+    assert not is_snake_case("")

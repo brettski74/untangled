@@ -27,3 +27,13 @@ def snake_to_pascal(value: str) -> str:
 def kebab_to_pascal(value: str) -> str:
     """Convert kebab-case to PascalCase (e.g. ``demo-item`` → ``DemoItem``)."""
     return snake_to_pascal(kebab_to_snake(value))
+
+
+def is_snake_case(value: str) -> bool:
+    """Return True if ``value`` is a non-empty snake_case identifier segment form."""
+    if not value or value != value.lower():
+        return False
+    if "-" in value or value.startswith("_") or value.endswith("_") or "__" in value:
+        return False
+    parts = value.split("_")
+    return all(part.isalnum() and part for part in parts)

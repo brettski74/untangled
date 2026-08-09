@@ -12,29 +12,29 @@ from uuid import UUID
 SYSTEM_CONFIG_ID = UUID("01900000-0000-7000-8000-000000000050")
 SYSTEM_USER_ID = UUID("01900000-0000-7000-8000-000000000006")
 
-# kebab-case name → substituted literal (string form).
+# snake_case name → substituted literal (string form).
 WELL_KNOWN: dict[str, str] = {
-    "system-config-id": str(SYSTEM_CONFIG_ID),
-    "system-user-id": str(SYSTEM_USER_ID),
+    "system_config_id": str(SYSTEM_CONFIG_ID),
+    "system_user_id": str(SYSTEM_USER_ID),
 }
 
 # Context → names available in that context. Timing is documented with each
-# consumer (check-constraint: definition load; nav-bar: nav definition load).
+# consumer (check_constraint: definition load; nav_bar: nav definition load).
 SUBSTITUTION_CONTEXTS: dict[str, frozenset[str]] = {
-    "check-constraint": frozenset({"system-config-id"}),
-    "nav-bar": frozenset({"system-config-id"}),
+    "check_constraint": frozenset({"system_config_id"}),
+    "nav_bar": frozenset({"system_config_id"}),
 }
 
-_TOKEN_RE = re.compile(r"\$\{([a-z0-9]+(?:-[a-z0-9]+)*)\}")
+_TOKEN_RE = re.compile(r"\$\{([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\}")
 
 
 class SubstitutionError(ValueError):
     """Unknown name, unknown context, or wrong-context ``${…}`` use."""
 
 
-def constant_name(name_kebab: str) -> str:
-    """Map a catalog kebab name to a Python/TS constant identifier."""
-    return name_kebab.upper().replace("-", "_")
+def constant_name(name_snake: str) -> str:
+    """Map a catalog snake name to a Python/TS constant identifier."""
+    return name_snake.upper()
 
 
 def substitute(
@@ -43,7 +43,7 @@ def substitute(
     *,
     available: frozenset[str] | None = None,
 ) -> str:
-    """Replace ``${kebab-name}`` tokens for ``context``.
+    """Replace ``${snake_name}`` tokens for ``context``.
 
     ``available`` overrides the context allowlist (tests only). Production
     callers pass a registered context name.

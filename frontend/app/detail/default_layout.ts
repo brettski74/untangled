@@ -10,31 +10,27 @@ import {
   attributes_in_declaration_order,
 } from "../list/columns";
 
-const TEXT_SECTION_TYPES = new Set(["text", "multiline-text"]);
+const TEXT_SECTION_TYPES = new Set(["text", "multiline_text"]);
 
 /** Closed platform audit set (not in author field-meta). Fixed display order. */
 export const DETAIL_AUDIT_FIELDS = [
   {
     name_snake: "created_at",
-    name_kebab: "created-at",
     type_name: "datetime",
     references: null as string | null,
   },
   {
     name_snake: "created_by",
-    name_kebab: "created-by",
     type_name: "uuid",
     references: "user",
   },
   {
     name_snake: "updated_at",
-    name_kebab: "updated-at",
     type_name: "datetime",
     references: null as string | null,
   },
   {
     name_snake: "updated_by",
-    name_kebab: "updated-by",
     type_name: "uuid",
     references: "user",
   },
@@ -42,11 +38,10 @@ export const DETAIL_AUDIT_FIELDS = [
 
 export type DetailFieldSlot = {
   name_snake: string;
-  name_kebab: string;
   type_name: string;
   label: string;
   references: string | null;
-  kind: "author" | "friendly-id" | "audit";
+  kind: "author" | "friendly_id" | "audit";
 };
 
 export type DetailLayout = {
@@ -62,7 +57,7 @@ export function is_text_section_type(type_name: string): boolean {
 
 /**
  * Partition class field meta into compact + text sections for the default view.
- * Author attributes follow declaration order; friendly-id is pinned top-left;
+ * Author attributes follow declaration order; friendly_id is pinned top-left;
  * system audit fields append after author compact in fixed platform order.
  * ``id`` is never included.
  */
@@ -82,11 +77,11 @@ export function partition_detail_layout(meta: ClassFieldMeta): DetailLayout {
       continue;
     }
     if (
-      attr.type_name === "friendly-id" ||
+      attr.type_name === "friendly_id" ||
       (meta.friendly_id_attr != null &&
         attr.name_snake === meta.friendly_id_attr)
     ) {
-      friendly = { ...slot, kind: "friendly-id" };
+      friendly = { ...slot, kind: "friendly_id" };
       continue;
     }
     compact_author.push(slot);
@@ -94,9 +89,8 @@ export function partition_detail_layout(meta: ClassFieldMeta): DetailLayout {
 
   const audit: DetailFieldSlot[] = DETAIL_AUDIT_FIELDS.map((field) => ({
     name_snake: field.name_snake,
-    name_kebab: field.name_kebab,
     type_name: field.type_name,
-    label: attribute_display_label(field.name_kebab),
+    label: attribute_display_label(field.name_snake),
     references: field.references,
     kind: "audit" as const,
   }));
@@ -130,9 +124,8 @@ export function split_compact_columns(
 function attribute_to_slot(attr: AttributeFieldMeta): DetailFieldSlot {
   return {
     name_snake: attr.name_snake,
-    name_kebab: attr.name_kebab,
     type_name: attr.type_name,
-    label: attribute_display_label(attr.name_kebab),
+    label: attribute_display_label(attr.name_snake),
     references: attr.references,
     kind: "author",
   };

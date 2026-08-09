@@ -69,7 +69,7 @@ def db_conn() -> Iterator[Connection]:
 
 @pytest.fixture
 def demo_definition(repo_definitions: Path) -> ClassDefinition:
-    return load_definition(repo_definitions / "demo-item.yaml")
+    return load_definition(repo_definitions / "demo_item.yaml")
 
 
 @pytest.fixture

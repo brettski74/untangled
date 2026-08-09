@@ -40,16 +40,16 @@ class RecordStore[T: BaseModel]:
         model_cls: type[T],
         *,
         actor_id: UUID = SYSTEM_USER_ID,
-        definitions_by_kebab: Mapping[str, ClassDefinition] | None = None,
+        definitions_by_name: Mapping[str, ClassDefinition] | None = None,
     ) -> None:
         self._conn = conn
         self._definition = definition
         self._model_cls = model_cls
         self._actor_id = actor_id
-        self._definitions_by_kebab = (
-            dict(definitions_by_kebab)
-            if definitions_by_kebab is not None
-            else {definition.name_kebab: definition}
+        self._definitions_by_name = (
+            dict(definitions_by_name)
+            if definitions_by_name is not None
+            else {definition.name_snake: definition}
         )
         self._user_columns = tuple(attr.name_snake for attr in definition.attributes)
         self._all_columns = (
@@ -218,7 +218,7 @@ class RecordStore[T: BaseModel]:
             limit=limit,
             offset=offset,
             enrich_fk_identity=enrich_fk_identity,
-            definitions_by_kebab=self._definitions_by_kebab,
+            definitions_by_name=self._definitions_by_name,
         )
 
     def _fetch_enriched(
@@ -226,7 +226,7 @@ class RecordStore[T: BaseModel]:
     ) -> dict[str, Any] | None:
         plan = build_enriched_read_plan(
             self._definition,
-            self._definitions_by_kebab,
+            self._definitions_by_name,
             list(self._all_columns),
         )
         query = sql.SQL("SELECT {} FROM {} WHERE {}.{} = {}").format(
@@ -274,7 +274,7 @@ class RecordStore[T: BaseModel]:
             return
         if self._friendly.name_snake in user_fields:
             raise ValueError(
-                f"{context} payload must not include server-assigned friendly-id "
+                f"{context} payload must not include server-assigned friendly_id "
                 f"field {self._friendly.name_snake!r}"
             )
 

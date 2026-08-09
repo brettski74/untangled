@@ -9,7 +9,6 @@ from untangled.mapping.definition import (
     load_definitions,
     validate_platform_definitions,
 )
-from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.system_fields import AUDIT_USER_TABLE, SYSTEM_FIELDS
 from untangled.mapping.types import friendly_id_sequence_name
 from untangled.schema.checks import check_constraint_name, normalize_check_expression
@@ -111,7 +110,7 @@ def _table_from_definition(definition: ClassDefinition) -> TableIR:
                 ForeignKeyIR(
                     name=foreign_key_constraint_name(definition.name_snake, col),
                     columns=(col,),
-                    referenced_table=kebab_to_snake(attr.references),
+                    referenced_table=attr.references,
                     referenced_columns=("id",),
                 )
             )

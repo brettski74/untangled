@@ -28,7 +28,6 @@ function attr(
     Pick<AttributeFieldMeta, "name_snake" | "type_name" | "order">,
 ): AttributeFieldMeta {
   return {
-    name_kebab: overrides.name_kebab ?? overrides.name_snake.replace(/_/g, "-"),
     name_snake: overrides.name_snake,
     type_name: overrides.type_name,
     required: overrides.required ?? false,
@@ -38,15 +37,15 @@ function attr(
 }
 
 describe("quick_filter_control_kind", () => {
-  it("maps text family, numeric, datetime, boolean, friendly-id", () => {
+  it("maps text family, numeric, datetime, boolean, friendly_id", () => {
     expect(quick_filter_control_kind("text")).toBe("text");
-    expect(quick_filter_control_kind("compact-text")).toBe("text");
+    expect(quick_filter_control_kind("compact_text")).toBe("text");
     expect(quick_filter_control_kind("choice")).toBe("text");
     expect(quick_filter_control_kind("status")).toBe("text");
     expect(quick_filter_control_kind("integer")).toBe("numeric");
     expect(quick_filter_control_kind("datetime")).toBe("datetime");
     expect(quick_filter_control_kind("boolean")).toBe("boolean");
-    expect(quick_filter_control_kind("friendly-id")).toBe("friendly-id");
+    expect(quick_filter_control_kind("friendly_id")).toBe("friendly_id");
   });
 
   it("rejects uuid and unknown types", () => {
@@ -58,10 +57,10 @@ describe("quick_filter_control_kind", () => {
 describe("should_clear_value_on_field_change", () => {
   it("preserves value within the same control kind (both directions)", () => {
     expect(
-      should_clear_value_on_field_change("text", "multiline-text"),
+      should_clear_value_on_field_change("text", "multiline_text"),
     ).toBe(false);
     expect(
-      should_clear_value_on_field_change("multiline-text", "text"),
+      should_clear_value_on_field_change("multiline_text", "text"),
     ).toBe(false);
     expect(should_clear_value_on_field_change("text", "status")).toBe(false);
     expect(should_clear_value_on_field_change("status", "choice")).toBe(false);
@@ -76,10 +75,10 @@ describe("should_clear_value_on_field_change", () => {
     expect(should_clear_value_on_field_change("text", "integer")).toBe(true);
     expect(should_clear_value_on_field_change("integer", "text")).toBe(true);
     expect(
-      should_clear_value_on_field_change("text", "friendly-id"),
+      should_clear_value_on_field_change("text", "friendly_id"),
     ).toBe(true);
     expect(
-      should_clear_value_on_field_change("friendly-id", "text"),
+      should_clear_value_on_field_change("friendly_id", "text"),
     ).toBe(true);
     expect(
       should_clear_value_on_field_change("datetime", "text"),
@@ -111,7 +110,6 @@ describe("quick_filterable_attributes", () => {
     expect(() =>
       quick_filterable_attributes([
         {
-          name_kebab: "summary",
           name_snake: "summary",
           type_name: "text",
           required: true,
@@ -125,7 +123,7 @@ describe("quick_filterable_attributes", () => {
 
 describe("quick_filter_ui_defaults", () => {
   const incidentish = [
-    attr({ name_snake: "number", type_name: "friendly-id", order: 0 }),
+    attr({ name_snake: "number", type_name: "friendly_id", order: 0 }),
     attr({ name_snake: "summary", type_name: "text", order: 1 }),
     attr({ name_snake: "status", type_name: "status", order: 2 }),
   ];
@@ -150,7 +148,7 @@ describe("quick_filter_ui_defaults", () => {
 
 describe("quick_filter_destination_reset", () => {
   const change_requestish = [
-    attr({ name_snake: "number", type_name: "friendly-id", order: 0 }),
+    attr({ name_snake: "number", type_name: "friendly_id", order: 0 }),
     attr({ name_snake: "risk_score", type_name: "integer", order: 1 }),
     attr({ name_snake: "summary", type_name: "text", order: 2 }),
   ];
@@ -217,7 +215,7 @@ describe("and_predicates", () => {
 });
 
 describe("build_quick_filter_predicates", () => {
-  it("builds contains for text and ends-with for friendly-id", () => {
+  it("builds contains for text and ends_with for friendly_id", () => {
     expect(
       build_quick_filter_predicates(
         attr({ name_snake: "summary", type_name: "text", order: 0 }),
@@ -231,13 +229,13 @@ describe("build_quick_filter_predicates", () => {
     });
     expect(
       build_quick_filter_predicates(
-        attr({ name_snake: "number", type_name: "friendly-id", order: 0 }),
+        attr({ name_snake: "number", type_name: "friendly_id", order: 0 }),
         { text: "0001" },
       ),
     ).toEqual({
       ok: true,
       predicates: [
-        { op: "ends-with", attribute: "number", value: "0001" },
+        { op: "ends_with", attribute: "number", value: "0001" },
       ],
     });
   });

@@ -8,12 +8,12 @@ import type { SearchPredicate } from "./quick_filter";
 
 const STRING_FAMILY = new Set([
   "string",
-  "compact-text",
+  "compact_text",
   "choice",
   "status",
   "text",
-  "multiline-text",
-  "friendly-id",
+  "multiline_text",
+  "friendly_id",
   "uuid",
 ]);
 
@@ -43,7 +43,7 @@ function attribute_render_context(
   const labels = new Map<string, string>();
   const types = new Map<string, string>();
   for (const attr of attributes) {
-    labels.set(attr.name_snake, attribute_display_label(attr.name_kebab));
+    labels.set(attr.name_snake, attribute_display_label(attr.name_snake));
     types.set(attr.name_snake, attr.type_name);
   }
   return { labels, types };
@@ -74,13 +74,13 @@ function render_node(node: SearchPredicate, ctx: AttrRenderCtx): string {
       return render_regexp(node, ctx);
     case "contains":
       return render_text_pattern("contains", node, ctx);
-    case "ends-with":
-      return render_text_pattern("ends-with", node, ctx);
-    case "starts-with":
-      return render_text_pattern("starts-with", node, ctx);
+    case "ends_with":
+      return render_text_pattern("ends_with", node, ctx);
+    case "starts_with":
+      return render_text_pattern("starts_with", node, ctx);
     case "empty":
       return `${attr_name(node.attribute, ctx)} is empty`;
-    case "not-empty":
+    case "not_empty":
       return `${attr_name(node.attribute, ctx)} is not empty`;
     default:
       return "";
@@ -161,7 +161,7 @@ function attr_name(
   }
   return (
     ctx.labels.get(attribute) ??
-    attribute_display_label(attribute.replace(/_/g, "-"))
+    attribute_display_label(attribute)
   );
 }
 

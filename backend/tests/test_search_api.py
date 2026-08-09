@@ -140,7 +140,7 @@ def test_search_not_empty(tickets_client: TestClient) -> None:
         tickets_client,
         "/incidents/search",
         {
-            "predicate": {"op": "not-empty", "attribute": "description"},
+            "predicate": {"op": "not_empty", "attribute": "description"},
             "attributes": ["description"],
         },
     )
@@ -297,7 +297,7 @@ def test_search_ordered_ops(tickets_client: TestClient) -> None:
     for item in status_gt.json()["items"]:
         assert item["status"] > "m"
 
-    # friendly-id starts-with-style bound via gte on INC numbers
+    # friendly_id starts_with-style bound via gte on INC numbers
     number_gte = _search(
         tickets_client,
         "/incidents/search",
@@ -423,7 +423,7 @@ def test_search_ordered_type_rejection(tickets_client: TestClient) -> None:
 
 
 def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
-    # contains / starts-with / ends-with / regexp against seed incident 1.
+    # contains / starts_with / ends_with / regexp against seed incident 1.
     contains = _search(
         tickets_client,
         "/incidents/search",
@@ -445,7 +445,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
         "/incidents/search",
         {
             "predicate": {
-                "op": "starts-with",
+                "op": "starts_with",
                 "attribute": "summary",
                 "value": "Email",
             },
@@ -460,7 +460,7 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
         "/incidents/search",
         {
             "predicate": {
-                "op": "ends-with",
+                "op": "ends_with",
                 "attribute": "summary",
                 "value": "delayed",
             },
@@ -485,13 +485,13 @@ def test_search_text_pattern_ops(tickets_client: TestClient) -> None:
     assert regexp.status_code == 200
     assert str(SEED_INCIDENT_1_ID) in {i["id"] for i in regexp.json()["items"]}
 
-    # friendly-id starts-with on change-requests (shared factory path).
+    # friendly_id starts_with on change-requests (shared factory path).
     chg = _search(
         tickets_client,
         "/change-requests/search",
         {
             "predicate": {
-                "op": "starts-with",
+                "op": "starts_with",
                 "attribute": "number",
                 "value": "CHG",
             },
@@ -681,6 +681,9 @@ def test_search_guardrails_and_validation_422(tickets_client: TestClient) -> Non
         },
         {"predicate": {"op": "gt", "attribute": "major_incident", "value": True}},
         {"predicate": {"op": "bogus", "attribute": "status", "value": "a"}},
+        {"predicate": {"op": "starts-with", "attribute": "summary", "value": "x"}},
+        {"predicate": {"op": "ends-with", "attribute": "summary", "value": "x"}},
+        {"predicate": {"op": "not-empty", "attribute": "description"}},
         {"sort": [{"attribute": "not_a_real_field", "direction": "asc"}]},
     ]
     for body in semantic_cases:
@@ -724,7 +727,7 @@ def test_search_unreadable_system_config_503(
     from untangled.system_config import SystemConfigUnreadableError
 
     def _boom(_conn, *, cache=None):
-        raise SystemConfigUnreadableError("system-config singleton could not be read")
+        raise SystemConfigUnreadableError("system_config singleton could not be read")
 
     monkeypatch.setattr(
         "untangled.records.router_factory.get_system_config",

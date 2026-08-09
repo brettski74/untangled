@@ -40,10 +40,10 @@ IMPLEMENTED_OPS: frozenset[str] = frozenset(
         "lt",
         "lte",
         "empty",
-        "not-empty",
+        "not_empty",
         "contains",
-        "starts-with",
-        "ends-with",
+        "starts_with",
+        "ends_with",
         "regexp",
     }
 )
@@ -51,16 +51,16 @@ IMPLEMENTED_OPS: frozenset[str] = frozenset(
 _VALUE_OPS = frozenset({"eq", "ne"})
 _ORDERED_OPS = frozenset({"gt", "gte", "lt", "lte"})
 # Text-family YAML types share string operator eligibility (incl. deprecated
-# ``string``). ``multiline-text`` keeps parity for M1; pattern/ordered filters
+# ``string``). ``multiline_text`` keeps parity for M1; pattern/ordered filters
 # on long text may scan heavily — tracked as follow-on performance debt.
 _TEXT_FAMILY_SEARCH_TYPES = frozenset(
     {
         "string",
-        "compact-text",
+        "compact_text",
         "choice",
         "status",
         "text",
-        "multiline-text",
+        "multiline_text",
     }
 )
 _ORDERED_TYPES = frozenset(
@@ -70,28 +70,28 @@ _ORDERED_TYPES = frozenset(
         "float",
         "decimal",
         "datetime",
-        "friendly-id",
+        "friendly_id",
     }
 )
-_TEXT_ORDERED_TYPES = frozenset({*_TEXT_FAMILY_SEARCH_TYPES, "friendly-id"})
+_TEXT_ORDERED_TYPES = frozenset({*_TEXT_FAMILY_SEARCH_TYPES, "friendly_id"})
 _ORDERED_SQL = {
     "gt": sql.SQL(">"),
     "gte": sql.SQL(">="),
     "lt": sql.SQL("<"),
     "lte": sql.SQL("<="),
 }
-_TEXT_PATTERN_OPS = frozenset({"contains", "starts-with", "ends-with", "regexp"})
-_TEXT_PATTERN_TYPES = frozenset({*_TEXT_FAMILY_SEARCH_TYPES, "friendly-id"})
+_TEXT_PATTERN_OPS = frozenset({"contains", "starts_with", "ends_with", "regexp"})
+_TEXT_PATTERN_TYPES = frozenset({*_TEXT_FAMILY_SEARCH_TYPES, "friendly_id"})
 _LIKE_ESCAPE_CHAR = "\\"
 
 _TYPE_ADAPTERS: dict[str, TypeAdapter[Any]] = {
     "string": TypeAdapter(str),
-    "compact-text": TypeAdapter(str),
+    "compact_text": TypeAdapter(str),
     "choice": TypeAdapter(str),
     "status": TypeAdapter(str),
     "text": TypeAdapter(str),
-    "multiline-text": TypeAdapter(str),
-    "friendly-id": TypeAdapter(str),
+    "multiline_text": TypeAdapter(str),
+    "friendly_id": TypeAdapter(str),
     "boolean": TypeAdapter(bool),
     "integer": TypeAdapter(int),
     "float": TypeAdapter(float),
@@ -194,7 +194,7 @@ def execute_search(
     limit: int | None = None,
     offset: int | None = None,
     enrich_fk_identity: bool = False,
-    definitions_by_kebab: dict[str, ClassDefinition] | None = None,
+    definitions_by_name: dict[str, ClassDefinition] | None = None,
 ) -> SearchResult:
     """Validate request, run COUNT + SELECT, return projected items.
 
@@ -223,12 +223,12 @@ def execute_search(
     )
 
     if enrich_fk_identity:
-        if definitions_by_kebab is None:
+        if definitions_by_name is None:
             raise RuntimeError(
-                "definitions_by_kebab is required when enrich_fk_identity is true"
+                "definitions_by_name is required when enrich_fk_identity is true"
             )
         plan = build_enriched_read_plan(
-            definition, definitions_by_kebab, select_columns
+            definition, definitions_by_name, select_columns
         )
         order_sql = sql.SQL(", ").join(
             sql.SQL("{} {}").format(
@@ -545,7 +545,7 @@ def _compile_comparison(
     raw = node["value"]
     if raw is None:
         raise SearchSemanticError(
-            f"{op!r} does not accept value: null; use empty / not-empty for null checks"
+            f"{op!r} does not accept value: null; use empty / not_empty for null checks"
         )
     typed = _coerce_value(attr, raw)
     params.append(typed)
@@ -577,7 +577,7 @@ def _compile_ordered_comparison(
     raw = node["value"]
     if raw is None:
         raise SearchSemanticError(
-            f"{op!r} does not accept value: null; use empty / not-empty for null checks"
+            f"{op!r} does not accept value: null; use empty / not_empty for null checks"
         )
     typed = _coerce_value(attr, raw)
     params.append(typed)
@@ -621,14 +621,14 @@ def _compile_text_pattern(
     if attr.type_name not in _TEXT_PATTERN_TYPES:
         raise SearchSemanticError(
             f"operator {op!r} is not applicable to attribute {attr.name!r} "
-            f"(type {attr.type_name!r}; requires a text-family type or friendly-id)"
+            f"(type {attr.type_name!r}; requires a text-family type or friendly_id)"
         )
     if "value" not in node:
         raise SearchStructuralError(f"{op!r} requires 'value'")
     raw = node["value"]
     if raw is None:
         raise SearchSemanticError(
-            f"{op!r} does not accept value: null; use empty / not-empty for null checks"
+            f"{op!r} does not accept value: null; use empty / not_empty for null checks"
         )
     typed = _coerce_value(attr, raw)
     if not isinstance(typed, str):
@@ -643,7 +643,7 @@ def _compile_text_pattern(
     escaped = _escape_like_literal(typed)
     if op == "contains":
         pattern = f"%{escaped}%"
-    elif op == "starts-with":
+    elif op == "starts_with":
         pattern = f"{escaped}%"
     else:
         pattern = f"%{escaped}"

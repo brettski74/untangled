@@ -1,4 +1,4 @@
-"""DB-backed tests for schema sync and demo-item persistence."""
+"""DB-backed tests for schema sync and demo_item persistence."""
 
 from __future__ import annotations
 

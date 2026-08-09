@@ -1,4 +1,4 @@
-"""Persistence tests for friendly-id allocation and delete."""
+"""Persistence tests for friendly_id allocation and delete."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def test_create_assigns_friendly_id_and_rejects_client_number(
     assert created.number.startswith("INC")
     assert len(created.number) >= 3 + 8
 
-    with pytest.raises(ValueError, match="friendly-id"):
+    with pytest.raises(ValueError, match="friendly_id"):
         incident_store.create(
             {
                 "summary": "x",
@@ -60,7 +60,7 @@ def test_create_assigns_friendly_id_and_rejects_client_number(
     updated = incident_store.update(created.id, {"status": "resolved"})
     assert updated.number == created.number
 
-    with pytest.raises(ValueError, match="friendly-id"):
+    with pytest.raises(ValueError, match="friendly_id"):
         incident_store.update(created.id, {"number": "INC00008888"})
 
     assert incident_store.delete(created.id) is True

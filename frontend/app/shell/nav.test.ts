@@ -26,19 +26,19 @@ import {
 const ADMIN = ["admin"];
 const READONLY = [
   "incident:read",
-  "change-request:read",
-  "demo-item:read",
+  "change_request:read",
+  "demo_item:read",
 ];
 const READWRITE = [
   "incident:create",
   "incident:read",
   "incident:update",
-  "change-request:create",
-  "change-request:read",
-  "change-request:update",
-  "demo-item:create",
-  "demo-item:read",
-  "demo-item:update",
+  "change_request:create",
+  "change_request:read",
+  "change_request:update",
+  "demo_item:create",
+  "demo_item:read",
+  "demo_item:update",
 ];
 const INCIDENT_ONLY_READ = ["incident:read"];
 
@@ -47,9 +47,9 @@ describe("default nav YAML", () => {
     reset_default_nav_cache_for_tests();
     const nav = load_default_nav();
     expect(nav.map((s) => s.class_name)).toEqual([
-      "change-request",
+      "change_request",
       "incident",
-      "system-config",
+      "system_config",
     ]);
     const change = nav[0];
     const incident = nav[1];
@@ -88,12 +88,12 @@ describe("default nav YAML", () => {
   it("rejects invalid documents via Zod", () => {
     expect(() =>
       nav_bar_document_schema.parse({
-        "nav-bar": [
+        "nav_bar": [
           {
-            "display-name": "X",
-            "section-type": "other",
+            "display_name": "X",
+            "section_type": "other",
             class: "incident",
-            options: [{ "display-name": "All", "option-type": "list" }],
+            options: [{ "display_name": "All", "option_type": "list" }],
           },
         ],
       }),
@@ -102,38 +102,38 @@ describe("default nav YAML", () => {
 
   it("accepts object sections via Zod", () => {
     const parsed = nav_bar_document_schema.parse({
-      "nav-bar": [
+      "nav_bar": [
         {
-          "display-name": "System Configuration",
-          "section-type": "object",
-          class: "system-config",
-          id: "${system-config-id}",
+          "display_name": "System Configuration",
+          "section_type": "object",
+          class: "system_config",
+          id: "${system_config_id}",
         },
       ],
     });
-    expect(parsed["nav-bar"][0]?.["section-type"]).toBe("object");
+    expect(parsed["nav_bar"][0]?.["section_type"]).toBe("object");
   });
 });
 
 describe("well_known_substitute", () => {
-  it("resolves system-config-id in nav-bar context", () => {
-    expect(substitute("${system-config-id}", "nav-bar")).toBe(SYSTEM_CONFIG_ID);
+  it("resolves system_config_id in nav_bar context", () => {
+    expect(substitute("${system_config_id}", "nav_bar")).toBe(SYSTEM_CONFIG_ID);
   });
 
   it("fails closed on undefined name", () => {
-    expect(() => substitute("${no-such-name}", "nav-bar")).toThrow(
+    expect(() => substitute("${no_such_name}", "nav_bar")).toThrow(
       SubstitutionError,
     );
   });
 
   it("fails closed on wrong-context name", () => {
-    expect(() => substitute("${system-user-id}", "nav-bar")).toThrow(
+    expect(() => substitute("${system_user_id}", "nav_bar")).toThrow(
       SubstitutionError,
     );
   });
 
   it("fails closed on unknown context", () => {
-    expect(() => substitute("${system-config-id}", "create-default")).toThrow(
+    expect(() => substitute("${system_config_id}", "create-default")).toThrow(
       SubstitutionError,
     );
   });
@@ -144,18 +144,18 @@ describe("nav paths", () => {
     expect(display_name_to_slug("In Progress")).toBe("in-progress");
     const nav = to_nav_bar_view(
       nav_bar_document_schema.parse({
-        "nav-bar": [
+        "nav_bar": [
           {
-            "display-name": "Change Requests",
-            "section-type": "class",
-            class: "change-request",
+            "display_name": "Change Requests",
+            "section_type": "class",
+            class: "change_request",
             options: [
-              { "display-name": "New", "option-type": "new" },
-              { "display-name": "All", "option-type": "list" },
+              { "display_name": "New", "option_type": "new" },
+              { "display_name": "All", "option_type": "list" },
             ],
           },
         ],
-      })["nav-bar"],
+      })["nav_bar"],
     );
     const section = nav[0]!;
     expect(section.section_type).toBe("class");
@@ -188,13 +188,13 @@ describe("nav paths", () => {
     expect(open_class_for_path(nav, "/incidents/new")).toBe("incident");
     expect(open_class_for_path(nav, "/incidents/INC00000001")).toBe("incident");
     expect(open_class_for_path(nav, "/change-requests/lists/all")).toBe(
-      "change-request",
+      "change_request",
     );
     expect(open_class_for_path(nav, "/change-requests/new")).toBe(
-      "change-request",
+      "change_request",
     );
     expect(open_class_for_path(nav, "/change-requests/CRQ00000001")).toBe(
-      "change-request",
+      "change_request",
     );
   });
 
@@ -227,9 +227,9 @@ describe("filter_nav_by_permissions", () => {
     reset_default_nav_cache_for_tests();
     const visible = filter_nav_by_permissions(load_default_nav(), ADMIN);
     expect(visible.map((s) => s.class_name)).toEqual([
-      "change-request",
+      "change_request",
       "incident",
-      "system-config",
+      "system_config",
     ]);
     const change = visible[0];
     expect(change?.section_type).toBe("class");
@@ -242,9 +242,9 @@ describe("filter_nav_by_permissions", () => {
     reset_default_nav_cache_for_tests();
     const visible = filter_nav_by_permissions(load_default_nav(), READONLY);
     expect(visible.map((s) => s.class_name)).toEqual([
-      "change-request",
+      "change_request",
       "incident",
-      "system-config",
+      "system_config",
     ]);
     for (const section of visible) {
       if (section.section_type === "class") {
@@ -274,7 +274,7 @@ describe("filter_nav_by_permissions", () => {
     );
     expect(visible.map((s) => s.class_name)).toEqual([
       "incident",
-      "system-config",
+      "system_config",
     ]);
     const incident = visible[0];
     expect(incident?.section_type).toBe("class");
@@ -288,7 +288,7 @@ describe("filter_nav_by_permissions", () => {
   it("shows only System Configuration when permissions are empty (public read)", () => {
     reset_default_nav_cache_for_tests();
     const visible = filter_nav_by_permissions(load_default_nav(), []);
-    expect(visible.map((s) => s.class_name)).toEqual(["system-config"]);
+    expect(visible.map((s) => s.class_name)).toEqual(["system_config"]);
     expect(visible[0]?.section_type).toBe("object");
   });
 });
@@ -299,8 +299,8 @@ describe("can_read_class", () => {
     expect(can_read_class(["incident:read"], "incident")).toBe(true);
     expect(can_read_class([], "incident")).toBe(false);
     expect(can_read_class([], "public-item", { public: true })).toBe(true);
-    expect(can_read_class(["change-request:read"], "incident")).toBe(false);
-    expect(can_read_class([], "system-config")).toBe(true);
+    expect(can_read_class(["change_request:read"], "incident")).toBe(false);
+    expect(can_read_class([], "system_config")).toBe(true);
   });
 });
 
@@ -309,7 +309,7 @@ describe("can_create_class", () => {
     expect(can_create_class(["admin"], "incident")).toBe(true);
     expect(can_create_class(["incident:create"], "incident")).toBe(true);
     expect(can_create_class(["incident:read"], "incident")).toBe(false);
-    expect(can_create_class(["change-request:create"], "incident")).toBe(
+    expect(can_create_class(["change_request:create"], "incident")).toBe(
       false,
     );
   });
@@ -318,12 +318,12 @@ describe("can_create_class", () => {
 describe("can_update_class", () => {
   it("P1: admin may update any class", () => {
     expect(can_update_class(["admin"], "incident")).toBe(true);
-    expect(can_update_class(["admin"], "change-request")).toBe(true);
+    expect(can_update_class(["admin"], "change_request")).toBe(true);
   });
 
   it("P2: class:update permits that class only", () => {
     expect(can_update_class(["incident:update"], "incident")).toBe(true);
-    expect(can_update_class(["incident:update"], "change-request")).toBe(
+    expect(can_update_class(["incident:update"], "change_request")).toBe(
       false,
     );
   });

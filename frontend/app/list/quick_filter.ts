@@ -25,7 +25,7 @@ export type QuickFilterControlKind =
   | "numeric"
   | "datetime"
   | "boolean"
-  | "friendly-id";
+  | "friendly_id";
 
 export type QuickFilterValues = {
   text?: string;
@@ -40,11 +40,11 @@ export type QuickFilterBuildResult =
 
 const TEXT_FAMILY = new Set([
   "string",
-  "compact-text",
+  "compact_text",
   "choice",
   "status",
   "text",
-  "multiline-text",
+  "multiline_text",
 ]);
 
 /**
@@ -66,8 +66,8 @@ export function quick_filter_control_kind(
       return "datetime";
     case "boolean":
       return "boolean";
-    case "friendly-id":
-      return "friendly-id";
+    case "friendly_id":
+      return "friendly_id";
     default:
       return null;
   }
@@ -169,7 +169,7 @@ export function and_predicates(
 
 /**
  * Build comparison predicate(s) for a quick-filter Enter submit.
- * Empty text/friendly-id/numeric/datetime values → empty predicates (no-op).
+ * Empty text/friendly_id/numeric/datetime values → empty predicates (no-op).
  * Boolean always emits `eq`.
  * Datetime To uses `lte` (PO: inclusive end-of-day with 23:59:59); numeric To uses `lt`.
  */
@@ -195,7 +195,7 @@ export function build_quick_filter_predicates(
         ],
       };
     }
-    case "friendly-id": {
+    case "friendly_id": {
       const text = values.text?.trim() ?? "";
       if (text === "") {
         return { ok: true, predicates: [] };
@@ -203,7 +203,7 @@ export function build_quick_filter_predicates(
       return {
         ok: true,
         predicates: [
-          { op: "ends-with", attribute: attr.name_snake, value: text },
+          { op: "ends_with", attribute: attr.name_snake, value: text },
         ],
       };
     }

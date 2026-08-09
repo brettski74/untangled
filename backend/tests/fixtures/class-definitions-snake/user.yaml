@@ -1,0 +1,17 @@
+# Loader fixture: platform user + display_attribute (not production user.yaml).
+name: user
+display_name: User
+display_attribute: display_name
+description: >
+  Minimal platform user for snake loader / generate tests.
+attributes:
+  username:
+    type: compact_text
+    required: true
+    unique: true
+  display_name:
+    type: compact_text
+    required: true
+  is_active:
+    type: boolean
+    required: true

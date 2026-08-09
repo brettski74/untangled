@@ -5,7 +5,6 @@ import type {
 
 export type ListColumn = {
   name_snake: string;
-  name_kebab: string;
   type_name: string;
   references: string | null;
   label: string;
@@ -16,7 +15,7 @@ export type ListColumn = {
 
 /**
  * Build list display columns from generated field meta.
- * Meta attributes are sorted by declaration ``order``; friendly-id is then
+ * Meta attributes are sorted by declaration ``order``; friendly_id is then
  * moved left-most for list display only.
  */
 export function list_display_columns(meta: ClassFieldMeta): ListColumn[] {
@@ -51,7 +50,7 @@ export function attributes_in_declaration_order(
       !Number.isInteger(attr.order)
     ) {
       throw new Error(
-        `field meta for attribute '${attr.name_kebab}' is missing a valid ` +
+        `field meta for attribute '${attr.name_snake}' is missing a valid ` +
           `declaration order ordinal`,
       );
     }
@@ -59,9 +58,10 @@ export function attributes_in_declaration_order(
   return [...attributes].sort((left, right) => left.order - right.order);
 }
 
-export function attribute_display_label(name_kebab: string): string {
-  return name_kebab
-    .split("-")
+/** Title-case a snake_case attribute name for list/detail labels. */
+export function attribute_display_label(name_snake: string): string {
+  return name_snake
+    .split("_")
     .filter((part) => part.length > 0)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
@@ -70,11 +70,10 @@ export function attribute_display_label(name_kebab: string): string {
 function attribute_to_column(attr: AttributeFieldMeta): ListColumn {
   return {
     name_snake: attr.name_snake,
-    name_kebab: attr.name_kebab,
     type_name: attr.type_name,
     references: attr.references,
-    label: attribute_display_label(attr.name_kebab),
-    is_friendly_id: attr.type_name === "friendly-id",
+    label: attribute_display_label(attr.name_snake),
+    is_friendly_id: attr.type_name === "friendly_id",
     order: attr.order,
   };
 }
@@ -82,7 +81,7 @@ function attribute_to_column(attr: AttributeFieldMeta): ListColumn {
 /** Sane default column widths (px) by attribute type — horizontal scroll as needed. */
 export function column_width_px(type_name: string): number {
   switch (type_name) {
-    case "friendly-id":
+    case "friendly_id":
       return 140;
     case "boolean":
       return 96;
@@ -95,11 +94,11 @@ export function column_width_px(type_name: string): number {
     case "uuid":
       return 280;
     case "string":
-    case "compact-text":
+    case "compact_text":
     case "choice":
     case "status":
     case "text":
-    case "multiline-text":
+    case "multiline_text":
       return 200;
     default:
       return 200;

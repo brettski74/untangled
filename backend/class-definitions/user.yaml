@@ -1,22 +1,22 @@
 # First-class User identity (M1 auth). Internal for API admin CRUD until a later ticket.
 name: user
-display-name: User
-# Explicit even though it matches the compact-text display-name default.
-display-attribute: display-name
+display_name: User
+# Explicit even though it matches the compact_text display_name default.
+display_attribute: display_name
 description: >
   Authenticated principal for login and audit stamps. Password hashes are for
   server use only and must never appear in API responses.
 attributes:
   username:
-    type: compact-text
+    type: compact_text
     required: true
     unique: true
-  password-hash:
-    type: compact-text
+  password_hash:
+    type: compact_text
     required: true
-  display-name:
-    type: compact-text
+  display_name:
+    type: compact_text
     required: true
-  is-active:
+  is_active:
     type: boolean
     required: true

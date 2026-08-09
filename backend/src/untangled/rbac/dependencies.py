@@ -13,6 +13,7 @@ from untangled.audit.context import client_ip
 from untangled.audit.emit import emit_best_effort, make_event
 from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.auth.dependencies import CurrentUser, DbConn
+from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.registry import class_definition
 from untangled.rbac.keys import (
     class_operation_granted,
@@ -68,7 +69,13 @@ def require_class_operation(
     class_kebab: str,
     operation: str,
 ) -> Callable[..., dict[str, Any]]:
-    """Dependency factory: require ``{class}:{operation}`` (or ``admin`` / ``public`` read)."""
+    """Dependency factory: require ``{class}:{operation}`` (or ``admin`` / ``public`` read).
+
+    Temporary #188 bridge (remove in #192): normalize mount identity to the
+    live class ``name`` before building the permission key (seeds use snake
+    class segments).
+    """
+    class_name = kebab_to_snake(class_kebab)
 
     def _dependency(
         request: Request,
@@ -77,11 +84,11 @@ def require_class_operation(
     ) -> dict[str, Any]:
         public = False
         if operation == "read":
-            public = class_definition(class_kebab).public
+            public = class_definition(class_name).public
         if not class_operation_granted(
-            permissions, class_kebab, operation, public=public
+            permissions, class_name, operation, public=public
         ):
-            required = class_operation_key(class_kebab, operation)
+            required = class_operation_key(class_name, operation)
             emit_best_effort(
                 make_event(
                     event_type=EventType.RECORD_AUTHZ_DENIED,
@@ -92,7 +99,7 @@ def require_class_operation(
                     user_id=user["id"],
                     ip_address=client_ip(request),
                     data={
-                        "class": class_kebab,
+                        "class": class_name,
                         "operation": operation,
                         "required_permission": required,
                     },

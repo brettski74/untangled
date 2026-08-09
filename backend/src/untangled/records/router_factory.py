@@ -12,6 +12,7 @@ from untangled.audit.file_sink import AuditWriteError
 from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.audit.volume import note_search
 from untangled.auth.dependencies import DbConn
+from untangled.mapping.naming import kebab_to_snake
 from untangled.persistence.search import SearchNestingLimits
 from untangled.rbac.dependencies import require_class_operation
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
@@ -29,6 +30,15 @@ from untangled.records.search_models import (
 from untangled.system_config import SystemConfigUnreadableError, get_system_config
 
 ApiSurface = Literal["legacy", "v1"]
+
+
+def _live_class_name(mount_identity: str) -> str:
+    """One-way normalize a legacy/v1 mount identity to the live class ``name``.
+
+    Temporary #188 bridge (remove in #192): mounts may still pass historical
+    kebab strings; permission keys and definition lookup use the live name only.
+    """
+    return kebab_to_snake(mount_identity)
 
 
 def _audit_http_500(exc: AuditWriteError) -> HTTPException:
@@ -49,10 +59,14 @@ def build_class_router(
 
     ``legacy``: full CRUD + scalar fetch/search (pre-versioning compatibility).
     ``v1``: fetch, search, and update with FK identity enrichment on responses.
+
+    ``class_kebab`` is the mount identity string (may still be kebab for
+    transitional call sites). Resolution uses the live class ``name``.
     """
-    create_cls: type[BaseModel] = model(class_kebab, "Create")
-    update_cls: type[BaseModel] = model(class_kebab, "Update")
-    definition = class_definition(class_kebab)
+    class_name = _live_class_name(class_kebab)
+    create_cls: type[BaseModel] = model(class_name, "Create")
+    update_cls: type[BaseModel] = model(class_name, "Update")
+    definition = class_definition(class_name)
     router = APIRouter(prefix=prefix, tags=tags)
     enrich = surface == "v1"
     deprecated = surface == "legacy"
@@ -65,10 +79,10 @@ def build_class_router(
             body: create_cls,
             conn: DbConn,
             user: Annotated[
-                dict[str, Any], Depends(require_class_operation(class_kebab, "create"))
+                dict[str, Any], Depends(require_class_operation(class_name, "create"))
             ],
         ) -> Any:
-            store = record_store(conn, class_kebab, actor_id=user["id"])
+            store = record_store(conn, class_name, actor_id=user["id"])
             created = store.create(body.model_dump())
             row_id: UUID = created.id
             try:
@@ -81,7 +95,7 @@ def build_class_router(
                         severity=Severity.INFO,
                         user_id=user["id"],
                         ip_address=client_ip(request),
-                        data={"class": class_kebab, "locator": str(row_id)},
+                        data={"class": class_name, "locator": str(row_id)},
                     )
                 )
             except AuditWriteError as exc:
@@ -96,7 +110,7 @@ def build_class_router(
                             user_id=user["id"],
                             ip_address=client_ip(request),
                             data={
-                                "class": class_kebab,
+                                "class": class_name,
                                 "locator": str(row_id),
                                 "compensate": True,
                             },
@@ -136,17 +150,17 @@ def build_class_router(
             summary=search_summary,
             description=search_description,
             deprecated=search_deprecated,
-            operation_id=f"{class_kebab.replace('-', '_')}_{surface}_search",
+            operation_id=f"{class_name}_{surface}_search",
         )
         def search_records(
             request: Request,
             body: SearchRequest,
             conn: DbConn,
             user: Annotated[
-                dict[str, Any], Depends(require_class_operation(class_kebab, "read"))
+                dict[str, Any], Depends(require_class_operation(class_name, "read"))
             ],
         ) -> SearchResponse | V1SearchResponse:
-            store = record_store(conn, class_kebab, actor_id=user["id"])
+            store = record_store(conn, class_name, actor_id=user["id"])
             sort_keys = (
                 [
                     (
@@ -256,18 +270,18 @@ def build_class_router(
         summary=fetch_summary,
         description=fetch_description,
         deprecated=deprecated,
-        operation_id=f"{class_kebab.replace('-', '_')}_{surface}_fetch",
+        operation_id=f"{class_name}_{surface}_fetch",
     )
     def fetch_record(
         request: Request,
         locator: str,
         conn: DbConn,
         user: Annotated[
-            dict[str, Any], Depends(require_class_operation(class_kebab, "read"))
+            dict[str, Any], Depends(require_class_operation(class_name, "read"))
         ],
     ) -> Any:
-        definition = class_definition(class_kebab)
-        store = record_store(conn, class_kebab, actor_id=user["id"])
+        definition = class_definition(class_name)
+        store = record_store(conn, class_name, actor_id=user["id"])
         row = fetch_by_locator(
             store, definition, locator, enrich_fk_identity=enrich
         )
@@ -311,7 +325,7 @@ def build_class_router(
         summary=update_summary,
         description=update_description,
         deprecated=deprecated,
-        operation_id=f"{class_kebab.replace('-', '_')}_{surface}_update",
+        operation_id=f"{class_name}_{surface}_update",
     )
     def update_record(
         request: Request,
@@ -319,11 +333,11 @@ def build_class_router(
         body: update_cls,
         conn: DbConn,
         user: Annotated[
-            dict[str, Any], Depends(require_class_operation(class_kebab, "update"))
+            dict[str, Any], Depends(require_class_operation(class_name, "update"))
         ],
     ) -> Any:
-        definition = class_definition(class_kebab)
-        store = record_store(conn, class_kebab, actor_id=user["id"])
+        definition = class_definition(class_name)
+        store = record_store(conn, class_name, actor_id=user["id"])
         existing = fetch_by_locator(store, definition, locator)
         before = existing.model_dump()
         patch = body.model_dump(exclude_unset=True)
@@ -332,7 +346,7 @@ def build_class_router(
         except KeyError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"{class_kebab} not found",
+                detail=f"{class_name} not found",
             ) from exc
         try:
             emit_fail_closed(
@@ -380,7 +394,7 @@ def build_class_router(
         if row is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"{class_kebab} not found",
+                detail=f"{class_name} not found",
             )
         assert isinstance(row, dict)
         return serialize_v1_record(row)
@@ -396,11 +410,11 @@ def build_class_router(
                 conn: DbConn,
                 user: Annotated[
                     dict[str, Any],
-                    Depends(require_class_operation(class_kebab, "delete")),
+                    Depends(require_class_operation(class_name, "delete")),
                 ],
             ) -> Response:
-                record_def = class_definition(class_kebab)
-                store = record_store(conn, class_kebab, actor_id=user["id"])
+                record_def = class_definition(class_name)
+                store = record_store(conn, class_name, actor_id=user["id"])
                 existing = fetch_by_locator(store, record_def, locator)
                 try:
                     emit_fail_closed(
@@ -423,7 +437,7 @@ def build_class_router(
                 if not store.delete(existing.id):
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"{class_kebab} not found",
+                        detail=f"{class_name} not found",
                     )
                 return Response(status_code=status.HTTP_204_NO_CONTENT)
 

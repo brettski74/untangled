@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-# YAML ``type`` values (kebab-case where multi-word; single tokens are plain).
+# YAML ``type`` values (snake_case where multi-word; single tokens are plain).
 SUPPORTED_TYPES: frozenset[str] = frozenset(
     {
         "string",
-        "compact-text",
+        "compact_text",
         "choice",
         "status",
         "text",
-        "multiline-text",
+        "multiline_text",
         "boolean",
         "integer",
         "float",
         "decimal",
         "uuid",
         "datetime",
-        "friendly-id",
+        "friendly_id",
     }
 )
 
@@ -26,20 +26,20 @@ SUPPORTED_TYPES: frozenset[str] = frozenset(
 TEXT_STORAGE_FAMILY: frozenset[str] = frozenset(
     {
         "string",
-        "compact-text",
+        "compact_text",
         "choice",
         "status",
         "text",
-        "multiline-text",
+        "multiline_text",
     }
 )
 
 # Human-oriented notes for docs and errors.
 TYPE_DESCRIPTIONS: dict[str, str] = {
     "string": (
-        "Deprecated alias for compact-text (UTF-8 text); prefer compact-text"
+        "Deprecated alias for compact_text (UTF-8 text); prefer compact_text"
     ),
-    "compact-text": "Free-form UTF-8 text (compact UI section)",
+    "compact_text": "Free-form UTF-8 text (compact UI section)",
     "choice": (
         "Restricted value set later; M1 unconstrained UTF-8 text (compact UI)"
     ),
@@ -47,7 +47,7 @@ TYPE_DESCRIPTIONS: dict[str, str] = {
         "Special choice later; M1 unconstrained UTF-8 text (compact UI)"
     ),
     "text": "UTF-8 text (full-width single-line UI section)",
-    "multiline-text": "UTF-8 text (full-width multiline UI section)",
+    "multiline_text": "UTF-8 text (full-width multiline UI section)",
     "boolean": "True/false",
     "integer": "Whole number",
     "float": "Floating-point number",
@@ -57,7 +57,7 @@ TYPE_DESCRIPTIONS: dict[str, str] = {
         "Timezone-aware timestamp; stored and exposed as UTC at whole-second "
         "precision (nearest second; no fractional seconds on the wire)"
     ),
-    "friendly-id": (
+    "friendly_id": (
         "Server-assigned operational id (prefix + zero-padded sequence); "
         "PostgreSQL text; environment-local"
     ),

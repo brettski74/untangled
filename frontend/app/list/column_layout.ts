@@ -28,7 +28,7 @@ export function column_set_signature(
 /**
  * Seed session layout from loader display columns.
  * Caller must pass columns already ordered by declaration ordinals with the
- * friendly-id display pin applied (``list_display_columns``); this validates
+ * friendly_id display pin applied (``list_display_columns``); this validates
  * ordinals fail-closed but does not re-sort the array.
  */
 export function seed_column_layout(
