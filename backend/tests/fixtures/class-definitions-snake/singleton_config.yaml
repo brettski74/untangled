@@ -1,0 +1,31 @@
+# Loader fixture: check_constraint, suppress flags, public, create_default bounds.
+name: singleton_config
+display_name: Singleton Config
+description: >
+  Snake fixture for check_constraint substitution and suppress/public flags.
+public: true
+suppress_create: true
+suppress_delete: true
+suppress_search: true
+check_constraint:
+  - "id = '${system_config_id}'::uuid"
+  - "max_items >= min_items"
+attributes:
+  min_items:
+    type: integer
+    required: true
+    create_default: 1
+    min_value: 1
+    max_value: 10
+  max_items:
+    type: integer
+    required: true
+    create_default: 5
+    min_value: 1
+    max_value: 100
+  drift_factor:
+    type: decimal
+    required: true
+    create_default: 1.1
+    min_value: 1
+    max_value: 10

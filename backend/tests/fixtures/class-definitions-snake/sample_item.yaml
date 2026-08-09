@@ -1,0 +1,36 @@
+# Loader fixture: broad attribute type coverage for the snake definition path.
+name: sample_item
+display_name: Sample Item
+description: >
+  Purpose-built snake fixture covering common scalar types for loader and
+  codegen tests. Not a product class.
+attributes:
+  title:
+    type: compact_text
+    required: true
+  summary:
+    type: text
+    required: false
+  notes:
+    type: multiline_text
+    required: false
+  is_active:
+    type: boolean
+    required: true
+  quantity:
+    type: integer
+    required: true
+    min_value: 0
+    max_value: 1000
+  unit_price:
+    type: float
+    required: false
+  fixed_amount:
+    type: decimal
+    required: true
+  due_at:
+    type: datetime
+    required: false
+  external_id:
+    type: uuid
+    required: false

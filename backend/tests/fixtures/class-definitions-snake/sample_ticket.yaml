@@ -1,0 +1,26 @@
+# Loader fixture: friendly_id, status/choice, create_default, FK to user.
+name: sample_ticket
+display_name: Sample Ticket
+description: >
+  Snake fixture covering friendly_id, status, choice, and create_default.
+attributes:
+  number:
+    type: friendly_id
+    required: true
+    prefix: SAM
+    pad_width: 4
+    start_at: 1
+  summary:
+    type: text
+    required: true
+  status:
+    type: status
+    required: true
+    create_default: new
+  severity:
+    type: choice
+    required: true
+  assigned_user_id:
+    type: uuid
+    required: false
+    references: user

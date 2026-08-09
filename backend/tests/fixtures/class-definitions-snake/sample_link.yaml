@@ -1,0 +1,13 @@
+# Loader fixture: FK reference coverage.
+name: sample_link
+display_name: Sample Link
+description: >
+  Snake fixture with a foreign key to sample_item.
+attributes:
+  sample_item_id:
+    type: uuid
+    required: true
+    references: sample_item
+  label:
+    type: compact_text
+    required: true
