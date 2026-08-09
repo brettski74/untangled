@@ -206,10 +206,22 @@ def test_v2_user_class_is_mounted(tickets_client: TestClient) -> None:
     assert response.status_code == 200, response.text
 
 
-def test_no_v1_create_still_holds(tickets_client: TestClient) -> None:
-    response = tickets_client.post(
+def test_legacy_and_v1_record_surfaces_not_mounted(
+    tickets_client: TestClient,
+) -> None:
+    headers = _headers(tickets_client, "admin")
+    body = {"summary": "x", "status": "new", "priority": "Low"}
+    for path in (
+        "/incidents",
         "/api/v1/incidents",
-        headers=_headers(tickets_client, "admin"),
-        json={"summary": "x", "status": "new", "severity": "Low"},
-    )
-    assert response.status_code == 404
+        "/change-requests",
+        "/api/v1/change-requests",
+        "/system-configs",
+        "/api/v1/system-configs",
+    ):
+        assert tickets_client.post(path, headers=headers, json=body).status_code == 404
+        assert tickets_client.get(f"{path}/x", headers=headers).status_code == 404
+        assert (
+            tickets_client.post(f"{path}/search", headers=headers, json={}).status_code
+            == 404
+        )

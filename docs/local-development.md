@@ -84,7 +84,7 @@ Inside the **api** / **web** containers, Compose sets `DATABASE_URL` / `UNTANGLE
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
 | `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` |
-| `UNTANGLED_AUDIT_LOG_DIR` | Compose: `/var/log/untangled/audit` (named volume `untangled_audit` on `api`) |
+| `UNTANGLED_AUDIT_LOG_DIR` | Compose: `/var/log/untangled/audit` (named volume `untangled_audit` on `api`). Host `make migrate` / `make seed`: defaults to `.run/audit` when unset. |
 | `UNTANGLED_AUDIT_ROLLOVER_BYTES` | `1048576` (1 MiB) |
 | `UNTANGLED_AUDIT_ROLLOVER_SECONDS` | `86400` (24 hours) |
 | `UNTANGLED_DEFINITIONS_DIR` | Optional. Absolute path to YAML class-definitions for unusual layouts only; Compose uses `/app/class-definitions` via the image WORKDIR (do not set this for normal local Compose). |
@@ -92,10 +92,11 @@ Inside the **api** / **web** containers, Compose sets `DATABASE_URL` / `UNTANGLE
 ### Access / security audit log (local)
 
 - The API appends **newline-delimited JSON** audit events under `UNTANGLED_AUDIT_LOG_DIR`.
-- Compose mounts named volume `untangled_audit` there. The API process **does not prune** rolled files — retain/forward externally (SIEM/export is a later ticket).
+- Compose mounts named volume `untangled_audit` there. Host CLIs (`make migrate`, `make seed`) default to gitignored `.run/audit` so fail-closed seed/migrate audit does not need `/var/log/untangled`.
+- The API process **does not prune** rolled files — retain/forward externally (SIEM/export is a later ticket).
 - With multiple API replicas, each process writes its own files under the shared mount (document forwarder topology; this MVP does not ship a distributed shipper).
 - `ip_address` is the **direct peer** address as seen by the API (in Compose UI traffic this is often the `web` container). Full trusted-proxy / `X-Forwarded-For` policy is tracked separately (#67).
-- Bulk-read volume thresholds live on `system-config` (`audit-bulk-read-window-seconds`, `audit-bulk-read-max-searches`): crossing them emits a **signal-only** event (no throttle).
+- Bulk-read volume thresholds live on `system_config` (`audit_bulk_read_window_seconds`, `audit_bulk_read_max_searches`): crossing them emits a **signal-only** event (no throttle).
 
 Seed users (usernames are case-normalized to lowercase):
 
@@ -174,20 +175,16 @@ Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-orig
 3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
 4. Hit `GET /auth/rbac-probe` (requires `demo_item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo_item:read`) get **403**; a user with no roles gets **403**.
 5. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
-   - Prefer the live in-app contract: `GET /api/v2/incident/{locator}` /
+   - Live record contract: `GET /api/v2/incident/{locator}` /
      `GET /api/v2/change_request/{locator}` (UUID or friendly number; path
      segment is the class `name`, no pluralization).
-   - Legacy (deprecated) surfaces still mounted until epic #150 child 7:
-     `/api/v1/{plural-collection}/…` and unversioned `/{plural-collection}/…`.
    - `POST` create / `PATCH` update / `DELETE` on `/api/v2/{class_name}`
      (admin only among seed roles for delete).
    - Junk locators → **422**; missing records → **404**; readonly cannot create → **403**.
 6. Exercise predicate search (same Authorize token; requires `{class}:read`):
-   - Prefer `POST /api/v2/incident/search` and
+   - `POST /api/v2/incident/search` and
      `POST /api/v2/change_request/search` (see [Predicate search](#predicate-search)
      and [API versioning](#api-versioning) below).
-   - Legacy `/api/v1/…/search` and unversioned `/{collection}/search` remain until
-     child 7 (scalar FK UUIDs on unversioned).
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
    - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
 7. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
@@ -197,27 +194,23 @@ Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-orig
 
 Public domain API versions are **path-based**: `/api/v{major}/…`.
 
-- `/api/v1` is the first versioned contract. Existing unversioned
-  `/{collection}/…` fetch and search routes are **pre-versioning legacy**
-  compatibility surfaces — they are not retrospectively called v1.
-- `/api/v2/{class_name}/…` is the live in-app record contract (class `name`
+- `/api/v2/{class_name}/…` is the sole record collection contract (class `name`
   as path segment; no pluralization). Create/update/delete/search/fetch are
-  versioned here with FK identity enrichment. Legacy unversioned and `/api/v1`
-  record mounts remain until epic #150 child 7.
+  versioned here with FK identity enrichment.
+- Legacy unversioned `/{collection}/…` and `/api/v1/{plural-collection}/…`
+  record mounts have been removed.
 - Every new public domain endpoint, and every existing public domain endpoint
   whose contract is changed, must have an API-version path. Operational
   endpoints such as `/health` and `/` are exempt.
 - Backward-incompatible request/response changes increment the major path
   version and leave the previous version available for a documented
   compatibility period.
-- Removal of the legacy unversioned and `/api/v1` record factories is tracked by
-  [#192](https://github.com/brettski74/untangled/issues/192).
 
-#### Versioned FK identity (v2 reads; same shape on v1)
+#### FK identity enrichment (record reads)
 
-On `/api/v2` (and still on `/api/v1`) fetch, search, update, and create
-responses, each projected foreign-key field
-(including audit `created_by` / `updated_by`) is either JSON `null` or:
+On `/api/v2` fetch, search, update, and create responses, each projected
+foreign-key field (including audit `created_by` / `updated_by`) is either
+JSON `null` or:
 
 ```json
 {
@@ -241,16 +234,14 @@ Rules:
 
 ### Predicate search
 
-Generic, definition-driven search for any class mounted via the class router factory. First wired collections: Incident and Change Request.
+Generic, definition-driven search for any class mounted via the `/api/v2`
+record router factory. First wired collections: Incident and Change Request.
 
 | Method | Path | Permission |
 | ------ | ---- | ---------- |
-| `POST` | `/api/v2/{class_name}/search` | `{class}:read` (live in-app contract) |
-| `POST` | `/api/v1/{collection}/search` | `{class}:read` (legacy until #192) |
-| `POST` | `/{collection}/search` | `{class}:read` (legacy scalar FK responses; until #192) |
+| `POST` | `/api/v2/{class_name}/search` | `{class}:read` |
 
 Examples: `POST /api/v2/incident/search`, `POST /api/v2/change_request/search`.
-Legacy: `POST /api/v1/incidents/search`, `POST /incidents/search`.
 
 #### Request envelope
 

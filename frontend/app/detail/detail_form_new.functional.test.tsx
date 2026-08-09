@@ -17,8 +17,8 @@ afterEach(() => {
 
 const SEED_ADMIN = "01900000-0000-7000-8000-000000000001";
 
-function render_new_form(class_kebab: string, can_update = true) {
-  const meta = class_field_meta(class_kebab)!;
+function render_new_form(class_name: string, can_update = true) {
+  const meta = class_field_meta(class_name)!;
   const layout = partition_detail_layout(meta);
   const seed = record_from_create_defaults(meta);
   const editable = editable_field_names(layout);

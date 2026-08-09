@@ -143,10 +143,14 @@ models: backend-install ## Generate Pydantic, Zod, and field-meta from YAML clas
 	$(BACKEND_PYTHON) -m untangled.mapping
 
 migrate: backend-install ## Apply YAML schema intent to PostgreSQL (intentional; not part of up)
-	$(BACKEND_PYTHON) -m untangled.schema $(MIGRATE_ARGS)
+	@mkdir -p $(RUN_DIR)/audit
+	UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
+		$(BACKEND_PYTHON) -m untangled.schema $(MIGRATE_ARGS)
 
 seed: backend-install ## Idempotent local user seed (intentional; after migrate; not part of up)
-	$(BACKEND_PYTHON) -m untangled.seed
+	@mkdir -p $(RUN_DIR)/audit
+	UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
+		$(BACKEND_PYTHON) -m untangled.seed
 
 lint: backend-lint frontend-lint ## Run backend and frontend lint checks
 

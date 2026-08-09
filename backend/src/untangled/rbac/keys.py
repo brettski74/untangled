@@ -10,13 +10,13 @@ OPERATIONS: frozenset[str] = frozenset({"create", "read", "update", "delete"})
 ADMIN_PERMISSION_KEY = "admin"
 
 
-def class_operation_key(class_kebab: str, operation: str) -> str:
+def class_operation_key(class_name: str, operation: str) -> str:
     """Build the canonical ``{class}:{operation}`` permission key."""
-    if not class_kebab or ":" in class_kebab:
-        raise ValueError(f"invalid class name for permission key: {class_kebab!r}")
+    if not class_name or ":" in class_name:
+        raise ValueError(f"invalid class name for permission key: {class_name!r}")
     if operation not in OPERATIONS:
         raise ValueError(f"unsupported operation: {operation!r}")
-    return f"{class_kebab}:{operation}"
+    return f"{class_name}:{operation}"
 
 
 def parse_permission_key(key: str) -> tuple[str | None, str | None]:
@@ -47,12 +47,12 @@ def permission_grants(effective: frozenset[str] | set[str], required: str) -> bo
 
 def class_operation_granted(
     effective: frozenset[str] | set[str],
-    class_kebab: str,
+    class_name: str,
     operation: str,
     *,
     public: bool = False,
 ) -> bool:
-    """Return True if ``effective`` may perform ``operation`` on ``class_kebab``.
+    """Return True if ``effective`` may perform ``operation`` on ``class_name``.
 
     ``public`` grants authenticated **read** without ``{class}:read``. Callers
     must still require an authenticated principal. Prefer
@@ -60,4 +60,4 @@ def class_operation_granted(
     """
     if operation == "read" and public:
         return True
-    return permission_grants(effective, class_operation_key(class_kebab, operation))
+    return permission_grants(effective, class_operation_key(class_name, operation))

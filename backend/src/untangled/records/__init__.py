@@ -2,7 +2,7 @@
 
 Router construction lives in ``untangled.records.mounts`` so importing
 ``untangled.records.deps`` (e.g. from system-config helpers) does not pull
-router factories and create an import cycle with coherence.
+router factories and create an import cycle.
 """
 
 from __future__ import annotations

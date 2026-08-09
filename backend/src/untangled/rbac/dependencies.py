@@ -13,7 +13,6 @@ from untangled.audit.context import client_ip
 from untangled.audit.emit import emit_best_effort, make_event
 from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.auth.dependencies import CurrentUser, DbConn
-from untangled.mapping.naming import kebab_to_snake
 from untangled.mapping.registry import class_definition
 from untangled.rbac.keys import (
     class_operation_granted,
@@ -66,16 +65,14 @@ def require_permission(required: str) -> Callable[..., dict[str, Any]]:
 
 
 def require_class_operation(
-    class_kebab: str,
+    class_name: str,
     operation: str,
 ) -> Callable[..., dict[str, Any]]:
     """Dependency factory: require ``{class}:{operation}`` (or ``admin`` / ``public`` read).
 
-    Temporary #188 bridge (remove in #192): normalize mount identity to the
-    live class ``name`` before building the permission key (seeds use snake
-    class segments).
+    ``class_name`` is the live class ``name``; used unaltered for permission keys
+    and definition lookup.
     """
-    class_name = kebab_to_snake(class_kebab)
 
     def _dependency(
         request: Request,
