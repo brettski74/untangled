@@ -12,7 +12,7 @@ from untangled.audit.deps import set_audit_logger
 from untangled.audit.file_sink import FileAuditLogger
 from untangled.audit.middleware import AuditCorrelationMiddleware
 from untangled.auth import auth_router
-from untangled.records import (
+from untangled.records.mounts import (
     change_requests_router,
     change_requests_v1_router,
     incidents_router,

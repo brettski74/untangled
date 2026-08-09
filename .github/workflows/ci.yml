@@ -68,6 +68,119 @@ jobs:
         # make test-ci → make lint + SKIP_DB_UP=1 make test (Make-equivalent checks).
         run: make test-ci
 
+  e2e:
+    name: playwright smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://untangled:untangled@127.0.0.1:5432/untangled
+      UNTANGLED_REDIS_URL: redis://127.0.0.1:6379/0
+      UNTANGLED_JWT_SECRET: local-dev-only-change-me-untangled-jwt-secret
+      UNTANGLED_SESSION_SECRET: local-dev-only-change-me-untangled-session-secret
+      UNTANGLED_API_BASE_URL: http://127.0.0.1:8000
+      UNTANGLED_COOKIE_SECURE: "false"
+      UNTANGLED_AUDIT_LOG_DIR: /tmp/untangled-audit-e2e
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+      CI: "1"
+    services:
+      postgres:
+        image: docker.io/library/postgres:18-alpine
+        env:
+          POSTGRES_USER: untangled
+          POSTGRES_PASSWORD: untangled
+          POSTGRES_DB: untangled
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U untangled -d untangled"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+      redis:
+        image: docker.io/library/redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend and frontend
+        run: make install models
+
+      - name: Install Playwright Chromium
+        run: cd frontend && npx playwright install chromium --with-deps
+
+      - name: Migrate and seed
+        run: |
+          mkdir -p "$UNTANGLED_AUDIT_LOG_DIR"
+          make migrate seed
+
+      - name: Build web
+        run: cd frontend && CI=1 npm run build
+
+      - name: Start API and web
+        run: |
+          set -euo pipefail
+          mkdir -p .run
+          backend/.venv/bin/uvicorn untangled.main:app --host 127.0.0.1 --port 8000 \
+            > .run/e2e-api.log 2>&1 &
+          echo $! > .run/e2e-api.pid
+          (
+            cd frontend
+            PORT=5173 npm run start > ../.run/e2e-web.log 2>&1 &
+            echo $! > ../.run/e2e-web.pid
+          )
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 \
+              && curl -fsS -o /dev/null http://127.0.0.1:5173/ 2>&1; then
+              echo "API and web are ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API/web failed to become ready"
+          tail -n 200 .run/e2e-api.log .run/e2e-web.log || true
+          exit 1
+
+      - name: Playwright smoke
+        run: make e2e-smoke
+
+      - name: Playwright full suite (non-gating)
+        # Informational only: failures do not fail the job. Smoke above remains the gate.
+        continue-on-error: true
+        id: e2e_full
+        run: make e2e
+
+      - name: Upload Playwright report
+        if: failure() || steps.e2e_full.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+            .run/e2e-api.log
+            .run/e2e-web.log
+          if-no-files-found: ignore
+
   publish-api:
     name: publish untangled-api
     needs: validate
