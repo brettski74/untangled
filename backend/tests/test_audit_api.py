@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from psycopg import Connection
+from psycopg import Connection, sql
 
 from untangled.audit.deps import get_audit_logger, set_audit_logger
 from untangled.audit.event import AuditEvent
-from untangled.audit.file_sink import FileAuditLogger
+from untangled.audit.file_sink import AuditWriteError, FileAuditLogger
 from untangled.audit.testing import (
     ConditionalFailAuditLogger,
     FailingAuditLogger,
@@ -22,6 +22,7 @@ from untangled.audit.types import ActorChannel, EventType
 from untangled.audit.volume import reset_bulk_read_state_for_tests
 from untangled.main import app
 from untangled.seed import seed_all
+from untangled.seed.rbac import seed_rbac
 from untangled.system_config.cache import default_cache
 
 # Matches password-strength defaults used by change-password tests.
@@ -210,8 +211,43 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
         for e in recorder.events
     )
 
-    token = _login(client).json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    # Seed an incident as admin for update/delete authz checks below.
+    admin_token = _login(client).json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    seed_incident = client.post(
+        "/incidents", headers=admin_headers, json=_incident_body()
+    )
+    assert seed_incident.status_code == 201
+    seed_locator = seed_incident.json()["id"]
+
+    recorder.events.clear()
+    update_denied = client.patch(
+        f"/incidents/{seed_locator}",
+        headers=ro_headers,
+        json={"summary": "nope"},
+    )
+    assert update_denied.status_code == 403
+    assert any(
+        e.event_type == EventType.RECORD_AUTHZ_DENIED
+        and e.data.get("class") == "incident"
+        and e.data.get("operation") == "update"
+        for e in recorder.events
+    )
+
+    readwrite = _login(client, username="readwrite", password="readwrite-change-me")
+    assert readwrite.status_code == 200
+    rw_headers = {"Authorization": f"Bearer {readwrite.json()['access_token']}"}
+    recorder.events.clear()
+    delete_denied = client.delete(f"/incidents/{seed_locator}", headers=rw_headers)
+    assert delete_denied.status_code == 403
+    assert any(
+        e.event_type == EventType.RECORD_AUTHZ_DENIED
+        and e.data.get("class") == "incident"
+        and e.data.get("operation") == "delete"
+        for e in recorder.events
+    )
+
+    headers = admin_headers
     recorder.events.clear()
 
     created = client.post("/incidents", headers=headers, json=_incident_body())
@@ -292,14 +328,21 @@ def test_update_fail_closed_restores_row(client: TestClient) -> None:
 
 
 def test_create_compensate_on_audit_failure(client: TestClient) -> None:
+    """Create audit failure must compensate-delete the row (recovery, not fail-closed)."""
     token = _login(client).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
+    before = client.post("/api/v1/incidents/search", headers=headers, json={})
+    assert before.status_code == 200
+    before_total = before.json()["total"]
     set_audit_logger(
         ConditionalFailAuditLogger(lambda e: e.event_type == EventType.RECORD_CREATE)
     )
     created = client.post("/incidents", headers=headers, json=_incident_body())
     assert created.status_code == 500
     set_audit_logger(RecordingAuditLogger())
+    after = client.post("/api/v1/incidents/search", headers=headers, json={})
+    assert after.status_code == 200
+    assert after.json()["total"] == before_total
 
 
 def test_privilege_change_emits_on_seed(demo_schema, db_conn: Connection) -> None:
@@ -314,6 +357,26 @@ def test_privilege_change_emits_on_seed(demo_schema, db_conn: Connection) -> Non
         and e.outcome.value == "success"
         for e in recorder.events
     )
+    set_audit_logger(RecordingAuditLogger())
+
+
+def test_privilege_change_fail_closed_rolls_back(
+    demo_schema, db_conn: Connection
+) -> None:
+    """RBAC seed must not commit privilege rows when fail-closed audit emit fails."""
+    # demo_schema → ensure_stub_actor_user already ran seed_all; clear privilege
+    # tables so a successful seed_rbac would insert, then prove audit failure rolls back.
+    for table in ("user_role", "role_permission", "role", "permission"):
+        db_conn.execute(
+            sql.SQL("DELETE FROM {}").format(sql.Identifier(table))
+        )
+    db_conn.commit()
+    assert db_conn.execute("SELECT count(*) FROM role").fetchone()[0] == 0
+
+    set_audit_logger(FailingAuditLogger())
+    with pytest.raises(AuditWriteError):
+        seed_rbac(db_conn)
+    assert db_conn.execute("SELECT count(*) FROM role").fetchone()[0] == 0
     set_audit_logger(RecordingAuditLogger())
 
 

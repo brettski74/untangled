@@ -27,3 +27,5 @@ def test_local_dev_docs_cover_audit_sink(repo_root: Path) -> None:
     assert "UNTANGLED_AUDIT_LOG_DIR" in docs
     assert "does not prune" in docs.lower() or "does **not** prune" in docs.lower()
     assert "#67" in docs or "67" in docs
+    # Wording regression only — not evidence of multi-replica sink behaviour.
+    assert "multiple API replicas" in docs
