@@ -249,7 +249,7 @@ Legacy: `POST /incidents/search`, `POST /change-requests/search`.
 
 #### Predicate grammar (delivered)
 
-Every node has an `op` (kebab-case string values). Logical nodes:
+Every node has an `op` (snake_case string values). Logical nodes:
 
 | `op` | Children | Meaning |
 | ---- | -------- | ------- |
@@ -268,19 +268,19 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
 | `lt` | `value` (required, non-null) | Less than |
 | `lte` | `value` (required, non-null) | Less than or equal |
 | `contains` | `value` (required, string) | Substring match (`LIKE`, case-sensitive) |
-| `starts-with` | `value` (required, string) | Prefix match (`LIKE`, case-sensitive) |
-| `ends-with` | `value` (required, string) | Suffix match (`LIKE`, case-sensitive) |
+| `starts_with` | `value` (required, string) | Prefix match (`LIKE`, case-sensitive) |
+| `ends_with` | `value` (required, string) | Suffix match (`LIKE`, case-sensitive) |
 | `regexp` | `value` (required, string) | POSIX regex match (`~`, case-sensitive) |
 | `empty` | *(none)* | `IS NULL` |
-| `not-empty` | *(none)* | `IS NOT NULL` |
+| `not_empty` | *(none)* | `IS NOT NULL` |
 
-- `eq` / `ne` / `empty` / `not-empty` apply to **all** mapped attribute types (including system fields).
+- `eq` / `ne` / `empty` / `not_empty` apply to **all** mapped attribute types (including system fields).
 - `gt` / `gte` / `lt` / `lte` apply to ordered types: **text-family** types
   (`compact-text`, `choice`, `status`, `text`, `multiline-text`, and deprecated
   `string`), plus **`integer`**, **`float`**, **`decimal`**, **`datetime`**,
   **`friendly-id`**. **Not** `boolean` or `uuid` (including FK uuid attributes)
   → **422**.
-- `contains` / `starts-with` / `ends-with` / `regexp` apply to the **text
+- `contains` / `starts_with` / `ends_with` / `regexp` apply to the **text
   family** and **`friendly-id`**. Other types → **422**.
   **Note:** `multiline-text` keeps the same operator eligibility as short text
   for M1 consistency; pattern/ordered filters on long bodies may scan heavily
@@ -291,7 +291,7 @@ Comparison nodes use `attribute` (snake_case, same names as create/fetch bodies 
   are deterministic across database locales. Non-ASCII codepoints sort after all
   ASCII. This is not the same as Unicode locale ordering.
 - **Text `sort` collation** still uses the database default (may disagree with C-ordered filters in the same request). Aligning sort with filter collation and case-insensitive search is deferred ([#61](https://github.com/brettski74/untangled/issues/61)).
-- **NULL and ordered / equality ops:** rows with a NULL attribute do not match `eq` / `ne` / `gt` / `gte` / `lt` / `lte` (SQL three-valued logic). `lt X` and `gte X` therefore do **not** partition the table. Optional booleans are tri-state: unset (`NULL`) matches neither `eq true` nor `eq false` — use `empty` / `not-empty`, or prefer required booleans once schema defaults/backfill exist ([#62](https://github.com/brettski74/untangled/issues/62)). Use `empty` / `not-empty` for null checks — `value: null` on value-taking ops → **422**.
+- **NULL and ordered / equality ops:** rows with a NULL attribute do not match `eq` / `ne` / `gt` / `gte` / `lt` / `lte` (SQL three-valued logic). `lt X` and `gte X` therefore do **not** partition the table. Optional booleans are tri-state: unset (`NULL`) matches neither `eq true` nor `eq false` — use `empty` / `not_empty`, or prefer required booleans once schema defaults/backfill exist ([#62](https://github.com/brettski74/untangled/issues/62)). Use `empty` / `not_empty` for null checks — `value: null` on value-taking ops → **422**.
 - **`risk_score` (Change Request):** optional integer; M1 seed/docs convention is **0–100** (not yet range-validated by the API).
 - **Friendly-id ordered compares** are lexicographic on the stored text (prefix + digits). With consistent prefixes and pad width this usually tracks numeric order; pad-width differences dominate (e.g. `INC10` sorts before `INC9` if those were the literal stored values without zero-padding).
 - LIKE pattern ops treat `%`, `_`, and `\` in the search value as **literals** (escaped; SQL uses `ESCAPE '\'`).
@@ -458,7 +458,7 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
 | Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI refresh (#14); hardening #33 / security review #67 |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly-id locator | — |
-| Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not-empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
+| Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
 | `make redis-up` / Redis | Shared bus + cache instance (ephemeral) | Message bus (#161); authz cache (#162) |
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |

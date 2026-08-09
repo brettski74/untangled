@@ -60,7 +60,7 @@ describe("leaf_ops_for_type", () => {
     expect(boolean_ops).toEqual([
       "eq",
       "empty",
-      "not-empty",
+      "not_empty",
       "ne",
     ].sort((a, b) =>
       operator_display_name(a).localeCompare(operator_display_name(b), undefined, {

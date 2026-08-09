@@ -115,16 +115,16 @@ describe("render_predicate_text", () => {
     ).toBe('Summary contains "the"');
     expect(
       render_predicate_text(
-        { op: "ends-with", attribute: "number", value: "432" },
+        { op: "ends_with", attribute: "number", value: "432" },
         attrs,
       ),
-    ).toBe('Number ends-with "432"');
+    ).toBe('Number ends_with "432"');
     expect(
       render_predicate_text(
-        { op: "starts-with", attribute: "summary", value: "This" },
+        { op: "starts_with", attribute: "summary", value: "This" },
         attrs,
       ),
-    ).toBe('Summary starts-with "This"');
+    ).toBe('Summary starts_with "This"');
     expect(
       render_predicate_text(
         { op: "empty", attribute: "description" },
@@ -133,7 +133,7 @@ describe("render_predicate_text", () => {
     ).toBe("Description is empty");
     expect(
       render_predicate_text(
-        { op: "not-empty", attribute: "description" },
+        { op: "not_empty", attribute: "description" },
         attrs,
       ),
     ).toBe("Description is not empty");
