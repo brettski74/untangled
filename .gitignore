@@ -150,6 +150,11 @@ activemq-data/
 # Environments
 .env
 .envrc
+# Rocky / deploy-seed host-local random seed passwords (never commit).
+seed-credentials.env
+# Local-only ops notes (not published in the public repo).
+docs/rocky-deploy.md
+docs/container-images.md
 .venv
 env/
 venv/
