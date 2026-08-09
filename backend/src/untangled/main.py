@@ -12,6 +12,7 @@ from untangled.audit.deps import set_audit_logger
 from untangled.audit.file_sink import FileAuditLogger
 from untangled.audit.middleware import AuditCorrelationMiddleware
 from untangled.auth import auth_router
+from untangled.coherence import start_system_config_subscriber
 from untangled.records.mounts import v2_record_routers
 from untangled.request_validation import register_request_validation_handlers
 
@@ -26,9 +27,12 @@ def _wire_audit_logger() -> FileAuditLogger:
 async def lifespan(app: FastAPI):
     logger = _wire_audit_logger()
     app.state.audit_logger = logger
+    # Bus-dependent: fail loud if Redis is missing/unreachable (no silent no-op).
+    stop_coherence = start_system_config_subscriber()
     try:
         yield
     finally:
+        stop_coherence()
         logger.close()
 
 

@@ -12,6 +12,7 @@ from untangled.audit.file_sink import AuditWriteError
 from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.audit.volume import note_search
 from untangled.auth.dependencies import DbConn
+from untangled.coherence import notify_system_config_changed
 from untangled.persistence.search import SearchNestingLimits
 from untangled.rbac.dependencies import require_class_operation
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
@@ -296,6 +297,8 @@ def build_v2_class_router(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"{class_name} not found",
             ) from exc
+        if class_name == "system_config":
+            notify_system_config_changed()
         try:
             emit_fail_closed(
                 make_event(

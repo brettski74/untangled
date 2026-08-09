@@ -155,6 +155,8 @@ seed-credentials.env
 # Local-only ops notes (not published in the public repo).
 docs/rocky-deploy.md
 docs/container-images.md
+# Local-only test plans (never commit).
+docs/TESTPLAN-161.md
 .venv
 env/
 venv/

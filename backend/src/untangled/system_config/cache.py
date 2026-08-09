@@ -21,8 +21,8 @@ class SystemConfigCache:
     """Process-local cache of the clamped system-config object.
 
     Expiry uses ``system_config_cache_ttl_seconds`` from the cached (clamped)
-    object. ``invalidate()`` clears the entry for a future flush broadcast;
-    this ticket does not wire a bus.
+    object. ``invalidate()`` clears the entry; API processes subscribe to the
+    coherence flush topic and call this on peer writes.
     """
 
     def __init__(self) -> None:

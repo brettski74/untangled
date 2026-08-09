@@ -21,6 +21,7 @@ Required web env (Compose sets these; `make frontend-dev` supplies local default
 | `UNTANGLED_API_BASE_URL` | Server-side API base (`http://api:8000` in Compose; `http://127.0.0.1:8000` on the host) |
 | `UNTANGLED_SESSION_SECRET` | Cookie signing secret — **required**; no in-code default |
 | `UNTANGLED_COOKIE_SECURE` | Secure cookies on by default; set `false` for plain-HTTP local |
+| `UNTANGLED_REDIS_URL` | Shared Redis for coherence signaling library / future subscribers (`redis://redis:6379/0` in Compose; host default `redis://127.0.0.1:6379/0`). No permanent web subscribe-on-boot until a product consumer exists; production hardening [#182](https://github.com/brettski74/untangled/issues/182) |
 
 Cookie `maxAge` is derived from the access JWT `exp` claim (no separate web TTL env).
 
@@ -34,6 +35,7 @@ Cookie `maxAge` is derived from the access JWT `exp` claim (no separate web TTL 
 | `frontend/app/list/` | Schema-driven list chrome (#13): context bar, quick filter, filter row + nested editor (`filter_chrome.tsx`), shared predicate text renderer (`predicate_text.ts`) |
 | `frontend/app/detail/` | Schema-driven detail read/edit (#81–#82) + new-record (#83); `TESTPLAN.md` / `TESTPLAN-83.md` |
 | `frontend/app/records/` | SSR search/fetch/update/create seams (Bearer via session). Record CRUD uses `/api/v2/{class_name}` with FK identity enrichment on responses. Shared helpers in `fk_identity.ts`. |
+| `frontend/app/coherence/` | Cache-coherence publish/subscribe abstraction (Redis pub/sub; not domain/audit bus) |
 | `frontend/app/config/nav-bar.yaml` | M1 product-default nav (instance override later) |
 | `frontend/app/root.tsx` | HTML shell / root layout |
 | `frontend/app/routes/` | Route modules (loaders, actions, components) |
