@@ -411,6 +411,8 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck |
 | `make test` | Backend pytest (starts DB + Redis; uses migrate path) + frontend build smoke test |
 | `make test-ci` | Same as lint + test, but skip Compose `db-up` / `redis-up` (services must already be up; used by Actions) |
+| `make e2e` | Full Playwright browser suite against a live web+API stack (default `http://127.0.0.1:5173`) |
+| `make e2e-smoke` | Playwright `@smoke` subset (CI gate; same stack prereqs as `e2e`) |
 | `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
 | `make clean` | Same as `clean-models` (clean source tree of codegen output) |
@@ -446,6 +448,25 @@ After `make up` → `make migrate` → `make seed`:
 ```bash
 docker compose exec web wget -qO- http://api:8000/health
 ```
+
+### Playwright browser E2E
+
+Specs live under `frontend/e2e/`. CI **gates** on the `@smoke` tag (`make e2e-smoke`). The full suite also runs in CI afterward as a **non-gating** step (`continue-on-error`) so regressions show up without failing the check. Locally: `make e2e`.
+
+Prerequisites: Postgres + Redis + migrated/seeded DB, API on `:8000`, web on `:5173` (Compose `make up` or host `make backend-dev` / `make frontend-dev`). First-time browser install:
+
+```bash
+cd frontend && npx playwright install chromium
+```
+
+Then:
+
+```bash
+make e2e-smoke   # CI-equivalent gate
+make e2e         # full suite
+```
+
+Override base URL with `PLAYWRIGHT_BASE_URL` if needed.
 
 After `make db-up` only (postgres):
 
