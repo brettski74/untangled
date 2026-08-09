@@ -12,9 +12,9 @@ export default [
   layout("routes/authenticated.tsx", [
     index("routes/home.tsx"),
     route("change-password", "routes/change_password.tsx"),
-    route(":collection/new", "routes/destination_new.tsx"),
-    route(":collection/lists/:list_id", "routes/destination_list.tsx"),
+    route(":class_name/new", "routes/destination_new.tsx"),
+    route(":class_name/lists/:list_id", "routes/destination_list.tsx"),
     // After static new/lists segments so those names are never locators.
-    route(":collection/:locator", "routes/destination_detail.tsx"),
+    route(":class_name/:locator", "routes/destination_detail.tsx"),
   ]),
 ] satisfies RouteConfig;

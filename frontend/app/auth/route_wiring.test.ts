@@ -68,7 +68,7 @@ describe("route wiring", () => {
     );
 
     const result = await authenticated_loader({
-      request: new Request("http://web.test/change-requests/lists/all", {
+      request: new Request("http://web.test/change_request/lists/all", {
         headers: { Cookie: cookie },
       }),
       params: {},
@@ -147,7 +147,7 @@ describe("route wiring", () => {
       const response = error as Response;
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toBe(
-        "/change-requests/lists/all",
+        "/change_request/lists/all",
       );
     }
   });
@@ -180,7 +180,7 @@ describe("route wiring", () => {
       const response = error as Response;
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toBe(
-        "/change-requests/lists/all",
+        "/change_request/lists/all",
       );
     }
   });

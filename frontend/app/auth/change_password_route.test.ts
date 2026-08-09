@@ -83,7 +83,7 @@ describe("change-password route (#173)", () => {
     expect(body.policy.password_estimate_drift_factor).toBe(1.1);
     expect(fetch_record).toHaveBeenCalledWith(
       expect.any(String),
-      "system-configs",
+      "system_config",
       POLICY_RECORD.id,
     );
   });

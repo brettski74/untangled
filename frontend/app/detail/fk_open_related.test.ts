@@ -10,7 +10,7 @@ describe("fk_open_related", () => {
     );
     expect(open.navigable).toBe(true);
     expect(open.href).toBe(
-      "/incidents/01901234-5678-7abc-89ab-cdef01234567",
+      "/incident/01901234-5678-7abc-89ab-cdef01234567",
     );
     expect(open.tooltip).toBe(
       "Open 01901234-5678-7abc-89ab-cdef01234567",
@@ -24,7 +24,7 @@ describe("fk_open_related", () => {
       friendly_id: "INC00000001",
     });
     expect(open.navigable).toBe(true);
-    expect(open.href).toBe("/incidents/INC00000001");
+    expect(open.href).toBe("/incident/INC00000001");
     expect(open.tooltip).toBe("Open Outbound email");
   });
 
@@ -33,7 +33,7 @@ describe("fk_open_related", () => {
       id: "01901234-5678-7abc-89ab-cdef01234567",
       friendly_id: "INC/odd",
     });
-    expect(open.href).toBe("/incidents/INC%2Fodd");
+    expect(open.href).toBe("/incident/INC%2Fodd");
   });
 
   it("F2: unset FK is non-navigable", () => {
@@ -42,8 +42,18 @@ describe("fk_open_related", () => {
     expect(open.href).toBeNull();
   });
 
-  it("F3: set + unmapped class (user) is non-navigable", () => {
+  it("F3: set + known class (user) is navigable by class name", () => {
     const open = fk_open_related("user", {
+      id: "01900000-0000-7000-8000-000000000001",
+      display_name: "Admin",
+    });
+    expect(open.navigable).toBe(true);
+    expect(open.href).toBe("/user/01900000-0000-7000-8000-000000000001");
+    expect(open.tooltip).toBe("Open Admin");
+  });
+
+  it("F3b: set + unknown class is non-navigable", () => {
+    const open = fk_open_related("not_a_real_class", {
       id: "01900000-0000-7000-8000-000000000001",
       display_name: "Admin",
     });

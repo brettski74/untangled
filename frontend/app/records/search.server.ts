@@ -4,8 +4,8 @@
 import { z } from "zod";
 
 import { api_fetch_with_token } from "../auth/api.server";
-import { class_for_collection } from "../shell/nav_paths";
-import { parse_v1_record } from "./fetch.server";
+import { class_field_meta } from "../generated/field_meta";
+import { parse_enriched_record } from "./fetch.server";
 
 export const search_response_schema = z.object({
   items: z.array(z.record(z.string(), z.unknown())),
@@ -16,7 +16,7 @@ export const search_response_schema = z.object({
 
 export type SearchResponse = z.infer<typeof search_response_schema>;
 
-/** Wire sort entry for POST /{collection}/search (user-selected only). */
+/** Wire sort entry for POST /api/v2/{class_name}/search (user-selected only). */
 export type SearchSortSpec = {
   attribute: string;
   direction: "asc" | "desc";
@@ -48,7 +48,7 @@ const DEFAULT_LIMIT = 20;
 const DEFAULT_OFFSET = 0;
 
 /**
- * POST /api/v1/{collection}/search via the web-tier Bearer seam.
+ * POST /api/v2/{class_name}/search via the web-tier Bearer seam.
  * Includes ``sort`` only when the caller supplies a non-empty list so the UI
  * does not invent an API default sort.
  * 400/422 raise {@link SearchApiError} with API ``detail`` when present.
@@ -58,7 +58,7 @@ const DEFAULT_OFFSET = 0;
  */
 export async function search_collection(
   access_token: string,
-  collection: string,
+  class_name: string,
   body: SearchCollectionBody,
 ): Promise<SearchResponse> {
   const payload: Record<string, unknown> = {
@@ -73,7 +73,7 @@ export async function search_collection(
 
   const response = await api_fetch_with_token(
     access_token,
-    `/api/v1/${collection}/search`,
+    `/api/v2/${class_name}/search`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -94,13 +94,12 @@ export async function search_collection(
 
   const response_payload: unknown = await response.json();
   const parsed = search_response_schema.parse(response_payload);
-  const class_kebab = class_for_collection(collection);
-  if (class_kebab == null) {
-    throw new Error(`Unknown collection for v1 search: ${collection}`);
+  if (class_field_meta(class_name) == null) {
+    throw new Error(`Unknown class for v2 search: ${class_name}`);
   }
   return {
     ...parsed,
-    items: parsed.items.map((item) => parse_v1_record(item, class_kebab)),
+    items: parsed.items.map((item) => parse_enriched_record(item, class_name)),
   };
 }
 

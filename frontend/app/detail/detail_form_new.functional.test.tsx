@@ -63,9 +63,10 @@ describe("DetailForm new-record functional surface (#83 / #109)", () => {
     expect(requested.disabled).toBe(true);
     expect(requested.value).toBe(SEED_ADMIN);
     const open = within(requested.parentElement as HTMLElement).getByRole(
-      "button",
+      "link",
+      { name: `Open ${SEED_ADMIN}` },
     );
-    expect((open as HTMLButtonElement).disabled).toBe(true);
+    expect(open.getAttribute("href")).toBe(`/user/${SEED_ADMIN}`);
   });
 
   it("F-E1: CHG scheduled datetime uses date + 24h time, not datetime-local", () => {

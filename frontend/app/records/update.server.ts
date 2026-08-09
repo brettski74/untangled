@@ -4,25 +4,25 @@
 import { z } from "zod";
 
 import { api_fetch_with_token } from "../auth/api.server";
-import { class_for_collection } from "../shell/nav_paths";
-import { parse_v1_record, type RecordResponse } from "./fetch.server";
+import { class_field_meta } from "../generated/field_meta";
+import { parse_enriched_record, type RecordResponse } from "./fetch.server";
 
 export type UpdateRecordBody = Record<string, unknown>;
 
 /**
- * PATCH /api/v1/{collection}/{locator} via the web-tier Bearer seam.
+ * PATCH /api/v2/{class_name}/{locator} via the web-tier Bearer seam.
  * Propagates domain 4xx/5xx as Response (except 401/403 from api_fetch_with_token).
  */
 export async function update_record(
   access_token: string,
-  collection: string,
+  class_name: string,
   locator: string,
   body: UpdateRecordBody,
 ): Promise<RecordResponse> {
   const encoded = encodeURIComponent(locator);
   const response = await api_fetch_with_token(
     access_token,
-    `/api/v1/${collection}/${encoded}`,
+    `/api/v2/${class_name}/${encoded}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -54,11 +54,10 @@ export async function update_record(
   }
 
   const payload: unknown = await response.json();
-  const class_kebab = class_for_collection(collection);
-  if (class_kebab == null) {
-    throw new Error(`Unknown collection for v1 update: ${collection}`);
+  if (class_field_meta(class_name) == null) {
+    throw new Error(`Unknown class for v2 update: ${class_name}`);
   }
-  return parse_v1_record(payload, class_kebab);
+  return parse_enriched_record(payload, class_name);
 }
 
 /** Narrow runtime check for JSON object bodies (not arrays). */

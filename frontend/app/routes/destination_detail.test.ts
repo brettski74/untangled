@@ -84,15 +84,14 @@ describe("destination_detail loader", () => {
     const { loader } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await loader({
-      request: new Request("http://web.test/incidents/INC00000001", {
+      request: new Request("http://web.test/incident/INC00000001", {
         headers: { Cookie: cookie },
       }),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
 
     const body = result.data;
-    expect(body.collection).toBe("incidents");
     expect(body.class_name).toBe("incident");
     expect(body.title_token).toBe("INC00000001");
     expect(body.record.number).toBe("INC00000001");
@@ -103,7 +102,7 @@ describe("destination_detail loader", () => {
     expect(body.layout.compact.some((s) => s.name_snake === "id")).toBe(false);
     expect(fetch_record).toHaveBeenCalledWith(
       expect.any(String),
-      "incidents",
+      "incident",
       "INC00000001",
     );
   });
@@ -114,14 +113,14 @@ describe("destination_detail loader", () => {
     const cookie = await session_cookie();
     const result = await loader({
       request: new Request(
-        `http://web.test/incidents/${INC_RECORD.id}`,
+        `http://web.test/incident/${INC_RECORD.id}`,
         { headers: { Cookie: cookie } },
       ),
-      params: { collection: "incidents", locator: INC_RECORD.id },
+      params: { class_name: "incident", locator: INC_RECORD.id },
       context: {},
     } as never);
     expect(result.data.title_token).toBe("INC00000001");
-    expect(result.data.copy_path).toBe("/incidents/INC00000001");
+    expect(result.data.copy_path).toBe("/incident/INC00000001");
   });
 
   it("D3: loads CHG by friendly-id", async () => {
@@ -129,10 +128,10 @@ describe("destination_detail loader", () => {
     const { loader } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await loader({
-      request: new Request("http://web.test/change-requests/CHG00000001", {
+      request: new Request("http://web.test/change_request/CHG00000001", {
         headers: { Cookie: cookie },
       }),
-      params: { collection: "change-requests", locator: "CHG00000001" },
+      params: { class_name: "change_request", locator: "CHG00000001" },
       context: {},
     } as never);
     expect(result.data.class_name).toBe("change_request");
@@ -150,7 +149,7 @@ describe("destination_detail loader", () => {
         request: new Request("http://web.test/widgets/W1", {
           headers: { Cookie: cookie },
         }),
-        params: { collection: "widgets", locator: "W1" },
+        params: { class_name: "widgets", locator: "W1" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 404 });
@@ -165,10 +164,10 @@ describe("destination_detail loader", () => {
     const cookie = await session_cookie();
     await expect(
       loader({
-        request: new Request("http://web.test/incidents/INC999", {
+        request: new Request("http://web.test/incident/INC999", {
           headers: { Cookie: cookie },
         }),
-        params: { collection: "incidents", locator: "INC999" },
+        params: { class_name: "incident", locator: "INC999" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 404 });
@@ -182,10 +181,10 @@ describe("destination_detail loader", () => {
     const cookie = await session_cookie();
     await expect(
       loader({
-        request: new Request("http://web.test/incidents/not-a-locator", {
+        request: new Request("http://web.test/incident/not-a-locator", {
           headers: { Cookie: cookie },
         }),
-        params: { collection: "incidents", locator: "not-a-locator" },
+        params: { class_name: "incident", locator: "not-a-locator" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 422 });
@@ -198,10 +197,10 @@ describe("destination_detail loader", () => {
     const cookie = await session_cookie();
     await expect(
       loader({
-        request: new Request("http://web.test/incidents/INC00000001", {
+        request: new Request("http://web.test/incident/INC00000001", {
           headers: { Cookie: cookie },
         }),
-        params: { collection: "incidents", locator: "INC00000001" },
+        params: { class_name: "incident", locator: "INC00000001" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 403, statusText: "Forbidden" });
@@ -211,8 +210,8 @@ describe("destination_detail loader", () => {
     const { loader } = await import("../routes/destination_detail");
     await expect(
       loader({
-        request: new Request("http://web.test/incidents/INC00000001"),
-        params: { collection: "incidents", locator: "INC00000001" },
+        request: new Request("http://web.test/incident/INC00000001"),
+        params: { class_name: "incident", locator: "INC00000001" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 302 });
@@ -225,10 +224,10 @@ describe("destination_detail loader", () => {
     const cookie = await session_cookie();
     const result = await loader({
       request: new Request(
-        "http://web.test/incidents/INC00000001?view=custom-unknown",
+        "http://web.test/incident/INC00000001?view=custom-unknown",
         { headers: { Cookie: cookie } },
       ),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
     expect(result.data.record.number).toBe("INC00000001");
@@ -239,15 +238,15 @@ describe("destination_detail loader", () => {
     const { loader } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     await loader({
-      request: new Request("http://web.test/incidents/INC00000001", {
+      request: new Request("http://web.test/incident/INC00000001", {
         headers: { Cookie: cookie },
       }),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
     expect(fetch_record).toHaveBeenCalledTimes(1);
     expect(fetch_record.mock.calls[0]?.slice(1)).toEqual([
-      "incidents",
+      "incident",
       "INC00000001",
     ]);
   });
@@ -284,7 +283,7 @@ describe("destination_detail action", () => {
     const { action } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/INC00000001", {
+      request: new Request("http://web.test/incident/INC00000001", {
         method: "PATCH",
         headers: {
           Cookie: cookie,
@@ -292,13 +291,13 @@ describe("destination_detail action", () => {
         },
         body: JSON.stringify({ status: "in-progress" }),
       }),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
     expect(result.data).toEqual({ ok: true, record: saved });
     expect(update_record).toHaveBeenCalledWith(
       expect.any(String),
-      "incidents",
+      "incident",
       "INC00000001",
       { status: "in-progress" },
     );
@@ -311,7 +310,7 @@ describe("destination_detail action", () => {
     const { action } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/INC00000001", {
+      request: new Request("http://web.test/incident/INC00000001", {
         method: "PATCH",
         headers: {
           Cookie: cookie,
@@ -319,7 +318,7 @@ describe("destination_detail action", () => {
         },
         body: JSON.stringify({ status: "in-progress" }),
       }),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
     expect(result.init?.status ?? (result.data.ok ? 200 : result.data.status)).toBe(422);
@@ -335,7 +334,7 @@ describe("destination_detail action", () => {
     const { action } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/INC00000001", {
+      request: new Request("http://web.test/incident/INC00000001", {
         method: "PATCH",
         headers: {
           Cookie: cookie,
@@ -343,7 +342,7 @@ describe("destination_detail action", () => {
         },
         body: JSON.stringify({ status: "in-progress" }),
       }),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
     expect(result.data).toEqual({
@@ -361,7 +360,7 @@ describe("destination_detail action", () => {
     const { action } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/INC999", {
+      request: new Request("http://web.test/incident/INC999", {
         method: "PATCH",
         headers: {
           Cookie: cookie,
@@ -369,7 +368,7 @@ describe("destination_detail action", () => {
         },
         body: JSON.stringify({ status: "x" }),
       }),
-      params: { collection: "incidents", locator: "INC999" },
+      params: { class_name: "incident", locator: "INC999" },
       context: {},
     } as never);
     expect(result.data.ok).toBe(false);
@@ -382,7 +381,7 @@ describe("destination_detail action", () => {
     const { action } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/INC00000001", {
+      request: new Request("http://web.test/incident/INC00000001", {
         method: "PATCH",
         headers: {
           Cookie: cookie,
@@ -390,7 +389,7 @@ describe("destination_detail action", () => {
         },
         body: JSON.stringify({ not_a_field: "x" }),
       }),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
     expect(result.data).toMatchObject({ ok: false, status: 400 });
@@ -401,7 +400,7 @@ describe("destination_detail action", () => {
     const { action } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/INC00000001", {
+      request: new Request("http://web.test/incident/INC00000001", {
         method: "PATCH",
         headers: {
           Cookie: cookie,
@@ -409,7 +408,7 @@ describe("destination_detail action", () => {
         },
         body: JSON.stringify({ assigned_user_id: "not-a-uuid" }),
       }),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
     expect(result.data).toMatchObject({ ok: false, status: 422 });
@@ -420,12 +419,12 @@ describe("destination_detail action", () => {
     const { action } = await import("../routes/destination_detail");
     await expect(
       action({
-        request: new Request("http://web.test/incidents/INC00000001", {
+        request: new Request("http://web.test/incident/INC00000001", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "x" }),
         }),
-        params: { collection: "incidents", locator: "INC00000001" },
+        params: { class_name: "incident", locator: "INC00000001" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 302 });
@@ -436,7 +435,7 @@ describe("destination_detail action", () => {
     const { action } = await import("../routes/destination_detail");
     const cookie = await session_cookie();
     const result = await action({
-      request: new Request("http://web.test/incidents/INC00000001", {
+      request: new Request("http://web.test/incident/INC00000001", {
         method: "PATCH",
         headers: {
           Cookie: cookie,
@@ -444,7 +443,7 @@ describe("destination_detail action", () => {
         },
         body: JSON.stringify(["not", "object"]),
       }),
-      params: { collection: "incidents", locator: "INC00000001" },
+      params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
     expect(result.data).toMatchObject({ ok: false, status: 400 });

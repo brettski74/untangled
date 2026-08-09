@@ -9,7 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { collection_for_class } from "../shell/nav_paths";
+import { class_field_meta } from "../generated/field_meta";
 import { record_detail_path } from "../records/record_paths";
 import {
   fk_display_label,
@@ -34,7 +34,7 @@ import {
 export type BasicListEmptyMode = "match" | "failed";
 
 export type BasicListProps = {
-  collection: string;
+  class_name: string;
   columns: ListColumn[];
   widths: Readonly<Record<string, number>>;
   sort: readonly ListSortSpec[];
@@ -51,7 +51,7 @@ export type BasicListProps = {
  * clipped cells, real record anchors.
  */
 export function BasicList({
-  collection,
+  class_name,
   columns,
   widths,
   sort,
@@ -385,7 +385,7 @@ export function BasicList({
                       )}
                     >
                       <ListCell
-                        collection={collection}
+                        class_name={class_name}
                         column={column}
                         value={row[column.name_snake]}
                       />
@@ -512,11 +512,11 @@ function apply_colgroup_widths(
 }
 
 function ListCell({
-  collection,
+  class_name,
   column,
   value,
 }: {
-  collection: string;
+  class_name: string;
   column: ListColumn;
   value: unknown;
 }) {
@@ -534,12 +534,11 @@ function ListCell({
       return null;
     }
     const locator = fk_link_locator(value);
-    const target_collection = collection_for_class(column.references);
-    if (target_collection != null && locator != null) {
+    if (class_field_meta(column.references) != null && locator != null) {
       return (
         <a
           className="text-sky-800 underline underline-offset-2"
-          href={record_detail_path(target_collection, locator)}
+          href={record_detail_path(column.references, locator)}
         >
           {label}
         </a>
@@ -554,7 +553,7 @@ function ListCell({
     return (
       <a
         className="text-sky-800 underline underline-offset-2"
-        href={record_detail_path(collection, value)}
+        href={record_detail_path(class_name, value)}
       >
         {text}
       </a>

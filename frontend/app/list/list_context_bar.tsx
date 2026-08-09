@@ -44,7 +44,7 @@ export type ListSearchPayload = {
 
 export type ListContextBarProps = {
   class_display_name: string;
-  collection: string;
+  class_name: string;
   /** Same destination identity as DestinationListPage path sync (`loaderData.path`). */
   list_path: string;
   can_create: boolean;
@@ -85,7 +85,7 @@ const MENU_STUBS = [
  */
 export function ListContextBar({
   class_display_name,
-  collection,
+  class_name,
   list_path,
   can_create,
   attributes,
@@ -168,7 +168,7 @@ export function ListContextBar({
 
         {can_create ? (
           <a
-            href={`/${collection}/new`}
+            href={`/${class_name}/new`}
             title="New"
             aria-label="New"
             className="inline-flex h-8 w-8 items-center justify-center rounded text-[var(--color-shell-chrome-fg)] hover:bg-white/10"

@@ -1,9 +1,9 @@
 /**
- * FK open-related href resolution (fail-closed when unset or unmapped).
+ * FK open-related href resolution (fail-closed when unset or unknown class).
  */
+import { class_field_meta } from "../generated/field_meta";
 import { record_detail_path } from "../records/record_paths";
 import { fk_display_label, fk_link_locator } from "../records/fk_identity";
-import { collection_for_class } from "../shell/nav_paths";
 
 export type FkOpenRelated = {
   navigable: boolean;
@@ -36,14 +36,13 @@ export function fk_open_related(
     return { navigable: false, href: null, tooltip };
   }
 
-  const collection = collection_for_class(references);
-  if (collection == null) {
+  if (class_field_meta(references) == null) {
     return { navigable: false, href: null, tooltip };
   }
 
   return {
     navigable: true,
-    href: record_detail_path(collection, locator),
+    href: record_detail_path(references, locator),
     tooltip,
   };
 }

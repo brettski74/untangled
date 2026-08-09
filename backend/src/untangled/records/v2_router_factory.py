@@ -50,8 +50,7 @@ def build_v2_class_router(
                 "Versioned create. Request body uses scalar foreign-key UUIDs. "
                 "The response is the full created record with the same FK "
                 "identity enrichment as versioned fetch (including audit "
-                "created_by / updated_by). Path tracks live class name; FE is "
-                "not cut over to v2 yet."
+                "created_by / updated_by). Path tracks live class name."
             ),
             operation_id=f"{op_base}_v2_create",
         )
@@ -82,7 +81,7 @@ def build_v2_class_router(
             description=(
                 "Versioned search. Projected foreign-key fields are identity "
                 "objects with canonical id plus configured display_name / "
-                "friendly_id. Path tracks live class name; FE is not cut over "
+                "friendly_id. Path tracks live class name; "
                 "to v2 yet."
             ),
             operation_id=f"{op_base}_v2_search",
@@ -154,7 +153,7 @@ def build_v2_class_router(
         description=(
             "Versioned fetch. All foreign-key fields (including audit "
             "created_by / updated_by) are identity objects. Path tracks live "
-            "class name; FE is not cut over to v2 yet."
+            "class name."
         ),
         operation_id=f"{op_base}_v2_fetch",
     )
@@ -180,7 +179,7 @@ def build_v2_class_router(
             "Versioned update. Request body uses scalar foreign-key UUIDs. The "
             "response is the full updated record with the same FK identity "
             "enrichment as versioned fetch (including audit created_by / "
-            "updated_by). Path tracks live class name; FE is not cut over to "
+            "updated_by). Path tracks live class name; to "
             "v2 yet."
         ),
         operation_id=f"{op_base}_v2_update",
@@ -219,8 +218,7 @@ def build_v2_class_router(
             status_code=status.HTTP_204_NO_CONTENT,
             summary="Delete one record",
             description=(
-                "Versioned delete. Path tracks live class name; FE is not cut "
-                "over to v2 yet."
+                "Versioned delete. Path tracks live class name."
             ),
             operation_id=f"{op_base}_v2_delete",
         )

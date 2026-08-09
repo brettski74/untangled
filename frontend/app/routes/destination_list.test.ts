@@ -51,15 +51,15 @@ describe("destination_list loader", () => {
     const { loader } = await import("../routes/destination_list");
     const cookie = await session_cookie();
     const result = await loader({
-      request: new Request("http://web.test/incidents/lists/all", {
+      request: new Request("http://web.test/incident/lists/all", {
         headers: { Cookie: cookie },
       }),
-      params: { collection: "incidents", list_id: "all" },
+      params: { class_name: "incident", list_id: "all" },
       context: {},
     } as never);
 
     const body = result.data;
-    expect(body.collection).toBe("incidents");
+    expect(body.class_name).toBe("incident");
     expect(body.total).toBe(1);
     expect(body.rows).toHaveLength(1);
     expect(body.columns[0]?.name_snake).toBe("number");
@@ -70,7 +70,7 @@ describe("destination_list loader", () => {
     expect(body.attributes.some((a) => a.name_snake === "summary")).toBe(true);
     expect(search_collection).toHaveBeenCalledTimes(1);
     const [, collection, search_body] = search_collection.mock.calls[0] ?? [];
-    expect(collection).toBe("incidents");
+    expect(collection).toBe("incident");
     expect(search_body).toMatchObject({
       predicate: null,
       attributes: expect.arrayContaining(["number", "summary", "status"]),
@@ -89,10 +89,10 @@ describe("destination_list loader", () => {
     const { loader } = await import("../routes/destination_list");
     const cookie = await session_cookie();
     const result = await loader({
-      request: new Request("http://web.test/incidents/lists/open", {
+      request: new Request("http://web.test/incident/lists/open", {
         headers: { Cookie: cookie },
       }),
-      params: { collection: "incidents", list_id: "open" },
+      params: { class_name: "incident", list_id: "open" },
       context: {},
     } as never);
 
@@ -112,10 +112,10 @@ describe("destination_list loader", () => {
     const cookie = await session_cookie();
     await expect(
       loader({
-        request: new Request("http://web.test/incidents/lists/nope", {
+        request: new Request("http://web.test/incident/lists/nope", {
           headers: { Cookie: cookie },
         }),
-        params: { collection: "incidents", list_id: "nope" },
+        params: { class_name: "incident", list_id: "nope" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 404 });
@@ -131,10 +131,10 @@ describe("destination_list loader", () => {
     await expect(
       loader({
         request: new Request(
-          "http://web.test/change-requests/lists/open",
+          "http://web.test/change_request/lists/open",
           { headers: { Cookie: cookie } },
         ),
-        params: { collection: "change-requests", list_id: "open" },
+        params: { class_name: "change_request", list_id: "open" },
         context: {},
       } as never),
     ).rejects.toMatchObject({
@@ -173,12 +173,12 @@ describe("destination_list action", () => {
     form.set("predicate", JSON.stringify(predicate));
 
     const result = await action({
-      request: new Request("http://web.test/incidents/lists/all", {
+      request: new Request("http://web.test/incident/lists/all", {
         method: "POST",
         headers: { Cookie: cookie },
         body: form,
       }),
-      params: { collection: "incidents", list_id: "all" },
+      params: { class_name: "incident", list_id: "all" },
       context: {},
     } as never);
 
@@ -213,12 +213,12 @@ describe("destination_list action", () => {
     form.set("sort", JSON.stringify(sort));
 
     const result = await action({
-      request: new Request("http://web.test/incidents/lists/all", {
+      request: new Request("http://web.test/incident/lists/all", {
         method: "POST",
         headers: { Cookie: cookie },
         body: form,
       }),
-      params: { collection: "incidents", list_id: "all" },
+      params: { class_name: "incident", list_id: "all" },
       context: {},
     } as never);
 
@@ -245,12 +245,12 @@ describe("destination_list action", () => {
     form.set("offset", "50");
 
     const result = await action({
-      request: new Request("http://web.test/incidents/lists/all", {
+      request: new Request("http://web.test/incident/lists/all", {
         method: "POST",
         headers: { Cookie: cookie },
         body: form,
       }),
-      params: { collection: "incidents", list_id: "all" },
+      params: { class_name: "incident", list_id: "all" },
       context: {},
     } as never);
 
@@ -282,12 +282,12 @@ describe("destination_list action", () => {
     form.set("predicate", "null");
 
     await action({
-      request: new Request("http://web.test/incidents/lists/all", {
+      request: new Request("http://web.test/incident/lists/all", {
         method: "POST",
         headers: { Cookie: cookie },
         body: form,
       }),
-      params: { collection: "incidents", list_id: "all" },
+      params: { class_name: "incident", list_id: "all" },
       context: {},
     } as never);
 
@@ -309,12 +309,12 @@ describe("destination_list action", () => {
 
     await expect(
       action({
-        request: new Request("http://web.test/incidents/lists/all", {
+        request: new Request("http://web.test/incident/lists/all", {
           method: "POST",
           headers: { Cookie: cookie },
           body: form,
         }),
-        params: { collection: "incidents", list_id: "all" },
+        params: { class_name: "incident", list_id: "all" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 422 });
@@ -331,12 +331,12 @@ describe("destination_list action", () => {
 
     await expect(
       action({
-        request: new Request("http://web.test/incidents/lists/all", {
+        request: new Request("http://web.test/incident/lists/all", {
           method: "POST",
           headers: { Cookie: cookie },
           body: form,
         }),
-        params: { collection: "incidents", list_id: "all" },
+        params: { class_name: "incident", list_id: "all" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 422 });
@@ -352,12 +352,12 @@ describe("destination_list action", () => {
 
     await expect(
       action({
-        request: new Request("http://web.test/incidents/lists/all", {
+        request: new Request("http://web.test/incident/lists/all", {
           method: "POST",
           headers: { Cookie: cookie },
           body: form,
         }),
-        params: { collection: "incidents", list_id: "all" },
+        params: { class_name: "incident", list_id: "all" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 400 });
@@ -372,12 +372,12 @@ describe("destination_list action", () => {
 
     await expect(
       action({
-        request: new Request("http://web.test/incidents/lists/all", {
+        request: new Request("http://web.test/incident/lists/all", {
           method: "POST",
           headers: { Cookie: cookie },
           body: form,
         }),
-        params: { collection: "incidents", list_id: "all" },
+        params: { class_name: "incident", list_id: "all" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 400 });
@@ -405,12 +405,12 @@ describe("destination_list action", () => {
     );
 
     const result = await action({
-      request: new Request("http://web.test/incidents/lists/all", {
+      request: new Request("http://web.test/incident/lists/all", {
         method: "POST",
         headers: { Cookie: cookie },
         body: form,
       }),
-      params: { collection: "incidents", list_id: "all" },
+      params: { class_name: "incident", list_id: "all" },
       context: {},
     } as never);
 
@@ -433,12 +433,12 @@ describe("destination_list action", () => {
 
     await expect(
       action({
-        request: new Request("http://web.test/incidents/lists/all", {
+        request: new Request("http://web.test/incident/lists/all", {
           method: "POST",
           headers: { Cookie: cookie },
           body: form,
         }),
-        params: { collection: "incidents", list_id: "all" },
+        params: { class_name: "incident", list_id: "all" },
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 403 });
