@@ -71,8 +71,26 @@ Default Redis URL from the **host** (override with `UNTANGLED_REDIS_URL`):
 redis://127.0.0.1:6379/0
 ```
 
-Inside the **api** / **web** containers, Compose sets `DATABASE_URL` / `UNTANGLED_REDIS_URL` to use the `postgres` / `redis` service hostnames. Redis is ephemeral (no named volume); local-dev has no Redis password — acceptable for Compose, not a production hardening claim.
+Inside the **api** / **web** containers, Compose sets `DATABASE_URL` / `UNTANGLED_REDIS_URL` to use the `postgres` / `redis` service hostnames. Redis is ephemeral (no named volume); local-dev has no Redis password — acceptable for Compose, not a production hardening claim ([#182](https://github.com/brettski74/untangled/issues/182)).
 
+### Cache-coherence invalidation (Redis pub/sub)
+
+API processes publish and subscribe **cache-coherence / invalidation** signals over Redis pub/sub (`untangled.coherence`). This is **not** the undecided internal domain/workflow event bus, **not** an audit channel, and **not** a durable queue.
+
+| Item | Value |
+| ---- | ----- |
+| Transport | Redis pub/sub via `UNTANGLED_REDIS_URL` (same instance #162 will share) |
+| System-config flush topic | `untangled.coherence.system_config.invalidate` |
+| Payload | Minimal JSON object `{"v": 1}` only — no credentials, secrets, tokens, or PII |
+| Delivery | Best-effort / at-most-once; offline subscribers miss signals; no replay |
+| Ephemeral Redis | Restart clears pub/sub state; consumers tolerate loss (TTL / next load) |
+| Connections | Command clients (publish / future GET/SET) are separate from dedicated subscriber connections |
+| API startup | Subscriber for system-config flush starts in process lifespan; missing/unreachable Redis fails loudly |
+| Publish on write | Fail-soft: system-config write still succeeds; publish failure is logged (Redis URLs redacted) |
+| SSR / web | TypeScript coherence `publish` / `subscribe` abstraction exists for CI/library use; **no** permanent subscribe-on-boot until a product consumer exists. Web may hold `UNTANGLED_REDIS_URL` (Compose already injects it); hardening is [#182](https://github.com/brettski74/untangled/issues/182) |
+| Spoof / integrity | Unauthenticated local Redis can deliver spoofed invalidates — residual until #182 |
+
+Host `make backend-dev` expects Redis reachable at the default URL (`make redis-up` if needed). The unset-env host default is a **local-dev convenience only** — production-capable deploys must set an explicit `UNTANGLED_REDIS_URL` (Compose already does); an explicitly empty value fails closed.
 ## Auth (local)
 
 | Setting | Default (Compose / docs) |
@@ -83,7 +101,7 @@ Inside the **api** / **web** containers, Compose sets `DATABASE_URL` / `UNTANGLE
 | `UNTANGLED_SESSION_SECRET` | `local-dev-only-change-me-untangled-session-secret` (web cookie signing; **required**, no in-code default) |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
-| `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` |
+| `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` (coherence signaling; shared with future authz cache) |
 | `UNTANGLED_AUDIT_LOG_DIR` | Compose: `/var/log/untangled/audit` (named volume `untangled_audit` on `api`) |
 | `UNTANGLED_AUDIT_ROLLOVER_BYTES` | `1048576` (1 MiB) |
 | `UNTANGLED_AUDIT_ROLLOVER_SECONDS` | `86400` (24 hours) |
@@ -401,7 +419,7 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make db-up` | Start PostgreSQL only (for host-run tests / persistence) |
 | `make db-down` | Stop the Compose PostgreSQL service |
 | `make db-wait` | Wait until PostgreSQL accepts connections |
-| `make redis-up` | Start Redis only (for host-run bus / cache work) |
+| `make redis-up` | Start Redis only (for host-run coherence / cache work) |
 | `make redis-down` | Stop the Compose Redis service |
 | `make redis-wait` | Wait until Redis accepts connections |
 | `make migrate` | Apply YAML schema intent via production CLI (`python -m untangled.schema`) |
@@ -475,7 +493,7 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
-| `make redis-up` / Redis | Shared bus + cache instance (ephemeral) | Message bus (#161); authz cache (#162) |
+| `make redis-up` / Redis | Shared coherence + cache instance (ephemeral) | Authz cache (#162); Redis hardening (#182) |
 | Backend `/health` | Real smoke endpoint (unauthenticated) | Domain APIs extend `backend/src/untangled/` |
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |
 | Persistence (`untangled.persistence`) | Thin SQL create/fetch/update/delete + friendly_id assign | Domain routes stamp authenticated actor |

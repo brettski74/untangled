@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from untangled.auth.dependencies import DbConn
+from untangled.coherence import notify_system_config_changed
 from untangled.persistence.search import SearchNestingLimits
 from untangled.rbac.dependencies import require_class_operation
 from untangled.records.deps import class_definition, fetch_by_locator, model, record_store
@@ -202,6 +203,8 @@ def build_v2_class_router(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"{class_kebab} not found",
             ) from exc
+        if class_kebab == "system_config":
+            notify_system_config_changed()
         row = store.fetch_by_id(updated.id, enrich_fk_identity=True)
         if row is None:
             raise HTTPException(

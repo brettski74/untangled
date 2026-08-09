@@ -300,6 +300,44 @@ def test_update_requires_admin_among_seed_roles(tickets_client: TestClient) -> N
     assert isinstance(updated.json()["updated_by"], str)
 
 
+def test_update_publishes_coherence_invalidate(
+    tickets_client: TestClient,
+) -> None:
+    """Successful system-config write publishes the coherence flush topic."""
+    from collections.abc import Mapping
+    from typing import Any
+
+    from untangled.coherence.system_config import set_default_bus_for_tests
+    from untangled.coherence.topics import (
+        SYSTEM_CONFIG_INVALIDATE_PAYLOAD,
+        SYSTEM_CONFIG_INVALIDATE_TOPIC,
+    )
+
+    published: list[tuple[str, dict[str, Any]]] = []
+
+    class CaptureBus:
+        def publish(self, topic: str, payload: Mapping[str, Any]) -> None:
+            published.append((topic, dict(payload)))
+
+        def subscribe(self, topic: str, handler):  # noqa: ANN001
+            raise AssertionError("unused")
+
+    set_default_bus_for_tests(CaptureBus())
+    try:
+        admin = _headers(tickets_client, "admin")
+        updated = tickets_client.patch(
+            f"/system-configs/{SYSTEM_CONFIG_ID}",
+            headers=admin,
+            json={"max_search_nesting_depth": 6},
+        )
+        assert updated.status_code == 200
+        assert published == [
+            (SYSTEM_CONFIG_INVALIDATE_TOPIC, SYSTEM_CONFIG_INVALIDATE_PAYLOAD)
+        ]
+    finally:
+        set_default_bus_for_tests(None)
+
+
 def test_v1_update_enriches_audit_fks_and_requires_admin(
     tickets_client: TestClient,
 ) -> None:
