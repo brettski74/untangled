@@ -195,6 +195,7 @@ def execute_search(
     offset: int | None = None,
     enrich_fk_identity: bool = False,
     definitions_by_name: dict[str, ClassDefinition] | None = None,
+    id_only_attributes: bool = False,
 ) -> SearchResult:
     """Validate request, run COUNT + SELECT, return projected items.
 
@@ -202,8 +203,19 @@ def execute_search(
     ``enrich_fk_identity`` is true, the SELECT uses bounded LEFT JOINs for
     projected FK fields and items may contain ``RelatedIdentity`` values.
     COUNT remains unjoined. Predicates and sorts still use source columns.
+
+    When ``id_only_attributes`` is true (search without effective class read),
+    only ``id`` is a known attribute for projection, predicates, and caller
+    sort — other names fail like unknown attributes. Internal stability sort
+    columns are unchanged.
     """
     attrs = searchable_attributes(definition)
+    if id_only_attributes:
+        id_attr = attrs.get("id")
+        if id_attr is None:
+            raise RuntimeError("class searchable attributes missing required 'id'")
+        attrs = {"id": id_attr}
+        enrich_fk_identity = False
     resolved_limit = _resolve_limit(limit)
     resolved_offset = _resolve_offset(offset)
     select_columns = _resolve_projection(attributes, attrs)

@@ -121,10 +121,10 @@ Seed users (usernames are case-normalized to lowercase):
 | Username | Default password | Stable UUID | Role |
 | -------- | ---------------- | ----------- | ---- |
 | `admin` | `admin-change-me` | `01900000-0000-7000-8000-000000000001` | `admin` (permission `admin` = allow-all) |
-| `readonly` | `readonly-change-me` | `01900000-0000-7000-8000-000000000002` | `read-only` (`{class}:read`) |
-| `readwrite` | `readwrite-change-me` | `01900000-0000-7000-8000-000000000003` | `read-write` (create/read/update; **no** `:delete`, **no** `admin`) |
-| `change` | `change-change-me` | `01900000-0000-7000-8000-000000000004` | `change_request-read-write` (CHG create/read/update only) |
-| `incident` | `incident-change-me` | `01900000-0000-7000-8000-000000000005` | `incident-read-only` (`incident:read` only) |
+| `readonly` | `readonly-change-me` | `01900000-0000-7000-8000-000000000002` | `read_only` (`{class}:read` + `:search`) |
+| `readwrite` | `readwrite-change-me` | `01900000-0000-7000-8000-000000000003` | `read_write` (`create`/`read`/`search`/`update`; **no** `:delete`) |
+| `change` | `change-change-me` | `01900000-0000-7000-8000-000000000004` | `change_request_read_write` |
+| `incident` | `incident-change-me` | `01900000-0000-7000-8000-000000000005` | `incident_read_only` (`incident:read` + `:search`) |
 
 Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_READWRITE_PASSWORD`, `SEED_CHANGE_PASSWORD`, `SEED_INCIDENT_PASSWORD` when running `make seed`.
 
@@ -132,11 +132,13 @@ Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_R
 
 ### Permission keys
 
-- Class+operation: `{class}:{operation}` where `class` is the YAML class `name` (snake_case) and `operation` is one of `create`, `read`, `update`, `delete`. Example: `demo_item:read`.
-- For M1, `read` covers list, fetch-by-id, and search.
-- Class YAML `public: true` grants **authenticated read** without `{class}:read` (standard class-access model via `require_class_operation` / `can_read_class`). Unauthenticated callers are still denied. Writes are unchanged.
+- Class+operation: `{class}:{operation}` where `class` is the YAML class `name` (snake_case) and `operation` is a declared permission name (`create`, `read`, `search`, `update`, `delete`, or a custom snake_case name). Example: `demo_item:read`, `incident:search`.
+- `search` is separate from `read` for ordinary grants. Fetch requires `{class}:read` (or `admin` / `public`); search requires `{class}:search` (or `admin` / `public`).
+- Class YAML `public: true` grants authenticated **read and search** authorization for mounted endpoints without those grants. Unauthenticated callers are still denied. `public` never grants create/update/delete. Mounting still requires declaring the standard permission names.
+- Permission row ids are UUIDv5 from a fixed platform namespace plus the canonical key (including `admin`); seed reconciles by key.
+- Nav list visibility still uses `can_read_class` (`:read` / `public` / `admin`); calling search still needs `:search` (or public/admin). Seed roles that should search are granted `:search` explicitly.
 - Non-class key in M1: `admin` — grants all access in enforcement helpers.
-- Seeded catalog includes full CRUD keys for `demo_item`, `incident`, and `change_request` (including `:delete` rows). Pre-seeding `incident` / `change_request` permission **rows** does not create those domain tables.
+- Seeded catalog is derived from class YAML `permissions` lists (plus bare `admin`). Product ticket/demo classes declare full CRUD+`search`; `system_config` declares `read`/`update`; auth/RBAC/internal classes declare none.
 - Effective permissions are the **union** across all roles assigned to a user. Resolution is from the database per request (not JWT claims).
 
 ### Roles (stable seed UUIDs)
@@ -144,10 +146,10 @@ Override passwords with `SEED_ADMIN_PASSWORD`, `SEED_READONLY_PASSWORD`, `SEED_R
 | Role `name` | UUID | Permissions |
 | ----------- | ---- | ----------- |
 | `admin` | `01900000-0000-7000-8000-000000000011` | `admin` |
-| `read-only` | `01900000-0000-7000-8000-000000000012` | `{class}:read` for seeded classes |
-| `read-write` | `01900000-0000-7000-8000-000000000013` | `{class}:create`, `:read`, `:update` for seeded classes |
-| `change_request-read-write` | `01900000-0000-7000-8000-000000000014` | `change_request:create`, `:read`, `:update` |
-| `incident-read-only` | `01900000-0000-7000-8000-000000000015` | `incident:read` |
+| `read_only` | `01900000-0000-7000-8000-000000000012` | `{class}:read` + `:search` for `demo_item` / `incident` / `change_request` |
+| `read_write` | `01900000-0000-7000-8000-000000000013` | `{class}:create`, `:read`, `:search`, `:update` for those classes |
+| `change_request_read_write` | `01900000-0000-7000-8000-000000000014` | `change_request:create`, `:read`, `:search`, `:update` |
+| `incident_read_only` | `01900000-0000-7000-8000-000000000015` | `incident:read`, `incident:search` |
 
 ### Enforcement helpers (for later domain routes)
 
@@ -199,7 +201,7 @@ Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-orig
    - `POST` create / `PATCH` update / `DELETE` on `/api/v2/{class_name}`
      (admin only among seed roles for delete).
    - Junk locators → **422**; missing records → **404**; readonly cannot create → **403**.
-6. Exercise predicate search (same Authorize token; requires `{class}:read`):
+6. Exercise predicate search (same Authorize token; requires `{class}:search` or `admin` / `public`):
    - `POST /api/v2/incident/search` and
      `POST /api/v2/change_request/search` (see [Predicate search](#predicate-search)
      and [API versioning](#api-versioning) below).
@@ -257,7 +259,7 @@ record router factory. First wired collections: Incident and Change Request.
 
 | Method | Path | Permission |
 | ------ | ---- | ---------- |
-| `POST` | `/api/v2/{class_name}/search` | `{class}:read` |
+| `POST` | `/api/v2/{class_name}/search` | `{class}:search` (or `admin` / `public`) |
 
 Examples: `POST /api/v2/incident/search`, `POST /api/v2/change_request/search`.
 

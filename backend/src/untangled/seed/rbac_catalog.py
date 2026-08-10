@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from untangled.rbac.keys import ADMIN_PERMISSION_KEY, OPERATIONS, class_operation_key
+from untangled.mapping.registry import definitions_by_name
+from untangled.rbac.keys import (
+    ADMIN_PERMISSION_KEY,
+    class_operation_key,
+    permission_id_for_key,
+)
 from untangled.seed.users import (
     SEED_ADMIN_ID,
     SEED_CHANGE_ID,
@@ -14,13 +19,15 @@ from untangled.seed.users import (
     SEED_READWRITE_ID,
 )
 
-# Seeded YAML class names that receive a full CRUD permission catalog in M1.
-# Pre-seeding incident / change_request keys does not create those domain tables.
-SEEDED_PERMISSION_CLASSES: tuple[str, ...] = (
+# Keys that the pre-#185 hard-coded seed matrix produced. Obsolete cleanup may
+# remove these when absent from the YAML-derived catalog; never delete other keys.
+LEGACY_SEEDED_PERMISSION_CLASSES: tuple[str, ...] = (
     "demo_item",
     "incident",
     "change_request",
 )
+LEGACY_SEEDED_OPERATIONS: tuple[str, ...] = ("create", "delete", "read", "update")
+
 
 SEED_ROLE_ADMIN_ID = UUID("01900000-0000-7000-8000-000000000011")
 SEED_ROLE_READ_ONLY_ID = UUID("01900000-0000-7000-8000-000000000012")
@@ -67,45 +74,54 @@ class SeedPermission:
     operation: str | None
 
 
-def _permission_id(ordinal: int) -> UUID:
-    """Stable UUIDv7-shaped id in the reserved seed block (…000100 + ordinal)."""
-    if not 0 <= ordinal <= 0xFF:
-        raise ValueError(f"permission ordinal out of range: {ordinal}")
-    return UUID(f"01900000-0000-7000-8000-0000000001{ordinal:02x}")
+def _legacy_seed_permission_keys() -> frozenset[str]:
+    keys = {ADMIN_PERMISSION_KEY}
+    for class_name in LEGACY_SEEDED_PERMISSION_CLASSES:
+        for operation in LEGACY_SEEDED_OPERATIONS:
+            keys.add(class_operation_key(class_name, operation))
+    return frozenset(keys)
 
 
-def _build_permission_catalog() -> tuple[SeedPermission, ...]:
+LEGACY_SEED_PERMISSION_KEYS: frozenset[str] = _legacy_seed_permission_keys()
+
+
+def build_permission_catalog_from_definitions() -> tuple[SeedPermission, ...]:
+    """Derive class-scoped permission rows from loaded class YAML + ``admin``."""
     items: list[SeedPermission] = [
         SeedPermission(
-            id=_permission_id(0),
+            id=permission_id_for_key(ADMIN_PERMISSION_KEY),
             key=ADMIN_PERMISSION_KEY,
             class_name=None,
             operation=None,
         )
     ]
-    ordinal = 1
-    for class_name in SEEDED_PERMISSION_CLASSES:
-        for operation in sorted(OPERATIONS):
+    for definition in sorted(
+        definitions_by_name().values(), key=lambda d: d.name_snake
+    ):
+        for permission_name in definition.permissions:
+            key = class_operation_key(definition.name_snake, permission_name)
             items.append(
                 SeedPermission(
-                    id=_permission_id(ordinal),
-                    key=class_operation_key(class_name, operation),
-                    class_name=class_name,
-                    operation=operation,
+                    id=permission_id_for_key(key),
+                    key=key,
+                    class_name=definition.name_snake,
+                    operation=permission_name,
                 )
             )
-            ordinal += 1
     return tuple(items)
 
 
-SEED_PERMISSIONS: tuple[SeedPermission, ...] = _build_permission_catalog()
-SEED_PERMISSIONS_BY_KEY: dict[str, SeedPermission] = {p.key: p for p in SEED_PERMISSIONS}
+def seed_permissions() -> tuple[SeedPermission, ...]:
+    """Return the current seed permission catalog (lazy over class definitions)."""
+    return build_permission_catalog_from_definitions()
 
 
-def _join_id(ordinal: int) -> UUID:
-    if not 0 <= ordinal <= 0xFF:
-        raise ValueError(f"join ordinal out of range: {ordinal}")
-    return UUID(f"01900000-0000-7000-8000-0000000002{ordinal:02x}")
+def seed_permissions_by_key() -> dict[str, SeedPermission]:
+    return {p.key: p for p in seed_permissions()}
+
+
+# Product ticket / demo classes that seed roles historically covered.
+_SEED_ROLE_CLASSES: tuple[str, ...] = ("demo_item", "incident", "change_request")
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,27 +131,37 @@ class SeedRolePermission:
     permission_key: str
 
 
+def _join_id(ordinal: int) -> UUID:
+    if not 0 <= ordinal <= 0xFF:
+        raise ValueError(f"join ordinal out of range: {ordinal}")
+    return UUID(f"01900000-0000-7000-8000-0000000002{ordinal:02x}")
+
+
 def _role_permission_keys(role_name: str) -> tuple[str, ...]:
     if role_name == "admin":
         return (ADMIN_PERMISSION_KEY,)
     if role_name == "read_only":
-        return tuple(
-            class_operation_key(class_name, "read")
-            for class_name in SEEDED_PERMISSION_CLASSES
-        )
-    if role_name == "read_write":
         keys: list[str] = []
-        for class_name in SEEDED_PERMISSION_CLASSES:
-            for operation in ("create", "read", "update"):
+        for class_name in _SEED_ROLE_CLASSES:
+            keys.append(class_operation_key(class_name, "read"))
+            keys.append(class_operation_key(class_name, "search"))
+        return tuple(keys)
+    if role_name == "read_write":
+        keys = []
+        for class_name in _SEED_ROLE_CLASSES:
+            for operation in ("create", "read", "search", "update"):
                 keys.append(class_operation_key(class_name, operation))
         return tuple(keys)
     if role_name == "change_request_read_write":
         return tuple(
             class_operation_key("change_request", operation)
-            for operation in ("create", "read", "update")
+            for operation in ("create", "read", "search", "update")
         )
     if role_name == "incident_read_only":
-        return (class_operation_key("incident", "read"),)
+        return (
+            class_operation_key("incident", "read"),
+            class_operation_key("incident", "search"),
+        )
     raise ValueError(f"unknown seed role: {role_name!r}")
 
 

@@ -194,16 +194,14 @@ def test_v2_system_config_suppresses_create_search_delete(
     assert search.status_code in (404, 405), search.text
 
 
-def test_v2_user_class_is_mounted(tickets_client: TestClient) -> None:
-    """Registry mounts include auth classes; admin can reach the route."""
+def test_v2_user_class_is_not_mounted(tickets_client: TestClient) -> None:
+    """Auth/RBAC classes declare no permissions → no generic record mounts."""
     response = tickets_client.post(
         "/api/v2/user/search",
         headers=_headers(tickets_client, "admin"),
         json={"limit": 1},
     )
-    # Mounted and authorized for admin (may be 200); not an unmounted 404.
-    assert response.status_code != 404, response.text
-    assert response.status_code == 200, response.text
+    assert response.status_code == 404, response.text
 
 
 def test_legacy_and_v1_record_surfaces_not_mounted(

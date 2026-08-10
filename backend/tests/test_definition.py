@@ -308,16 +308,14 @@ def test_create_default_forbidden_on_friendly_id(tmp_path: Path) -> None:
         load_definition(path)
 
 
-def test_class_flags_default_false(repo_definitions: Path) -> None:
-    demo = load_definition(repo_definitions / "demo_item.yaml")
-    assert demo.public is False
-    assert demo.suppress_create is False
-    assert demo.suppress_delete is False
-    assert demo.suppress_search is False
-    assert demo.check_constraints == ()
+def test_class_flags_default_empty_permissions(repo_definitions: Path) -> None:
+    user = load_definition(repo_definitions / "user.yaml")
+    assert user.public is False
+    assert user.permissions == ()
+    assert user.check_constraints == ()
 
 
-def test_public_and_suppress_and_check_constraint(tmp_path: Path) -> None:
+def test_public_and_permissions_and_check_constraint(tmp_path: Path) -> None:
     path = tmp_path / "bounded.yaml"
     path.write_text(
         "\n".join(
@@ -326,9 +324,9 @@ def test_public_and_suppress_and_check_constraint(tmp_path: Path) -> None:
                 "display_name: Bounded",
                 "description: Flags and check constraint.",
                 "public: true",
-                "suppress_create: true",
-                "suppress_delete: true",
-                "suppress_search: true",
+                "permissions:",
+                "  - read",
+                "  - update",
                 "check_constraint: \"id = '${system_config_id}'::uuid\"",
                 "attributes:",
                 "  quantity:",
@@ -343,15 +341,34 @@ def test_public_and_suppress_and_check_constraint(tmp_path: Path) -> None:
     )
     defn = load_definition(path)
     assert defn.public is True
-    assert defn.suppress_create is True
-    assert defn.suppress_delete is True
-    assert defn.suppress_search is True
+    assert defn.permissions == ("read", "update")
     assert defn.check_constraints == (
         "id = '01900000-0000-7000-8000-000000000050'::uuid",
     )
     attr = defn.attributes[0]
     assert attr.min_value == 1
     assert attr.max_value == 10
+
+
+def test_public_requires_read_or_search(tmp_path: Path) -> None:
+    path = tmp_path / "bad_public.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: bad_public",
+                "display_name: Bad",
+                "description: Public without read/search.",
+                "public: true",
+                "permissions:",
+                "  - update",
+                "attributes: {}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DefinitionError, match="public: true requires"):
+        load_definition(path)
 
 
 def test_min_max_rejects_non_numeric_and_inverted(tmp_path: Path) -> None:

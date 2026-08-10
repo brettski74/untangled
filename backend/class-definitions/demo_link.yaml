@@ -4,6 +4,12 @@ display_name: Demo Link
 description: >
   Minimal fixture class with a foreign key to demo_item. Used to prove YAML → IR
   → diff → apply for foreign keys. Not a product ticket type.
+permissions:
+  - create
+  - read
+  - search
+  - update
+  - delete
 attributes:
   demo_item_id:
     type: uuid

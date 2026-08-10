@@ -22,7 +22,7 @@ def _route_keys(router) -> set[tuple[str, str]]:
     return keys
 
 
-def test_v2_suppress_flags_omit_create_search_delete(
+def test_v2_permissions_omit_undeclared_endpoints(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from untangled.records import v2_router_factory as factory
@@ -32,9 +32,8 @@ def test_v2_suppress_flags_omit_create_search_delete(
         factory,
         "class_definition",
         lambda _name: SimpleNamespace(
-            suppress_create=True,
-            suppress_delete=True,
-            suppress_search=True,
+            permissions=("read", "update"),
+            public=True,
         ),
     )
     v2 = build_v2_class_router(
@@ -60,9 +59,8 @@ def test_v2_full_crud_routes_use_singular_class_name(
         factory,
         "class_definition",
         lambda _name: SimpleNamespace(
-            suppress_create=False,
-            suppress_delete=False,
-            suppress_search=False,
+            permissions=("create", "read", "search", "update", "delete"),
+            public=False,
         ),
     )
     v2 = build_v2_class_router(
@@ -80,16 +78,21 @@ def test_v2_full_crud_routes_use_singular_class_name(
     assert not any("/change-requests" in path for _, path in keys)
 
 
-def test_v2_mounts_include_registry_classes_beyond_legacy_allowlist() -> None:
+def test_v2_mounts_include_declared_product_classes_only() -> None:
     routers = build_v2_record_routers()
     prefixes = {router.prefix for router in routers}
     assert "/api/v2/incident" in prefixes
     assert "/api/v2/change_request" in prefixes
     assert "/api/v2/system_config" in prefixes
-    # Auth/RBAC classes mount with no exclusion allowlist (#185 is follow-up).
-    assert "/api/v2/user" in prefixes
-    assert "/api/v2/role" in prefixes
-    assert "/api/v2/permission" in prefixes
+    assert "/api/v2/demo_item" in prefixes
+    assert "/api/v2/demo_link" in prefixes
+    # Auth/RBAC/internal classes declare no permissions → no generic mounts.
+    assert "/api/v2/user" not in prefixes
+    assert "/api/v2/role" not in prefixes
+    assert "/api/v2/permission" not in prefixes
+    assert "/api/v2/user_role" not in prefixes
+    assert "/api/v2/role_permission" not in prefixes
+    assert "/api/v2/refresh_token" not in prefixes
     assert not any(p.endswith("s") and p.rsplit("/", 1)[-1] in {
         "incidents",
         "change-requests",

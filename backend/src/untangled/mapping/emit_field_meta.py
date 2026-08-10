@@ -50,11 +50,10 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
         "  /** Snake_case display_attribute name, if any",
         "   * (exact compact_text). */",
         "  display_attribute: string | null;",
-        "  /** Authenticated read without ``{class}:read``. */",
+        "  /** Authenticated read+search without ``{class}:read`` / ``:search``. */",
         "  public: boolean;",
-        "  suppress_create: boolean;",
-        "  suppress_delete: boolean;",
-        "  suppress_search: boolean;",
+        "  /** Declared permission names (standard ops mount endpoints). */",
+        "  permissions: readonly string[];",
         "};",
         "",
         "export const CLASS_FIELD_META: Readonly<Record<string, ClassFieldMeta>> = {",
@@ -79,9 +78,8 @@ def emit_field_meta_module(definitions: list[ClassDefinition]) -> str:
         )
         lines.append(f"    display_attribute: {display_snake},")
         lines.append(f"    public: {_ts_bool(definition.public)},")
-        lines.append(f"    suppress_create: {_ts_bool(definition.suppress_create)},")
-        lines.append(f"    suppress_delete: {_ts_bool(definition.suppress_delete)},")
-        lines.append(f"    suppress_search: {_ts_bool(definition.suppress_search)},")
+        perm_literals = ", ".join(_ts_string(p) for p in definition.permissions)
+        lines.append(f"    permissions: [{perm_literals}] as const,")
         lines.append("  },")
 
     lines.append("};")

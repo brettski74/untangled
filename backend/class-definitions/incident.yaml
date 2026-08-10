@@ -7,6 +7,12 @@ description: >
   is new → in-progress → resolved → closed, plus terminal off-ramp cancelled.
   Severity vocabulary: Critical, High, Medium, Low. Resolution-type vocabulary:
   User error, Application fault, Hardware fault, Network fault, Other.
+permissions:
+  - create
+  - read
+  - search
+  - update
+  - delete
 attributes:
   number:
     type: friendly_id

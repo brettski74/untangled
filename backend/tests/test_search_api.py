@@ -738,3 +738,142 @@ def test_search_unreadable_system_config_503(
     detail = response.json()["detail"].lower()
     assert "system configuration" in detail
     assert "search cannot run" in detail
+
+
+def test_search_denied_when_only_read_held(
+    tickets_client: TestClient, db_conn: Connection
+) -> None:
+    """Holding ``:read`` without ``:search`` does not authorize search."""
+    from untangled.rbac.keys import class_operation_key, permission_id_for_key
+
+    search_id = permission_id_for_key(class_operation_key("incident", "search"))
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM role_permission WHERE permission_id = %s",
+            (search_id,),
+        )
+    db_conn.commit()
+    try:
+        response = _search(
+            tickets_client,
+            "/api/v2/incident/search",
+            {},
+            username="incident",
+        )
+        assert response.status_code == 403, response.text
+        assert "incident:search" in response.json()["detail"]
+    finally:
+        from untangled.seed.rbac import seed_rbac
+
+        seed_rbac(db_conn)
+
+
+def test_search_without_read_is_opaque(
+    tickets_client: TestClient, db_conn: Connection
+) -> None:
+    """``:search`` without effective class read: non-id attrs fail like unknown."""
+    from datetime import datetime, timezone
+
+    from untangled.mapping.well_known import SYSTEM_USER_ID
+    from untangled.persistence.ids import new_uuid7
+    from untangled.rbac.keys import class_operation_key, permission_id_for_key
+    from untangled.seed.rbac import seed_rbac
+    from untangled.seed.users import SEED_INCIDENT_ID
+
+    search_id = permission_id_for_key(class_operation_key("incident", "search"))
+    role_id = new_uuid7()
+    link_id = new_uuid7()
+    rp_id = new_uuid7()
+    now = datetime.now(timezone.utc)
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM user_role WHERE user_id = %s",
+            (SEED_INCIDENT_ID,),
+        )
+        cur.execute(
+            "INSERT INTO role ("
+            "id, created_at, updated_at, created_by, updated_by, name, display_name"
+            ") VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (
+                role_id,
+                now,
+                now,
+                SYSTEM_USER_ID,
+                SYSTEM_USER_ID,
+                f"tmp_search_only_{role_id.hex[:8]}",
+                "Tmp Search Only",
+            ),
+        )
+        cur.execute(
+            "INSERT INTO role_permission ("
+            "id, created_at, updated_at, created_by, updated_by, "
+            "role_id, permission_id"
+            ") VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (
+                rp_id,
+                now,
+                now,
+                SYSTEM_USER_ID,
+                SYSTEM_USER_ID,
+                role_id,
+                search_id,
+            ),
+        )
+        cur.execute(
+            "INSERT INTO user_role ("
+            "id, created_at, updated_at, created_by, updated_by, user_id, role_id"
+            ") VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (
+                link_id,
+                now,
+                now,
+                SYSTEM_USER_ID,
+                SYSTEM_USER_ID,
+                SEED_INCIDENT_ID,
+                role_id,
+            ),
+        )
+    db_conn.commit()
+    try:
+        id_only = _search(
+            tickets_client,
+            "/api/v2/incident/search",
+            {},
+            username="incident",
+        )
+        assert id_only.status_code == 200, id_only.text
+        body = id_only.json()
+        assert body["total"] >= 1
+        for item in body["items"]:
+            assert set(item.keys()) == {"id"}
+
+        projected = _search(
+            tickets_client,
+            "/api/v2/incident/search",
+            {"attributes": ["summary"]},
+            username="incident",
+        )
+        assert projected.status_code == 422, projected.text
+        assert "unknown attribute" in projected.json()["detail"]
+
+        filtered = _search(
+            tickets_client,
+            "/api/v2/incident/search",
+            {
+                "predicate": {
+                    "op": "eq",
+                    "attribute": "status",
+                    "value": "new",
+                }
+            },
+            username="incident",
+        )
+        assert filtered.status_code == 422, filtered.text
+        assert "unknown attribute" in filtered.json()["detail"]
+    finally:
+        with db_conn.cursor() as cur:
+            cur.execute("DELETE FROM user_role WHERE id = %s", (link_id,))
+            cur.execute("DELETE FROM role_permission WHERE id = %s", (rp_id,))
+            cur.execute("DELETE FROM role WHERE id = %s", (role_id,))
+        db_conn.commit()
+        seed_rbac(db_conn)

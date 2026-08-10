@@ -10,11 +10,12 @@ from psycopg import Connection, sql
 from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.well_known import SYSTEM_USER_ID
 from untangled.seed.rbac_catalog import (
-    SEED_PERMISSIONS,
-    SEED_PERMISSIONS_BY_KEY,
+    LEGACY_SEED_PERMISSION_KEYS,
     SEED_ROLE_PERMISSIONS,
     SEED_ROLES,
     SEED_USER_ROLES,
+    seed_permissions,
+    seed_permissions_by_key,
 )
 
 
@@ -22,13 +23,27 @@ def seed_rbac(conn: Connection) -> dict[str, int]:
     """Upsert roles, permissions, and joins. Returns counts touched per kind."""
     now = utc_now()
     actor = SYSTEM_USER_ID
+    permissions = seed_permissions()
+    permissions_by_key = seed_permissions_by_key()
+    catalog_keys = {p.key for p in permissions}
     _upsert_roles(conn, now=now, actor=actor)
-    _upsert_permissions(conn, now=now, actor=actor)
-    _upsert_role_permissions(conn, now=now, actor=actor)
+    _reconcile_permissions(
+        conn,
+        permissions=permissions,
+        catalog_keys=catalog_keys,
+        now=now,
+        actor=actor,
+    )
+    _upsert_role_permissions(
+        conn,
+        permissions_by_key=permissions_by_key,
+        now=now,
+        actor=actor,
+    )
     _upsert_user_roles(conn, now=now, actor=actor)
     counts = {
         "roles": len(SEED_ROLES),
-        "permissions": len(SEED_PERMISSIONS),
+        "permissions": len(permissions),
         "role_permissions": len(SEED_ROLE_PERMISSIONS),
         "user_roles": len(SEED_USER_ROLES),
     }
@@ -87,42 +102,113 @@ def _upsert_roles(conn: Connection, *, now: datetime, actor: UUID) -> None:
             )
 
 
-def _upsert_permissions(conn: Connection, *, now: datetime, actor: UUID) -> None:
-    for perm in SEED_PERMISSIONS:
+def _reconcile_permissions(
+    conn: Connection,
+    *,
+    permissions: tuple,
+    catalog_keys: set[str],
+    now: datetime,
+    actor: UUID,
+) -> None:
+    """Upsert catalog permissions by key; rewrite join FKs when ids change.
+
+    Obsolete cleanup is limited to keys that the pre-#185 hard-coded seed matrix
+    produced and that are absent from the new catalog. Unknown/operator-added
+    permission keys are left alone.
+    """
+    for perm in permissions:
         with conn.cursor() as cur:
             cur.execute(
-                sql.SQL(
-                    "INSERT INTO {} ("
-                    "id, created_at, updated_at, created_by, updated_by, "
-                    "key, class_name, operation"
-                    ") VALUES ("
-                    "{}, {}, {}, {}, {}, {}, {}, {}"
-                    ") ON CONFLICT (id) DO UPDATE SET "
-                    "key = EXCLUDED.key, "
-                    "class_name = EXCLUDED.class_name, "
-                    "operation = EXCLUDED.operation, "
-                    "updated_at = EXCLUDED.updated_at, "
-                    "updated_by = EXCLUDED.updated_by"
-                ).format(
-                    sql.Identifier("permission"),
-                    *[sql.Placeholder() for _ in range(8)],
-                ),
-                (
-                    perm.id,
-                    now,
-                    now,
-                    actor,
-                    actor,
-                    perm.key,
-                    perm.class_name,
-                    perm.operation,
-                ),
+                "SELECT id FROM permission WHERE key = %s",
+                (perm.key,),
+            )
+            row = cur.fetchone()
+            if row is not None and row[0] != perm.id:
+                existing_id = row[0]
+                # Drop joins then replace the row so the PK can change under FKs.
+                cur.execute(
+                    "DELETE FROM role_permission WHERE permission_id = %s",
+                    (existing_id,),
+                )
+                cur.execute(
+                    "DELETE FROM permission WHERE id = %s",
+                    (existing_id,),
+                )
+                row = None
+
+            if row is None:
+                cur.execute(
+                    sql.SQL(
+                        "INSERT INTO {} ("
+                        "id, created_at, updated_at, created_by, updated_by, "
+                        "key, class_name, operation"
+                        ") VALUES ("
+                        "{}, {}, {}, {}, {}, {}, {}, {}"
+                        ") ON CONFLICT (id) DO UPDATE SET "
+                        "key = EXCLUDED.key, "
+                        "class_name = EXCLUDED.class_name, "
+                        "operation = EXCLUDED.operation, "
+                        "updated_at = EXCLUDED.updated_at, "
+                        "updated_by = EXCLUDED.updated_by"
+                    ).format(
+                        sql.Identifier("permission"),
+                        *[sql.Placeholder() for _ in range(8)],
+                    ),
+                    (
+                        perm.id,
+                        now,
+                        now,
+                        actor,
+                        actor,
+                        perm.key,
+                        perm.class_name,
+                        perm.operation,
+                    ),
+                )
+            else:
+                cur.execute(
+                    "UPDATE permission SET "
+                    "class_name = %s, operation = %s, "
+                    "updated_at = %s, updated_by = %s "
+                    "WHERE key = %s",
+                    (
+                        perm.class_name,
+                        perm.operation,
+                        now,
+                        actor,
+                        perm.key,
+                    ),
+                )
+
+    obsolete = LEGACY_SEED_PERMISSION_KEYS - catalog_keys
+    if not obsolete:
+        return
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM permission WHERE key = ANY(%s)",
+            (list(obsolete),),
+        )
+        rows = cur.fetchall()
+        for (permission_id,) in rows:
+            cur.execute(
+                "DELETE FROM role_permission WHERE permission_id = %s",
+                (permission_id,),
+            )
+            cur.execute(
+                "DELETE FROM permission WHERE id = %s",
+                (permission_id,),
             )
 
 
-def _upsert_role_permissions(conn: Connection, *, now: datetime, actor: UUID) -> None:
+def _upsert_role_permissions(
+    conn: Connection,
+    *,
+    permissions_by_key: dict,
+    now: datetime,
+    actor: UUID,
+) -> None:
     for link in SEED_ROLE_PERMISSIONS:
-        permission = SEED_PERMISSIONS_BY_KEY[link.permission_key]
+        permission = permissions_by_key[link.permission_key]
         with conn.cursor() as cur:
             cur.execute(
                 sql.SQL(

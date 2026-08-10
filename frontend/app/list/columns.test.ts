@@ -18,9 +18,7 @@ function sample_meta(
     friendly_id_attr,
     display_attribute: null,
     public: false,
-    suppress_create: false,
-    suppress_delete: false,
-    suppress_search: false,
+    permissions: ["create", "read", "search", "update", "delete"],
   };
 }
 

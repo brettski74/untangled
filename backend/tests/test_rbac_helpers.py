@@ -35,17 +35,23 @@ def _fake_request() -> Request:
 def test_class_operation_key_format() -> None:
     assert class_operation_key("demo_item", "read") == "demo_item:read"
     assert class_operation_key("change_request", "delete") == "change_request:delete"
+    assert class_operation_key("incident", "search") == "incident:search"
+    assert class_operation_key("user", "password_reset") == "user:password_reset"
 
 
 def test_class_operation_key_rejects_bad_inputs() -> None:
     with pytest.raises(ValueError, match="invalid class name"):
         class_operation_key("bad:name", "read")
     with pytest.raises(ValueError, match="unsupported operation"):
-        class_operation_key("incident", "list")
+        class_operation_key("incident", "bad:op")
+    with pytest.raises(ValueError, match="unsupported operation"):
+        class_operation_key("incident", "")
 
 
 def test_parse_permission_key_class_op_and_admin() -> None:
     assert parse_permission_key("incident:update") == ("incident", "update")
+    assert parse_permission_key("incident:search") == ("incident", "search")
+    assert parse_permission_key("user:password_reset") == ("user", "password_reset")
     assert parse_permission_key(ADMIN_PERMISSION_KEY) == (None, None)
     assert parse_permission_key("custom-non-class") == (None, None)
 
@@ -55,8 +61,6 @@ def test_parse_permission_key_rejects_invalid() -> None:
         parse_permission_key("")
     with pytest.raises(ValueError):
         parse_permission_key(" incident:read")
-    with pytest.raises(ValueError):
-        parse_permission_key("incident:list")
     with pytest.raises(ValueError):
         parse_permission_key("a:b:c")
 
@@ -129,11 +133,13 @@ def test_require_permission_admin_allows_any() -> None:
     )
 
 
-def test_class_operation_granted_public_read_only() -> None:
+def test_class_operation_granted_public_read_and_search() -> None:
     empty = frozenset()
     assert class_operation_granted(empty, "system_config", "read", public=True)
+    assert class_operation_granted(empty, "system_config", "search", public=True)
     assert not class_operation_granted(empty, "system_config", "update", public=True)
     assert not class_operation_granted(empty, "incident", "read", public=False)
+    assert not class_operation_granted(empty, "incident", "search", public=False)
 
 
 def test_require_class_operation_public_read(monkeypatch: pytest.MonkeyPatch) -> None:

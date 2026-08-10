@@ -205,6 +205,7 @@ class RecordStore[T: BaseModel]:
         limit: int | None = None,
         offset: int | None = None,
         enrich_fk_identity: bool = False,
+        id_only_attributes: bool = False,
     ) -> SearchResult:
         """Definition-driven predicate search with projection and pagination."""
         pred = dict(predicate) if predicate is not None else None
@@ -219,6 +220,7 @@ class RecordStore[T: BaseModel]:
             offset=offset,
             enrich_fk_identity=enrich_fk_identity,
             definitions_by_name=self._definitions_by_name,
+            id_only_attributes=id_only_attributes,
         )
 
     def _fetch_enriched(

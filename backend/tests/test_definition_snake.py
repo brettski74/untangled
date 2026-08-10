@@ -68,9 +68,7 @@ def test_load_snake_fixtures(snake_definitions: Path) -> None:
 
     config = by_snake["singleton_config"]
     assert config.public is True
-    assert config.suppress_create is True
-    assert config.suppress_delete is True
-    assert config.suppress_search is True
+    assert config.permissions == ("read", "update")
     assert config.check_constraints == (
         f"id = '{SYSTEM_CONFIG_ID}'::uuid",
         "max_items >= min_items",

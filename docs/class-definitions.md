@@ -40,8 +40,8 @@ Each file declares at least:
 | `display_name` | Human-readable **class label** (not a table/column identifier; not related-record display identity) |
 | `description` | Purpose and other details configurers/users should know |
 | `display_attribute` | Optional. Snake_case attribute name used as limited related-record display identity (see below) |
-| `public` | Optional boolean, default `false`. When `true`, every **authenticated** caller may **read** without `{class}:read`. Writes still use `{class}:{op}` / `admin`. Unauthenticated callers still have no access. This is standard class-access behaviour, not a seed permission grant. |
-| `suppress_create` / `suppress_delete` / `suppress_search` | Optional booleans, default `false`. When `true`, the shared router factory omits that operation (search suppression applies to legacy and v1). Fetch and update are not suppressible here. |
+| `public` | Optional boolean, default `false`. When `true`, every **authenticated** caller has effective **read** and **search** authorization for whatever of those endpoints are mounted, without `{class}:read` / `{class}:search`. Writes still use `{class}:{op}` / `admin`. Unauthenticated callers still have no access. Loader rejects `public: true` unless `read` and/or `search` is declared. Mounting is independent of `public` — declare standard permissions to mount endpoints. |
+| `permissions` | Optional list of snake_case permission names (default empty). Standard names `create`, `read`, `update`, `delete`, and `search` each mount the matching generic record endpoint **and** seed `{class}:{name}` into the permission catalog. Additional names (e.g. future custom ops) are catalog-only and do not mount endpoints. Empty/omitted list → no generic `/api/v2/{class}` mounts. Declaring a standard name always mounts that endpoint (coupled tradeoff). |
 | `check_constraint` | Optional SQL CHECK expression (string) or list of expressions. Snake_case SQL identifiers. `${snake_name}` literals are substituted at definition load. |
 | `attributes` | Map of attribute name → `{ type, required, … }` |
 
@@ -260,10 +260,10 @@ the authenticated principal.
 
 `system_config` is the durable home for **general, non-sensitive,
 environment-local system settings** (operators may tune per deployment without
-a Git promote cycle). It is `public: true` (authenticated read without
-`system_config:read`), with create/delete/search suppressed. Fetch and
-unversioned update use the shared router factory like other mounted classes.
-Among seed roles, only `admin` can update (no dedicated permission grants).
+a Git promote cycle). It is `public: true` with declared permissions
+`read` and `update` only (no create/delete/search mounts). Authenticated
+callers may fetch without `system_config:read`; among seed roles, only `admin`
+can update (no dedicated permission grants).
 
 Initial attributes (YAML min/max on create/update; list will grow):
 
