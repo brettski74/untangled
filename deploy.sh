@@ -87,7 +87,8 @@ resolve_compose() {
 }
 
 compose() {
-  UNTANGLED_API_IMAGE="$API_IMAGE" UNTANGLED_WEB_IMAGE="$WEB_IMAGE" \
+  # Fail closed: never inherit a developer COMPOSE_PROFILES=local-edge into Rocky.
+  COMPOSE_PROFILES= UNTANGLED_API_IMAGE="$API_IMAGE" UNTANGLED_WEB_IMAGE="$WEB_IMAGE" \
     "${COMPOSE_CMD[@]}" "$@"
 }
 

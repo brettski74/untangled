@@ -1,6 +1,6 @@
 # Local development
 
-Untangled is **containers-first**: `make up` brings up PostgreSQL, Redis, the API, and the web app via Compose (Podman or Docker).
+Untangled is **containers-first**: `make up` brings up PostgreSQL, Redis, the API, the web app, and (locally) an HTTPS reverse proxy + auth skeleton via Compose (Podman or Docker).
 
 For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` / `make redis-up` if you need Postgres or Redis). Those are not required for the Compose runtime.
 
@@ -12,6 +12,7 @@ Shared-host GHCR publish / Rocky deploy notes are local-only (gitignored): `docs
 
 - **Podman or Docker** with a usable Compose entrypoint — required for `make up` and DB-backed tests (see [Compose engine selection](#compose-engine-selection))
 - GNU Make
+- OpenSSL — used by `make local-certs` / `make up` to mint a self-signed `dev.crt` + `dev.key` when both are missing
 - Python 3.12+ and Node.js 20+ — only needed for host-side `make install`, lint/test, and `*-dev` targets
 
 ## Compose engine selection
@@ -186,7 +187,7 @@ Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http
 - The authenticated layout loads `GET /auth/me` once per navigation tree; the header user chip uses display name (hover = username). Real RBAC permissions still come from `/auth/me` for later YAML nav (#66).
 - Access expiry / API **401** clears the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67.
 
-Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-origin authenticated SSR form actions), `secure` on by default with explicit local opt-out, cookie `maxAge` derived from the access JWT `exp` claim. The JWT is never exposed to browser JavaScript. Login-form CSRF and broader hardening are tracked in #67.
+Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-origin authenticated SSR form actions), `secure` on by default with explicit local opt-out, cookie `maxAge` derived from the access JWT `exp` claim. The JWT is never exposed to browser JavaScript. The HTTPS proxy cookie/CSRF skeleton (browser→auth POST) is documented in [edge-proxy.md](./edge-proxy.md); live login still posts through SSR until #212.
 
 ### `/docs` Authorize loop
 
@@ -405,8 +406,9 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | Command | Purpose |
 | ------- | ------- |
 | `make` or `make help` | List targets with one-line descriptions |
-| `make up` | Build and start postgres + redis + api + web via Compose (does **not** migrate or seed) |
+| `make up` | Build and start postgres + redis + api + web + local-edge proxy/auth via Compose (does **not** migrate or seed). Generates `deploy/caddy/certs/dev.crt` + `dev.key` when both are missing. |
 | `make down` | Stop the Compose stack (keeps the named DB volume; Redis is ephemeral) |
+| `make local-certs` | Create self-signed proxy TLS files when both are missing; never overwrites an existing pair |
 | `make reinstall` | Wipe named DB volume, then `up` → `migrate` → `seed` (add `WITH_HOST_INSTALL=1` to also run `make install`) |
 | `make reinstall-keep-data` | Same as `reinstall` but keeps the Postgres volume (`make down` only) |
 | `make db-up` | Start PostgreSQL only (for host-run tests / persistence) |
@@ -419,10 +421,10 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make seed` | Idempotent seed of baseline users + RBAC + sample INC/CHG (`python -m untangled.seed`) |
 | `make backend-dev` | Run FastAPI with reload on the host (port 8000) |
 | `make frontend-dev` | Run React Router dev server on the host (port 5173) |
-| `make lint` | Backend `ruff` + frontend TypeScript typecheck |
-| `make test` | Backend pytest (starts DB + Redis; uses migrate path) + frontend build smoke test |
+| `make lint` | Backend `ruff` + frontend TypeScript typecheck + auth typecheck |
+| `make test` | Backend pytest (starts DB + Redis; uses migrate path) + frontend build smoke + auth unit tests |
 | `make test-ci` | Same as lint + test, but skip Compose `db-up` / `redis-up` (services must already be up; used by Actions) |
-| `make e2e` | Full Playwright browser suite against a live web+API stack (default `http://127.0.0.1:5173`) |
+| `make e2e` | Full Playwright browser suite against a live web+API stack (default `http://127.0.0.1:5173`; interim, not the HTTPS proxy origin) |
 | `make e2e-smoke` | Playwright `@smoke` subset (CI gate; same stack prereqs as `e2e`) |
 | `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
@@ -434,7 +436,7 @@ Destructive schema plans are rejected by default. To allow them locally:
 make migrate MIGRATE_ARGS=--allow-destructive
 ```
 
-Ensure host ports **5432**, **6379**, **8000**, and **5173** are free before `make up`.
+Ensure host ports **5432**, **6379**, **8000**, **5173**, and **8443** are free before `make up`.
 
 ## Ports
 
@@ -442,8 +444,9 @@ Ensure host ports **5432**, **6379**, **8000**, and **5173** are free before `ma
 | ------- | -------------------- | ----- |
 | postgres | `5432` | Published for host tools and tests |
 | redis | `6379` | Ephemeral; published for host tools and tests |
-| api | `8000` | FastAPI; docs at `/docs` |
-| web | `5173` | Maps to container port **3000**. Production / non-local deploys should expose **3000**, not 5173. |
+| api | `8000` | FastAPI; docs at `/docs`. Not the browser credential origin. |
+| web | `5173` | Maps to container port **3000**. Host-dev / Playwright (interim). Production / non-local deploys should expose **3000**, not 5173. |
+| proxy | `8443` | Local HTTPS browser origin (`local-edge` profile). See [edge-proxy.md](./edge-proxy.md). |
 
 ## Smoke tests
 
@@ -451,7 +454,8 @@ After `make up` → `make migrate` → `make seed`:
 
 - API health: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`
 - API docs: open `http://127.0.0.1:8000/docs` and run the Authorize loop above
-- Web: open `http://127.0.0.1:5173` — unauthenticated users redirect to `/login`; after seed login, authenticated stub shows `/auth/me`
+- Web (interim host-dev): open `http://127.0.0.1:5173` — unauthenticated users redirect to `/login`; after seed login, authenticated stub shows `/auth/me`
+- HTTPS proxy (browser origin): `curl -k https://127.0.0.1:8443/` and `curl -k https://127.0.0.1:8443/api/v2/auth/csrf` — see [edge-proxy.md](./edge-proxy.md)
 - Postgres: `docker compose exec postgres pg_isready -U untangled -d untangled`
 - Redis: `docker compose exec redis redis-cli ping` → `PONG`
 - Web → API on the Compose network:
@@ -464,7 +468,7 @@ docker compose exec web wget -qO- http://api:8000/health
 
 Specs live under `frontend/e2e/`. CI **gates** on the `@smoke` tag (`make e2e-smoke`). The full suite also runs in CI afterward as a **non-gating** step (`continue-on-error`) so regressions show up without failing the check. Locally: `make e2e`.
 
-Prerequisites: Postgres + Redis + migrated/seeded DB, API on `:8000`, web on `:5173` (Compose `make up` or host `make backend-dev` / `make frontend-dev`). First-time browser install:
+Prerequisites: Postgres + Redis + migrated/seeded DB, API on `:8000`, web on `:5173` (Compose `make up` or host `make backend-dev` / `make frontend-dev`). Playwright still uses this HTTP origin (interim); the HTTPS proxy is not the E2E base URL yet. First-time browser install:
 
 ```bash
 cd frontend && npx playwright install chromium
@@ -500,10 +504,11 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 
 | Piece | Status | Later work |
 | ----- | ------ | ---------- |
-| `make up` / `make down` | Full Compose runtime (postgres + redis + api + web); **no auto-migrate/seed** | — |
+| `make up` / `make down` | Full Compose runtime (postgres + redis + api + web + local-edge proxy/auth); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
 | Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI refresh (#14); hardening #33 / security review #67 |
+| Auth service + HTTPS proxy | Local-edge Caddy + CSRF/cookie skeleton on `/api/v2/auth/` | Real login/ES256 (#212); Playwright still HTTP `:5173` |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
@@ -515,14 +520,16 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 | Frontend SSR login + shell chrome | Real `/login`, httpOnly access JWT cookie, header/nav/context chrome | YAML nav (#66), refresh (#14) |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |
 | `frontend/package-lock.json` | Pinned deps | Regenerate when `package.json` changes |
+| `auth/package-lock.json` | Pinned deps | Regenerate when `auth/package.json` changes |
 
 ## Monorepo layout
 
 ```text
 backend/     Python FastAPI application (src layout; Dockerfile for api)
 frontend/    React Router v7 framework-mode SSR app (Dockerfile for web)
+auth/        Dedicated JS/TS auth service (Dockerfile for local-edge)
 docs/        Developer documentation
-compose.yaml postgres + redis + api + web
+compose.yaml postgres + redis + api + web; profile local-edge adds auth + proxy
 Makefile     Primary command entrypoint
 ```
 

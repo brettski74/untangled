@@ -14,6 +14,7 @@ make help       # list all commands
 ```
 
 See [docs/local-development.md](docs/local-development.md) for setup, ports, auth/`/docs` Authorize, smoke tests, and host hot-reload (`make backend-dev` / `make frontend-dev`).
+See [docs/edge-proxy.md](docs/edge-proxy.md) for the local HTTPS reverse proxy and cookie/CSRF skeleton.
 See [docs/class-definitions.md](docs/class-definitions.md) for YAML class definitions, `make models`, and `make migrate`.
 
 # Why?

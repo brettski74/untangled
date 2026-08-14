@@ -1,0 +1,40 @@
+{
+	# Local Compose edge only. Production TLS is customer-owned; do not copy this
+	# file to a public perimeter. Certificates are bind-mounted (dev.crt / dev.key).
+	auto_https off
+}
+
+(overwrite_forwarded) {
+	header_up -Forwarded
+	header_up -X-Forwarded-For
+	header_up -X-Forwarded-Proto
+	header_up -X-Forwarded-Host
+	header_up Forwarded "for={http.request.remote.host};proto={http.request.scheme};host={http.request.host}"
+	header_up X-Forwarded-For {http.request.remote.host}
+	header_up X-Forwarded-Proto {http.request.scheme}
+	header_up X-Forwarded-Host {http.request.host}
+}
+
+:443 {
+	tls /etc/caddy/certs/dev.crt /etc/caddy/certs/dev.key
+
+	@auth_session path /api/v2/auth /api/v2/auth/*
+
+	handle @auth_session {
+		reverse_proxy auth:3000 {
+			import overwrite_forwarded
+		}
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000 {
+			import overwrite_forwarded
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000 {
+			import overwrite_forwarded
+		}
+	}
+}
