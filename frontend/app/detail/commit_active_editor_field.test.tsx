@@ -72,6 +72,29 @@ describe("commit_active_editor_field", () => {
     expect(local_datetime_control_parts(saved).time).toBe("15:30:00");
   });
 
+  it("commits an existing date change into parent state before Save reads it", () => {
+    let saved: string | null | undefined;
+    const initial = "2026-02-01T00:00:00Z";
+    render(
+      <SaveHarness
+        initial={initial}
+        on_save={(value) => {
+          saved = value;
+        }}
+      />,
+    );
+
+    const date = screen.getByLabelText("Date") as HTMLInputElement;
+    const initial_date = local_datetime_control_parts(initial).date;
+    expect(date.value).toBe(initial_date);
+    const next_date = initial_date === "2026-02-02" ? "2026-02-03" : "2026-02-02";
+    fireEvent.change(date, { target: { value: next_date } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(saved).not.toBe(initial);
+    expect(local_datetime_control_parts(saved).date).toBe(next_date);
+  });
+
   it("no-ops when focus is outside the editor form", () => {
     let saved: string | null | undefined;
     render(
