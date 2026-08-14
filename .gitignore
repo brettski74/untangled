@@ -157,6 +157,10 @@ docs/rocky-deploy.md
 docs/container-images.md
 # Local-only test plans (never commit).
 docs/TESTPLAN-161.md
+
+# Local Compose reverse-proxy TLS material (`make local-certs` / `make up`).
+deploy/caddy/certs/dev.crt
+deploy/caddy/certs/dev.key
 .venv
 env/
 venv/

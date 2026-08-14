@@ -1,5 +1,6 @@
 # Compose runtime: PostgreSQL + Redis + API + web.
-# Local: make up (build:). Rocky/GHCR: ./deploy.sh (image pins + --no-build).
+# Local: make up (build:; COMPOSE_PROFILES=local-edge adds auth + HTTPS proxy).
+# Rocky/GHCR: ./deploy.sh (image pins + --no-build; does not enable local-edge).
 # Variable defaults preserve local-dev behaviour when no .env is present.
 # Redis is ephemeral (no named volume): cache/bus consumers tolerate restart loss.
 services:
@@ -92,6 +93,53 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # Local/dev only (Make sets COMPOSE_PROFILES=local-edge). Not started by Rocky deploy.sh.
+  auth:
+    profiles: ["local-edge"]
+    image: ${UNTANGLED_AUTH_IMAGE:-untangled-auth:local}
+    build:
+      context: ./auth
+    environment:
+      UNTANGLED_PUBLIC_ORIGIN: ${UNTANGLED_PUBLIC_ORIGIN:-https://127.0.0.1:8443}
+      # HTTPS browser origin via the proxy — Secure cookies on.
+      UNTANGLED_COOKIE_SECURE: ${UNTANGLED_AUTH_COOKIE_SECURE:-true}
+      PORT: "3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  proxy:
+    profiles: ["local-edge"]
+    image: docker.io/library/caddy:2-alpine
+    ports:
+      - "${UNTANGLED_PROXY_HOST_PORT:-8443}:443"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/caddy/certs/dev.crt:/etc/caddy/certs/dev.crt:ro
+      - ./deploy/caddy/certs/dev.key:/etc/caddy/certs/dev.key:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--no-check-certificate", "https://127.0.0.1:443/"]
       interval: 5s
       timeout: 5s
       retries: 12

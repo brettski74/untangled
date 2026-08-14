@@ -2,11 +2,14 @@
 
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
+AUTH_DIR := auth
 RUN_DIR := .run
 PYTHON ?= python3
 BACKEND_VENV := $(BACKEND_DIR)/.venv
 BACKEND_PYTHON := $(BACKEND_VENV)/bin/python
 BACKEND_PIP := $(BACKEND_VENV)/bin/pip
+LOCAL_EDGE_CERT := deploy/caddy/certs/dev.crt
+LOCAL_EDGE_KEY := deploy/caddy/certs/dev.key
 
 # Compose engine: unset COMPOSE → auto-detect (prefer Podman); env/CLI override wins.
 # Empty COMPOSE is an error. Export so nested $(MAKE) keeps the same engine/wait flags.
@@ -38,8 +41,10 @@ endif
 export COMPOSE
 export COMPOSE_WAIT_FLAG
 export COMPOSE_SUPPORTS_WAIT
+# local-edge (auth + HTTPS proxy) is enabled only on up/down/reinstall, not db-up/redis-up.
+COMPOSE_LOCAL_EDGE := COMPOSE_PROFILES=local-edge
 
-.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait backend-dev frontend-dev backend-install frontend-install lint test test-ci backend-lint backend-test frontend-lint frontend-test e2e e2e-smoke models migrate seed clean clean-models clean-run
+.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait backend-dev frontend-dev backend-install frontend-install auth-install local-certs lint test test-ci backend-lint backend-test frontend-lint frontend-test auth-lint auth-test e2e e2e-smoke models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -47,7 +52,7 @@ help: ## List available targets
 	@echo "  Shared-host deploy: ./deploy.sh --api-image … --web-image …"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-install: backend-install frontend-install ## Install backend and frontend dependencies
+install: backend-install frontend-install auth-install ## Install backend, frontend, and auth dependencies
 
 backend-install: ## Create backend venv and install locked dependencies
 	@test -d $(BACKEND_VENV)/bin || $(PYTHON) -m venv $(BACKEND_VENV)
@@ -58,27 +63,48 @@ backend-install: ## Create backend venv and install locked dependencies
 frontend-install: ## Install frontend npm dependencies
 	cd $(FRONTEND_DIR) && npm ci
 
-up: ## Build and start postgres + redis + api + web via Compose
-	$(COMPOSE) up -d --build $(COMPOSE_WAIT_FLAG)
+auth-install: ## Install auth-service npm dependencies
+	cd $(AUTH_DIR) && npm ci
+
+$(LOCAL_EDGE_CERT) $(LOCAL_EDGE_KEY) &:
+	@cert="$(LOCAL_EDGE_CERT)"; key="$(LOCAL_EDGE_KEY)"; \
+	if [ -f "$$cert" ] && [ -f "$$key" ]; then exit 0; fi; \
+	if [ -f "$$cert" ] || [ -f "$$key" ]; then \
+		echo "ERROR: exactly one of $$cert / $$key exists." >&2; \
+		echo "Copy the matching file or remove the orphan, then retry." >&2; \
+		exit 1; \
+	fi; \
+	mkdir -p deploy/caddy/certs; \
+	openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
+		-keyout "$$key" -out "$$cert" \
+		-subj "/CN=127.0.0.1" \
+		-addext "subjectAltName=IP:127.0.0.1,DNS:localhost"; \
+	echo "generated self-signed $$cert and $$key"
+
+local-certs: $(LOCAL_EDGE_CERT) $(LOCAL_EDGE_KEY) ## Create self-signed proxy TLS files when both are missing
+
+up: $(LOCAL_EDGE_CERT) $(LOCAL_EDGE_KEY) ## Build and start postgres + redis + api + web + local-edge proxy/auth
+	$(COMPOSE_LOCAL_EDGE) $(COMPOSE) up -d --build $(COMPOSE_WAIT_FLAG)
 ifneq ($(COMPOSE_SUPPORTS_WAIT),yes)
 	@$(MAKE) db-wait
 	@$(MAKE) redis-wait
 endif
 
 down: ## Stop Compose runtime (keeps named DB volume; Redis is ephemeral)
-	$(COMPOSE) down
+	$(COMPOSE_LOCAL_EDGE) $(COMPOSE) down
 
 # Full local reset: wipe named volumes (Postgres), bring stack back, migrate, seed.
 # Redis has no named volume — restart always starts empty. Optional:
 # WITH_HOST_INSTALL=1 also runs `make install` after teardown.
 reinstall: ## Wipe DB volume, restart stack, migrate, and seed
-	$(COMPOSE) down -v --remove-orphans
+	$(COMPOSE_LOCAL_EDGE) $(COMPOSE) down -v --remove-orphans
 ifeq ($(WITH_HOST_INSTALL),1)
 	$(MAKE) install
 endif
 	$(MAKE) up migrate seed
 	@echo "==> Reinstall complete"
-	@echo "    Web: http://127.0.0.1:5173"
+	@echo "    Proxy (browser origin, interim HTTPS): https://127.0.0.1:8443"
+	@echo "    Web (host-dev / Playwright): http://127.0.0.1:5173"
 	@echo "    API: http://127.0.0.1:8000"
 
 reinstall-keep-data: ## Restart stack without wiping DB volume, then migrate and seed
@@ -88,7 +114,8 @@ ifeq ($(WITH_HOST_INSTALL),1)
 endif
 	$(MAKE) up migrate seed
 	@echo "==> Reinstall complete"
-	@echo "    Web: http://127.0.0.1:5173"
+	@echo "    Proxy (browser origin, interim HTTPS): https://127.0.0.1:8443"
+	@echo "    Web (host-dev / Playwright): http://127.0.0.1:5173"
 	@echo "    API: http://127.0.0.1:8000"
 
 db-up: ## Start containerized PostgreSQL only (for host-run tests / persistence)
@@ -152,9 +179,9 @@ seed: backend-install ## Idempotent local user seed (intentional; after migrate;
 	UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
 		$(BACKEND_PYTHON) -m untangled.seed
 
-lint: backend-lint frontend-lint ## Run backend and frontend lint checks
+lint: backend-lint frontend-lint auth-lint ## Run backend, frontend, and auth lint checks
 
-test: backend-test frontend-test ## Run backend and frontend tests
+test: backend-test frontend-test auth-test ## Run backend, frontend, and auth tests
 
 # Same leaf checks as lint + test. Skips Compose db-up / redis-up — Postgres and
 # Redis must already be reachable (e.g. Actions service containers).
@@ -183,6 +210,12 @@ frontend-lint: frontend-install models ## Typecheck the frontend (minimal lint u
 frontend-test: frontend-install models ## Run frontend unit tests and SSR production build smoke
 	cd $(FRONTEND_DIR) && CI=1 npm test
 	cd $(FRONTEND_DIR) && CI=1 npm run build
+
+auth-lint: auth-install ## Typecheck the auth service
+	cd $(AUTH_DIR) && npm run typecheck
+
+auth-test: auth-install ## Run auth-service unit tests
+	cd $(AUTH_DIR) && npm test
 
 # Playwright browser E2E. Requires a live web+API stack (e.g. make up && make migrate && make seed)
 # or host-dev API on :8000 + web on :5173. Does not start services.

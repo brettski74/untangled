@@ -8,6 +8,11 @@ describe("LocalDatetimeInput", () => {
       "utf8",
     );
     expect(source).toMatch(/local_datetime_control_parts/);
+    // First paint must show the committed value (no empty useEffect flash).
+    expect(source).toMatch(
+      /useState\(\(\) => local_datetime_control_parts\(value\)\)/,
+    );
+    expect(source).not.toMatch(/useState\(\{\s*date:\s*""/);
     expect(source).toMatch(/type="date"/);
     expect(source).toMatch(/lang="en-GB"/);
     expect(source).toMatch(/aria-label="Time"/);

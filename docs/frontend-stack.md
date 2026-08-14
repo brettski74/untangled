@@ -14,6 +14,8 @@ Untangled M1 uses **React Router v7 in framework mode** for the web application.
 
 Access JWTs are held only in an **httpOnly** signed session cookie on the web tier. Browser-originated API needs go through SSR loaders/actions/resource routes (ADR `architecture/decisions/002-httponly-cookie-ssr-token-delivery.md`). Token refresh is #14; broader auth hardening is #67.
 
+The local HTTPS reverse proxy and browser→auth CSRF/cookie skeleton are documented in [edge-proxy.md](./edge-proxy.md). Live login still posts through SSR until #212. Playwright and `make frontend-dev` still use HTTP `:5173` (interim; not the browser credential origin).
+
 Required web env (Compose sets these; `make frontend-dev` supplies local defaults):
 
 | Variable | Role |

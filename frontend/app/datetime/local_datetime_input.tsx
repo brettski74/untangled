@@ -45,7 +45,7 @@ export function LocalDatetimeInput({
   on_focus,
   on_blur,
 }: LocalDatetimeInputProps) {
-  const [parts, set_parts] = useState({ date: "", time: "" });
+  const [parts, set_parts] = useState(() => local_datetime_control_parts(value));
   const [date_remount_key, set_date_remount_key] = useState(0);
 
   useEffect(() => {

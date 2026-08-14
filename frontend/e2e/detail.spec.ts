@@ -154,18 +154,20 @@ test.describe("detail and create", () => {
     await login(page, "admin");
     await page.goto("/change_request/lists/all");
     await page.getByRole("link", { name: /^CHG/ }).first().click();
+    const save = page.getByRole("button", { name: "Save" });
+    await expect(save).toBeVisible();
     const date = page.locator("#detail-scheduled_start");
     const current = await date.inputValue();
     const next = current === "2031-06-01" ? "2031-06-02" : "2031-06-01";
     await date.fill(next);
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("button", { name: "Save" })).toHaveAttribute(
-      "title",
-      "Save (no changes)",
-      { timeout: 20_000 },
-    );
+    await expect(date).toHaveValue(next);
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(save).toHaveAttribute("title", "Save (no changes)", {
+      timeout: 20_000,
+    });
     await date.fill(current);
-    await page.getByRole("button", { name: "Save" }).click();
+    await save.click();
   });
 
   test("P112-2: deep-link opens class nav section", async ({ page }) => {

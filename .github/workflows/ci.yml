@@ -62,7 +62,9 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            auth/package-lock.json
 
       - name: Lint and test
         # make test-ci → make lint + SKIP_DB_UP=1 make test (Make-equivalent checks).
@@ -120,7 +122,9 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            auth/package-lock.json
 
       - name: Install backend and frontend
         run: make install models

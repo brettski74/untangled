@@ -1,0 +1,19 @@
+{
+  "name": "untangled-auth",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3"
+  }
+}
