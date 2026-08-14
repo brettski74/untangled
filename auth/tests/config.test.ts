@@ -1,28 +1,28 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { generateKeyPair, SignJWT } from "jose";
 
-import { cookie_secure_from_env, load_config_from_env } from "../src/config.js";
+import { load_config_from_env } from "../src/config.js";
+import { cookie_secure_from_env } from "../src/cookie_secure.js";
 import { parse_forwarded_for } from "../src/forwarded.js";
+import { sign_access_token, verify_access_token } from "../src/jwt.js";
+import { load_private_key, load_public_key } from "../src/keys.js";
 import { origin_is_exact_match } from "../src/origin.js";
+import { safe_next_path } from "../src/next_path.js";
 
 describe("config", () => {
-  it("requires an exact public origin", () => {
-    assert.throws(
+  it("requires an exact public origin before keys", async () => {
+    await assert.rejects(
       () => load_config_from_env({} as NodeJS.ProcessEnv),
       /UNTANGLED_PUBLIC_ORIGIN/,
     );
-    assert.throws(
+    await assert.rejects(
       () =>
         load_config_from_env({
           UNTANGLED_PUBLIC_ORIGIN: "https://127.0.0.1:8443/extra",
         } as NodeJS.ProcessEnv),
       /exact origin/,
     );
-    const config = load_config_from_env({
-      UNTANGLED_PUBLIC_ORIGIN: "https://127.0.0.1:8443",
-    } as NodeJS.ProcessEnv);
-    assert.equal(config.public_origin, "https://127.0.0.1:8443");
-    assert.equal(config.cookie_secure, true);
   });
 
   it("cookie_secure_from_env defaults to secure and rejects typos", () => {
@@ -52,5 +52,68 @@ describe("forwarded", () => {
     assert.equal(parse_forwarded_for("for=198.51.100.10:1234"), "198.51.100.10");
     assert.equal(parse_forwarded_for(undefined), undefined);
     assert.equal(parse_forwarded_for(""), undefined);
+  });
+});
+
+describe("safe_next_path", () => {
+  it("allows same-origin relative paths", () => {
+    assert.equal(safe_next_path("/"), "/");
+    assert.equal(safe_next_path("/incident"), "/incident");
+    assert.equal(safe_next_path("/a?b=1"), "/a?b=1");
+  });
+
+  it("rejects open redirects", () => {
+    assert.equal(safe_next_path("//evil.example"), "/");
+    assert.equal(safe_next_path("https://evil.example"), "/");
+    assert.equal(safe_next_path("http://evil.example/x"), "/");
+    assert.equal(safe_next_path(null), "/");
+    assert.equal(safe_next_path(""), "/");
+  });
+});
+
+describe("keys", () => {
+  it("fails closed when private key material is missing", async () => {
+    await assert.rejects(
+      () => load_private_key({} as NodeJS.ProcessEnv),
+      /UNTANGLED_JWT_PRIVATE_KEY/,
+    );
+  });
+
+  it("fails closed when public key material is missing", async () => {
+    await assert.rejects(
+      () => load_public_key({} as NodeJS.ProcessEnv),
+      /UNTANGLED_JWT_PUBLIC_KEY/,
+    );
+  });
+});
+
+describe("jwt", () => {
+  it("round-trips ES256 and rejects a token from a different P-256 key", async () => {
+    const issuer = await generateKeyPair("ES256");
+    const other = await generateKeyPair("ES256");
+    const user_id = "01900000-0000-7000-8000-000000000001";
+    const token = await sign_access_token(issuer.privateKey, user_id, 900);
+    const payload = await verify_access_token(issuer.publicKey, token);
+    assert.equal(payload.sub, user_id);
+    assert.equal(payload.typ, "access");
+    await assert.rejects(() => verify_access_token(other.publicKey, token));
+  });
+
+  it("rejects HS256 and missing exp", async () => {
+    const { privateKey, publicKey } = await generateKeyPair("ES256");
+    const hs = await new SignJWT({ typ: "access" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject("01900000-0000-7000-8000-000000000001")
+      .setIssuedAt()
+      .setExpirationTime("15m")
+      .sign(new TextEncoder().encode("not-a-real-hmac-secret-value!!"));
+    await assert.rejects(() => verify_access_token(publicKey, hs));
+
+    const no_exp = await new SignJWT({ typ: "access" })
+      .setProtectedHeader({ alg: "ES256" })
+      .setSubject("01900000-0000-7000-8000-000000000001")
+      .setIssuedAt()
+      .sign(privateKey);
+    await assert.rejects(() => verify_access_token(publicKey, no_exp));
   });
 });

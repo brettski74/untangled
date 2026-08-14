@@ -78,10 +78,11 @@ jobs:
     env:
       DATABASE_URL: postgresql://untangled:untangled@127.0.0.1:5432/untangled
       UNTANGLED_REDIS_URL: redis://127.0.0.1:6379/0
-      UNTANGLED_JWT_SECRET: local-dev-only-change-me-untangled-jwt-secret
-      UNTANGLED_SESSION_SECRET: local-dev-only-change-me-untangled-session-secret
       UNTANGLED_API_BASE_URL: http://127.0.0.1:8000
+      UNTANGLED_PUBLIC_ORIGIN: http://127.0.0.1:5173
       UNTANGLED_COOKIE_SECURE: "false"
+      UNTANGLED_JWT_PRIVATE_KEY_PATH: ${{ github.workspace }}/deploy/jwt/dev-es256-private.pem
+      UNTANGLED_JWT_PUBLIC_KEY_PATH: ${{ github.workspace }}/deploy/jwt/dev-es256-public.pem
       UNTANGLED_AUDIT_LOG_DIR: /tmp/untangled-audit-e2e
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
       CI: "1"
@@ -127,7 +128,7 @@ jobs:
             auth/package-lock.json
 
       - name: Install backend and frontend
-        run: make install models
+        run: make install models local-jwt-keys
 
       - name: Install Playwright Chromium
         run: cd frontend && npx playwright install chromium --with-deps
@@ -137,10 +138,12 @@ jobs:
           mkdir -p "$UNTANGLED_AUDIT_LOG_DIR"
           make migrate seed
 
-      - name: Build web
-        run: cd frontend && CI=1 npm run build
+      - name: Build web and auth
+        run: |
+          cd frontend && CI=1 npm run build
+          cd ../auth && npm run build
 
-      - name: Start API and web
+      - name: Start API, auth, web, and HTTP edge
         run: |
           set -euo pipefail
           mkdir -p .run
@@ -148,20 +151,28 @@ jobs:
             > .run/e2e-api.log 2>&1 &
           echo $! > .run/e2e-api.pid
           (
+            cd auth
+            PORT=3001 npm run start > ../.run/e2e-auth.log 2>&1 &
+            echo $! > ../.run/e2e-auth.pid
+          )
+          (
             cd frontend
-            PORT=5173 npm run start > ../.run/e2e-web.log 2>&1 &
+            PORT=3000 npm run start > ../.run/e2e-web.log 2>&1 &
             echo $! > ../.run/e2e-web.pid
           )
+          PORT=5173 node auth/scripts/http_edge.mjs > .run/e2e-edge.log 2>&1 &
+          echo $! > .run/e2e-edge.pid
           for i in $(seq 1 90); do
             if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 \
+              && curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1 \
               && curl -fsS -o /dev/null http://127.0.0.1:5173/ 2>&1; then
-              echo "API and web are ready"
+              echo "API, auth, web edge are ready"
               exit 0
             fi
             sleep 1
           done
-          echo "API/web failed to become ready"
-          tail -n 200 .run/e2e-api.log .run/e2e-web.log || true
+          echo "API/auth/web/edge failed to become ready"
+          tail -n 200 .run/e2e-api.log .run/e2e-auth.log .run/e2e-web.log .run/e2e-edge.log || true
           exit 1
 
       - name: Playwright smoke
@@ -182,7 +193,9 @@ jobs:
             frontend/playwright-report
             frontend/test-results
             .run/e2e-api.log
+            .run/e2e-auth.log
             .run/e2e-web.log
+            .run/e2e-edge.log
           if-no-files-found: ignore
 
   publish-api:
@@ -275,6 +288,49 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  publish-auth:
+    name: publish untangled-auth
+    needs: validate
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/untangled-auth
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-,format=short
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: auth
+          file: auth/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   # Teammate shared Rocky wiring only — not customer environment promotion.
   # Environment `rocky9` scopes host secrets; a future `deploy-rocky10` can mirror this job.
   # Each run SSHs and provisions deploy.sh + compose.yaml + .env; no pre-placed host files required.
@@ -283,7 +339,7 @@ jobs:
   # Never downs volumes or passes --allow-destructive.
   deploy-rocky9:
     name: deploy rocky9
-    needs: [publish-api, publish-web]
+    needs: [publish-api, publish-web, publish-auth]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: rocky9
@@ -300,6 +356,7 @@ jobs:
           owner="${{ github.repository_owner }}"
           {
             echo "api_image=ghcr.io/${owner}/untangled-api:sha-${short_sha}"
+            echo "auth_image=ghcr.io/${owner}/untangled-auth:sha-${short_sha}"
             echo "web_image=ghcr.io/${owner}/untangled-web:sha-${short_sha}"
             echo "sha_tag=sha-${short_sha}"
           } >> "$GITHUB_OUTPUT"
@@ -341,14 +398,15 @@ jobs:
           fi
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Write runtime .env from Environment secrets
+      - name: Write runtime .env and JWT PEMs from Environment secrets
         env:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          UNTANGLED_JWT_SECRET: ${{ secrets.UNTANGLED_JWT_SECRET }}
-          UNTANGLED_SESSION_SECRET: ${{ secrets.UNTANGLED_SESSION_SECRET }}
+          UNTANGLED_JWT_PRIVATE_KEY: ${{ secrets.UNTANGLED_JWT_PRIVATE_KEY }}
+          UNTANGLED_JWT_PUBLIC_KEY: ${{ secrets.UNTANGLED_JWT_PUBLIC_KEY }}
+          UNTANGLED_PUBLIC_ORIGIN: ${{ secrets.UNTANGLED_PUBLIC_ORIGIN }}
           UNTANGLED_COOKIE_SECURE: ${{ secrets.UNTANGLED_COOKIE_SECURE }}
           UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${{ secrets.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS }}
           UNTANGLED_REFRESH_TOKEN_TTL_SECONDS: ${{ secrets.UNTANGLED_REFRESH_TOKEN_TTL_SECONDS }}
@@ -358,12 +416,16 @@ jobs:
             echo "POSTGRES_PASSWORD is not set on Environment rocky9" >&2
             exit 1
           fi
-          if [ -z "${UNTANGLED_JWT_SECRET}" ]; then
-            echo "UNTANGLED_JWT_SECRET is not set on Environment rocky9" >&2
+          if [ -z "${UNTANGLED_JWT_PRIVATE_KEY}" ]; then
+            echo "UNTANGLED_JWT_PRIVATE_KEY is not set on Environment rocky9" >&2
             exit 1
           fi
-          if [ -z "${UNTANGLED_SESSION_SECRET}" ]; then
-            echo "UNTANGLED_SESSION_SECRET is not set on Environment rocky9" >&2
+          if [ -z "${UNTANGLED_JWT_PUBLIC_KEY}" ]; then
+            echo "UNTANGLED_JWT_PUBLIC_KEY is not set on Environment rocky9" >&2
+            exit 1
+          fi
+          if [ -z "${UNTANGLED_PUBLIC_ORIGIN}" ]; then
+            echo "UNTANGLED_PUBLIC_ORIGIN is not set on Environment rocky9" >&2
             exit 1
           fi
           pg_user="${POSTGRES_USER:-untangled}"
@@ -372,21 +434,33 @@ jobs:
             DATABASE_URL="postgresql://${pg_user}:${POSTGRES_PASSWORD}@postgres:5432/${pg_db}"
           fi
           umask 077
+          write_pem() {
+            local raw="$1"
+            local dest="$2"
+            if [[ "$raw" == *$'\n'* ]]; then
+              printf '%s\n' "$raw" > "$dest"
+            else
+              printf '%s\n' "${raw//\\n/$'\n'}" > "$dest"
+            fi
+            chmod 600 "$dest"
+          }
+          write_pem "${UNTANGLED_JWT_PRIVATE_KEY}" "${RUNNER_TEMP}/jwt-private.pem"
+          write_pem "${UNTANGLED_JWT_PUBLIC_KEY}" "${RUNNER_TEMP}/jwt-public.pem"
           {
             printf 'POSTGRES_USER=%s\n' "${pg_user}"
             printf 'POSTGRES_PASSWORD=%s\n' "${POSTGRES_PASSWORD}"
             printf 'POSTGRES_DB=%s\n' "${pg_db}"
             printf 'DATABASE_URL=%s\n' "${DATABASE_URL}"
             printf 'UNTANGLED_REDIS_URL=%s\n' "${UNTANGLED_REDIS_URL:-redis://redis:6379/0}"
-            printf 'UNTANGLED_JWT_SECRET=%s\n' "${UNTANGLED_JWT_SECRET}"
-            printf 'UNTANGLED_SESSION_SECRET=%s\n' "${UNTANGLED_SESSION_SECRET}"
             printf 'UNTANGLED_COOKIE_SECURE=%s\n' "${UNTANGLED_COOKIE_SECURE:-true}"
             printf 'UNTANGLED_ACCESS_TOKEN_TTL_SECONDS=%s\n' "${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}"
             printf 'UNTANGLED_REFRESH_TOKEN_TTL_SECONDS=%s\n' "${UNTANGLED_REFRESH_TOKEN_TTL_SECONDS:-604800}"
             printf 'UNTANGLED_API_BASE_URL=%s\n' "http://api:8000"
+            printf 'UNTANGLED_PUBLIC_ORIGIN=%s\n' "${UNTANGLED_PUBLIC_ORIGIN}"
             printf 'UNTANGLED_WEB_HOST_PORT=%s\n' "3000"
+            printf 'UNTANGLED_AUTH_HOST_PORT=%s\n' "3001"
           } > "${RUNNER_TEMP}/untangled-rocky.env"
-          echo "Wrote runtime env file for remote sync (values not logged)"
+          echo "Wrote runtime env file and JWT PEMs for remote sync (values not logged)"
 
       - name: Sync contract files and deploy over SSH
         env:
@@ -395,6 +469,7 @@ jobs:
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           API_IMAGE: ${{ steps.pins.outputs.api_image }}
           WEB_IMAGE: ${{ steps.pins.outputs.web_image }}
+          AUTH_IMAGE: ${{ steps.pins.outputs.auth_image }}
         run: |
           if [ -z "${DEPLOY_HOST}" ] || [ -z "${DEPLOY_PORT}" ] || [ -z "${DEPLOY_USER}" ]; then
             echo "DEPLOY_HOST, DEPLOY_PORT, and DEPLOY_USER must be set as Environment rocky9 variables" >&2
@@ -410,9 +485,10 @@ jobs:
           echo "SSH deploy as ${remote} port ${DEPLOY_PORT}"
           echo "Pinned api=${API_IMAGE}"
           echo "Pinned web=${WEB_IMAGE}"
+          echo "Pinned auth=${AUTH_IMAGE}"
           echo "Provisioning ~/untangled/ on host from this commit (no pre-placed files required)"
           ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
-            "mkdir -p ~/untangled && chmod 700 ~/untangled"
+            "mkdir -p ~/untangled/deploy/jwt && chmod 700 ~/untangled && chmod 700 ~/untangled/deploy/jwt"
           scp "${ssh_base[@]}" -P "${DEPLOY_PORT}" \
             deploy.sh \
             compose.yaml \
@@ -424,8 +500,16 @@ jobs:
             "${remote}:untangled/.env"
           ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
             "chmod 600 ~/untangled/.env"
+          scp "${ssh_base[@]}" -P "${DEPLOY_PORT}" \
+            "${RUNNER_TEMP}/jwt-private.pem" \
+            "${remote}:untangled/deploy/jwt/dev-es256-private.pem"
+          scp "${ssh_base[@]}" -P "${DEPLOY_PORT}" \
+            "${RUNNER_TEMP}/jwt-public.pem" \
+            "${remote}:untangled/deploy/jwt/dev-es256-public.pem"
+          ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
+            "chmod 600 ~/untangled/deploy/jwt/dev-es256-private.pem ~/untangled/deploy/jwt/dev-es256-public.pem"
           # Single host script: pull/up/health/safe-migrate/regen seed-credentials/seed.
           # Seed password values stay on the host file only; never echoed by deploy.sh or CI.
           echo "Running ./deploy.sh on host (seed credential values not logged)"
           ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
-            "cd ~/untangled && ./deploy.sh --api-image $(printf %q "$API_IMAGE") --web-image $(printf %q "$WEB_IMAGE")"
+            "cd ~/untangled && ./deploy.sh --api-image $(printf %q "$API_IMAGE") --web-image $(printf %q "$WEB_IMAGE") --auth-image $(printf %q "$AUTH_IMAGE")"

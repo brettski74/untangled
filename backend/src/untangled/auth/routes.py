@@ -6,7 +6,6 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordRequestForm
 
 from untangled.audit.context import client_ip
 from untangled.audit.emit import emit_best_effort, emit_fail_closed, make_event
@@ -20,15 +19,11 @@ from untangled.auth.schemas import (
     LogoutRequest,
     RbacProbeResponse,
     RefreshRequest,
-    TokenPair,
     UserProfile,
 )
 from untangled.auth.store import (
-    authenticate_user,
-    issue_token_pair,
     refresh_token_is_active,
     revoke_refresh_token,
-    rotate_refresh_token,
     update_user_password_hash,
 )
 from untangled.rbac.dependencies import require_class_operation
@@ -41,109 +36,28 @@ from untangled.rbac.store import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 _LOG = logging.getLogger("untangled.audit")
 
-_INVALID_CREDENTIALS = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Invalid username or password",
-    headers={"WWW-Authenticate": "Bearer"},
+_LOGIN_GONE = HTTPException(
+    status_code=status.HTTP_410_GONE,
+    detail="Login moved to POST /api/v2/auth/login",
+)
+_REFRESH_GONE = HTTPException(
+    status_code=status.HTTP_410_GONE,
+    detail="Token refresh moved off this API; use the auth service",
 )
 
 _DEMO_ITEM_READ = class_operation_key("demo_item", "read")
 
 
-@router.post("/login", response_model=TokenPair)
-def login(
-    request: Request,
-    form: Annotated[OAuth2PasswordRequestForm, Depends()],
-    conn: DbConn,
-) -> TokenPair:
-    """Username/password login (OAuth2 password form for Swagger Authorize)."""
-    ip = client_ip(request)
-    user = authenticate_user(conn, form.username, form.password)
-    if user is None:
-        emit_best_effort(
-            make_event(
-                event_type=EventType.AUTH_LOGIN,
-                actor_channel=ActorChannel.HUMAN,
-                outcome=Outcome.FAILURE,
-                reason="invalid_credentials",
-                severity=Severity.WARNING,
-                ip_address=ip,
-                data={"attempted_username": form.username},
-            )
-        )
-        raise _INVALID_CREDENTIALS
-    access, refresh = issue_token_pair(conn, user["id"])
-    try:
-        emit_fail_closed(
-            make_event(
-                event_type=EventType.AUTH_LOGIN,
-                actor_channel=ActorChannel.HUMAN,
-                outcome=Outcome.SUCCESS,
-                reason="login_ok",
-                severity=Severity.INFO,
-                user_id=user["id"],
-                ip_address=ip,
-                data={"username": user["username"]},
-            )
-        )
-    except AuditWriteError as exc:
-        if not revoke_refresh_token(conn, refresh):
-            _LOG.error("login audit failed and refresh revoke failed user=%s", user["id"])
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Audit logging failed",
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Audit logging failed",
-        ) from exc
-    return TokenPair(access_token=access, refresh_token=refresh)
+@router.post("/login", status_code=status.HTTP_410_GONE)
+def login() -> None:
+    """Removed: browser and machine login issue ES256 tokens from the auth service."""
+    raise _LOGIN_GONE
 
 
-@router.post("/refresh", response_model=TokenPair)
-def refresh(request: Request, body: RefreshRequest, conn: DbConn) -> TokenPair:
-    """Exchange a valid refresh token for a new access + refresh pair (rotation)."""
-    ip = client_ip(request)
-    pair = rotate_refresh_token(conn, body.refresh_token)
-    if pair is None:
-        emit_best_effort(
-            make_event(
-                event_type=EventType.AUTH_REFRESH,
-                actor_channel=ActorChannel.HUMAN,
-                outcome=Outcome.FAILURE,
-                reason="invalid_or_expired_refresh",
-                severity=Severity.WARNING,
-                ip_address=ip,
-            )
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
-        )
-    access, refresh_token = pair
-    try:
-        emit_fail_closed(
-            make_event(
-                event_type=EventType.AUTH_REFRESH,
-                actor_channel=ActorChannel.HUMAN,
-                outcome=Outcome.SUCCESS,
-                reason="refresh_ok",
-                severity=Severity.INFO,
-                ip_address=ip,
-            )
-        )
-    except AuditWriteError as exc:
-        if not revoke_refresh_token(conn, refresh_token):
-            _LOG.error("refresh audit failed and new refresh revoke failed")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Audit logging failed",
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Audit logging failed",
-        ) from exc
-    return TokenPair(access_token=access, refresh_token=refresh_token)
+@router.post("/refresh", status_code=status.HTTP_410_GONE)
+def refresh(_body: RefreshRequest) -> None:
+    """Removed: this process does not mint access tokens."""
+    raise _REFRESH_GONE
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

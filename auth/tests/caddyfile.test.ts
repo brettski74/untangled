@@ -34,4 +34,15 @@ describe("Caddyfile path contract", () => {
   it("uses the gitignored local certificate pair", () => {
     assert.match(caddyfile, /tls \/etc\/caddy\/certs\/dev\.crt \/etc\/caddy\/certs\/dev\.key/);
   });
+
+  it("canonicalizes localhost and ::1 to 127.0.0.1 without folding Origin in auth", () => {
+    assert.match(
+      caddyfile,
+      /header_regexp Host \(\?i\)\^\(localhost\|\\\[::1\\\]\|::1\)\(:\\d\+\)\?\$/,
+    );
+    assert.match(
+      caddyfile,
+      /redir @not_canonical https:\/\/127\.0\.0\.1:\{\$UNTANGLED_PROXY_HOST_PORT:8443\}\{uri\} 308/,
+    );
+  });
 });

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reset_session_storage_for_tests } from "./session.server";
-import { fake_access_token } from "./test_tokens";
+import { reset_access_verifier_for_tests } from "./session.server";
+import { fake_access_token, install_test_jwt_keys } from "./test_tokens";
 
 const fetch_me = vi.fn();
 const change_password = vi.fn();
@@ -51,9 +51,10 @@ const POLICY_RECORD = {
 
 describe("change-password route (#173)", () => {
   beforeEach(() => {
-    reset_session_storage_for_tests();
-    process.env.UNTANGLED_SESSION_SECRET = "test-session-secret-32chars!!";
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_COOKIE_SECURE = "false";
+    install_test_jwt_keys();
+    reset_access_verifier_for_tests();
     fetch_me.mockReset();
     change_password.mockReset();
     fetch_record.mockReset();

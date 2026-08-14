@@ -12,27 +12,27 @@ Untangled M1 uses **React Router v7 in framework mode** for the web application.
 
 ## Auth delivery (SSR)
 
-Access JWTs are held only in an **httpOnly** signed session cookie on the web tier. Browser-originated API needs go through SSR loaders/actions/resource routes (ADR `architecture/decisions/002-httponly-cookie-ssr-token-delivery.md`). Token refresh is #14; broader auth hardening is #67.
+The login **page** is SSR (`GET /login`). The browser posts credentials to `POST /api/v2/auth/login` (same origin via Caddy, Vite, or `http_edge`). Auth sets HttpOnly `__untangled_access`. SSR loaders read and verify that cookie with the ES256 public key, then call the API with Bearer. The JWT is never exposed to JavaScript and is not returned in the login JSON body. Token refresh is #14; broader auth hardening is #67 / #213–#216.
 
-The local HTTPS reverse proxy and browser→auth CSRF/cookie skeleton are documented in [edge-proxy.md](./edge-proxy.md). Live login still posts through SSR until #212. Playwright and `make frontend-dev` still use HTTP `:5173` (interim; not the browser credential origin).
+The local HTTPS reverse proxy and browser→auth CSRF/cookie contract are documented in [edge-proxy.md](./edge-proxy.md). Playwright and `make frontend-dev` use HTTP `:5173` (Vite proxies `/api/v2/auth` to the auth service). Compose browser login uses `https://127.0.0.1:8443`.
 
 Required web env (Compose sets these; `make frontend-dev` supplies local defaults):
 
 | Variable | Role |
 | -------- | ---- |
 | `UNTANGLED_API_BASE_URL` | Server-side API base (`http://api:8000` in Compose; `http://127.0.0.1:8000` on the host) |
-| `UNTANGLED_SESSION_SECRET` | Cookie signing secret — **required**; no in-code default |
+| `UNTANGLED_JWT_PUBLIC_KEY` or `UNTANGLED_JWT_PUBLIC_KEY_PATH` | ES256 public key — **required**; no in-code default |
 | `UNTANGLED_COOKIE_SECURE` | Secure cookies on by default; set `false` for plain-HTTP local |
 | `UNTANGLED_REDIS_URL` | Shared Redis for coherence signaling library / future subscribers (`redis://redis:6379/0` in Compose; host default `redis://127.0.0.1:6379/0`). No permanent web subscribe-on-boot until a product consumer exists; production hardening [#182](https://github.com/brettski74/untangled/issues/182) |
 
-Cookie `maxAge` is derived from the access JWT `exp` claim (no separate web TTL env).
+Cookie `maxAge` on `__untangled_access` is the access JWT TTL (auth sets it). SSR logout expires the same cookie.
 
 ## Key paths
 
 | Path | Role |
 | ---- | ---- |
 | `frontend/app/routes.ts` | Route table (login, logout, authenticated layout, destinations) |
-| `frontend/app/auth/` | Session cookie, API seam, Zod envelopes, gate helpers |
+| `frontend/app/auth/` | Access-cookie verify, API seam, Zod envelopes, gate helpers |
 | `frontend/app/shell/` | Operator chrome (header, nav rail, context bar host, YAML nav). Context bar mount: routes portal chrome via `ShellContextBar` into one always-present layout host (inert when empty). Binding contract: ADR `architecture/decisions/005-portal-shell-context-bars.md`. |
 | `frontend/app/list/` | Schema-driven list chrome (#13): context bar, quick filter, filter row + nested editor (`filter_chrome.tsx`), shared predicate text renderer (`predicate_text.ts`) |
 | `frontend/app/detail/` | Schema-driven detail read/edit (#81–#82) + new-record (#83); `TESTPLAN.md` / `TESTPLAN-83.md` |

@@ -6,11 +6,11 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+from jwt_mint import bearer_for, mint_access_token
 from psycopg import Connection
 
 from untangled.main import app
 from untangled.rbac.keys import ADMIN_PERMISSION_KEY, class_operation_key
-from untangled.seed.users import SEED_USERS, password_for
 
 
 @pytest.fixture
@@ -20,18 +20,8 @@ def rbac_client(demo_schema, db_conn: Connection) -> Iterator[TestClient]:
         yield client
 
 
-def _login(client: TestClient, username: str, password: str):
-    return client.post(
-        "/auth/login",
-        data={"username": username, "password": password},
-    )
-
-
-def _bearer(client: TestClient, username: str) -> str:
-    seed = next(s for s in SEED_USERS if s.username == username)
-    login = _login(client, seed.username, password_for(seed))
-    assert login.status_code == 200
-    return login.json()["access_token"]
+def _bearer(_client: TestClient, username: str) -> str:
+    return bearer_for(username)
 
 
 def test_me_includes_roles_and_permissions(rbac_client: TestClient) -> None:
@@ -115,9 +105,7 @@ def test_rbac_probe_forbidden_without_permission(
         )
     db_conn.commit()
 
-    login = _login(rbac_client, "noroles", "noroles-change-me")
-    assert login.status_code == 200
-    token = login.json()["access_token"]
+    token = mint_access_token(user_id)
     response = rbac_client.get(
         "/auth/rbac-probe",
         headers={"Authorization": f"Bearer {token}"},

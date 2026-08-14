@@ -7,15 +7,6 @@
  */
 import { z } from "zod";
 
-export const token_pair_schema = z.object({
-  access_token: z.string().min(1),
-  // Optional: this ticket discards refresh; do not fail closed if absent.
-  refresh_token: z.string().min(1).optional(),
-  token_type: z.string().default("bearer"),
-});
-
-export type TokenPair = z.infer<typeof token_pair_schema>;
-
 /** Only fields rendered or used by the login-gate stub. */
 export const user_profile_schema = z.object({
   username: z.string(),

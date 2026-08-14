@@ -1,6 +1,6 @@
 # Local development
 
-Untangled is **containers-first**: `make up` brings up PostgreSQL, Redis, the API, the web app, and (locally) an HTTPS reverse proxy + auth skeleton via Compose (Podman or Docker).
+Untangled is **containers-first**: `make up` brings up PostgreSQL, Redis, the API, the web app, the auth service, and (locally) an HTTPS reverse proxy via Compose (Podman or Docker).
 
 For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` / `make redis-up` if you need Postgres or Redis). Those are not required for the Compose runtime.
 
@@ -96,10 +96,10 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 
 | Setting | Default (Compose / docs) |
 | ------- | ------------------------ |
-| `UNTANGLED_JWT_SECRET` | `local-dev-only-change-me-untangled-jwt-secret` (dev only) |
+| `UNTANGLED_JWT_PRIVATE_KEY_PATH` / `UNTANGLED_JWT_PUBLIC_KEY_PATH` | Gitignored `deploy/jwt/dev-es256-*.pem` (`make local-jwt-keys`). Auth gets both; API and web get the public key only. |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
-| `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days) |
-| `UNTANGLED_SESSION_SECRET` | `local-dev-only-change-me-untangled-session-secret` (web cookie signing; **required**, no in-code default) |
+| `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days; unused until #14) |
+| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose HTTPS: `https://127.0.0.1:8443`. Host-dev/Playwright: `http://127.0.0.1:5173` |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
 | `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` (coherence signaling; shared with future authz cache) |
@@ -180,36 +180,37 @@ Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
 
 ### UI login (SSR gate)
 
-Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http://127.0.0.1:5173` and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above).
+Local-dev convention: after `make up` + `make migrate` + `make seed`, open `https://127.0.0.1:8443` (trust the local cert or use `curl -k`) and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above). `https://localhost:8443` redirects there (`localhost` is a different origin). Host-dev: `make auth-dev` in one terminal and `make frontend-dev` in another, then `http://127.0.0.1:5173`.
 
 - Unauthenticated routes redirect to `/login` (fail-closed).
-- Login calls `POST /auth/login` from the web tier; only the **access** JWT is stored in an httpOnly session cookie (refresh discarded until #14).
-- The authenticated layout loads `GET /auth/me` once per navigation tree; the header user chip uses display name (hover = username). Real RBAC permissions still come from `/auth/me` for later YAML nav (#66).
-- Access expiry / API **401** clears the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67.
+- The login page is SSR; the browser posts to `POST /api/v2/auth/login` after `GET /api/v2/auth/csrf`. Auth sets HttpOnly `__untangled_access` (ES256). The JWT is not in the JSON body.
+- SSR verifies that cookie with the public key and calls the API with Bearer. The authenticated layout loads `GET /auth/me` once per navigation tree; the header user chip uses display name (hover = username).
+- Access expiry / API **401** expires the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67. Login abuse controls are #213 / #214.
 
-Cookie posture (ADR 002): `httpOnly`, `sameSite=lax` (CSRF defence for same-origin authenticated SSR form actions), `secure` on by default with explicit local opt-out, cookie `maxAge` derived from the access JWT `exp` claim. The JWT is never exposed to browser JavaScript. The HTTPS proxy cookie/CSRF skeleton (browser→auth POST) is documented in [edge-proxy.md](./edge-proxy.md); live login still posts through SSR until #212.
+Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default with explicit local opt-out, cookie `Max-Age` from the access JWT TTL. The JWT is never exposed to browser JavaScript. Path and CSRF details: [edge-proxy.md](./edge-proxy.md).
 
 ### `/docs` Authorize loop
 
 1. Open `http://127.0.0.1:8000/docs`.
-2. `POST /auth/login` (OAuth2 password form) with a seed username/password — copy `access_token`.
-3. Click **Authorize**, paste the access token as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
-4. Hit `GET /auth/rbac-probe` (requires `demo_item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo_item:read`) get **403**; a user with no roles gets **403**.
-5. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
+2. Sign in through the UI (Compose `:8443` or host-dev `:5173`), then copy the `__untangled_access` cookie value from the browser's cookie inspector (HttpOnly: not visible to page script).
+3. Click **Authorize**, paste that JWT as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
+4. Python `POST /auth/login` and `POST /auth/refresh` return **410** — they no longer issue tokens.
+5. Hit `GET /auth/rbac-probe` (requires `demo_item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo_item:read`) get **403**; a user with no roles gets **403**.
+6. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
    - Live record contract: `GET /api/v2/incident/{locator}` /
      `GET /api/v2/change_request/{locator}` (UUID or friendly number; path
      segment is the class `name`, no pluralization).
    - `POST` create / `PATCH` update / `DELETE` on `/api/v2/{class_name}`
      (admin only among seed roles for delete).
    - Junk locators → **422**; missing records → **404**; readonly cannot create → **403**.
-6. Exercise predicate search (same Authorize token; requires `{class}:search` or `admin` / `public`):
+7. Exercise predicate search (same Authorize token; requires `{class}:search` or `admin` / `public`):
    - `POST /api/v2/incident/search` and
      `POST /api/v2/change_request/search` (see [Predicate search](#predicate-search)
      and [API versioning](#api-versioning) below).
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
    - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
-7. When the access token expires (~15m), `POST /auth/refresh` with the refresh token, then Authorize again with the new access token.
-8. `POST /auth/logout` with the refresh token to revoke it.
+8. When the access token expires (~15m), sign in again through the UI (refresh is #14).
+9. Sign out from the header menu (expires `__untangled_access`). Python `POST /auth/logout` still accepts a refresh token body for leftover rows.
 
 ### API versioning
 
@@ -420,11 +421,12 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make migrate` | Apply YAML schema intent via production CLI (`python -m untangled.schema`) |
 | `make seed` | Idempotent seed of baseline users + RBAC + sample INC/CHG (`python -m untangled.seed`) |
 | `make backend-dev` | Run FastAPI with reload on the host (port 8000) |
-| `make frontend-dev` | Run React Router dev server on the host (port 5173) |
+| `make frontend-dev` | Run React Router dev server on the host (port 5173; proxies `/api/v2/auth` to `:3001`) |
+| `make auth-dev` | Run the auth service on the host (port 3001) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck + auth typecheck |
 | `make test` | Backend pytest (starts DB + Redis; uses migrate path) + frontend build smoke + auth unit tests |
 | `make test-ci` | Same as lint + test, but skip Compose `db-up` / `redis-up` (services must already be up; used by Actions) |
-| `make e2e` | Full Playwright browser suite against a live web+API stack (default `http://127.0.0.1:5173`; interim, not the HTTPS proxy origin) |
+| `make e2e` | Full Playwright browser suite against `http://127.0.0.1:5173` (Vite or `http_edge`, not raw Compose web) |
 | `make e2e-smoke` | Playwright `@smoke` subset (CI gate; same stack prereqs as `e2e`) |
 | `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
@@ -436,7 +438,7 @@ Destructive schema plans are rejected by default. To allow them locally:
 make migrate MIGRATE_ARGS=--allow-destructive
 ```
 
-Ensure host ports **5432**, **6379**, **8000**, **5173**, and **8443** are free before `make up`.
+Ensure host ports **5432**, **6379**, **8000**, **3000**, **3001**, **5173**, and **8443** are free before `make up` (or skip host-dev ports you are not using).
 
 ## Ports
 
@@ -445,8 +447,10 @@ Ensure host ports **5432**, **6379**, **8000**, **5173**, and **8443** are free 
 | postgres | `5432` | Published for host tools and tests |
 | redis | `6379` | Ephemeral; published for host tools and tests |
 | api | `8000` | FastAPI; docs at `/docs`. Not the browser credential origin. |
-| web | `5173` | Maps to container port **3000**. Host-dev / Playwright (interim). Production / non-local deploys should expose **3000**, not 5173. |
+| web | `3000` | Maps to container port **3000**. |
+| auth | `3001` | Maps to container port **3000**. Customer edge / host-dev. Not the browser credential origin. |
 | proxy | `8443` | Local HTTPS browser origin (`local-edge` profile). See [edge-proxy.md](./edge-proxy.md). |
+| http_edge / Vite | `5173` | Host-dev and Playwright same-origin edge. |
 
 ## Smoke tests
 
@@ -454,7 +458,7 @@ After `make up` → `make migrate` → `make seed`:
 
 - API health: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`
 - API docs: open `http://127.0.0.1:8000/docs` and run the Authorize loop above
-- Web (interim host-dev): open `http://127.0.0.1:5173` — unauthenticated users redirect to `/login`; after seed login, authenticated stub shows `/auth/me`
+- Web: open `http://127.0.0.1:3000` (SSR only; login needs the public origin or http_edge)
 - HTTPS proxy (browser origin): `curl -k https://127.0.0.1:8443/` and `curl -k https://127.0.0.1:8443/api/v2/auth/csrf` — see [edge-proxy.md](./edge-proxy.md)
 - Postgres: `docker compose exec postgres pg_isready -U untangled -d untangled`
 - Redis: `docker compose exec redis redis-cli ping` → `PONG`
@@ -468,7 +472,7 @@ docker compose exec web wget -qO- http://api:8000/health
 
 Specs live under `frontend/e2e/`. CI **gates** on the `@smoke` tag (`make e2e-smoke`). The full suite also runs in CI afterward as a **non-gating** step (`continue-on-error`) so regressions show up without failing the check. Locally: `make e2e`.
 
-Prerequisites: Postgres + Redis + migrated/seeded DB, API on `:8000`, web on `:5173` (Compose `make up` or host `make backend-dev` / `make frontend-dev`). Playwright still uses this HTTP origin (interim); the HTTPS proxy is not the E2E base URL yet. First-time browser install:
+Prerequisites: Postgres + Redis + migrated/seeded DB, API on `:8000`, auth on `:3001`, and a same-origin edge on `:5173` (`make auth-dev` + `make frontend-dev`, or production web on `:3000` plus `node auth/scripts/http_edge.mjs`). First-time browser install:
 
 ```bash
 cd frontend && npx playwright install chromium
@@ -498,17 +502,17 @@ After `make redis-up` only (redis):
 | Server-side / from web container | `http://api:8000` (`UNTANGLED_API_BASE_URL` in Compose) |
 | Host `make frontend-dev` | `http://127.0.0.1:8000` (Makefile default) |
 
-Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do not point the browser at the API with a JS-held Bearer token — see ADR 002 / #67.
+Authenticated browser login posts to `/api/v2/auth/` on the public origin. Domain API calls stay on the web tier (SSR loaders/actions). Do not put the access JWT in JavaScript.
 
 ## What is placeholder vs real
 
 | Piece | Status | Later work |
 | ----- | ------ | ---------- |
-| `make up` / `make down` | Full Compose runtime (postgres + redis + api + web + local-edge proxy/auth); **no auto-migrate/seed** | — |
+| `make up` / `make down` | Full Compose runtime (postgres + redis + api + web + auth + local-edge proxy); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
-| Auth (`/auth/login`, refresh, logout, `/auth/me`, `/auth/rbac-probe`) | Bearer JWT + rotating refresh + RBAC helpers | UI refresh (#14); hardening #33 / security review #67 |
-| Auth service + HTTPS proxy | Local-edge Caddy + CSRF/cookie skeleton on `/api/v2/auth/` | Real login/ES256 (#212); Playwright still HTTP `:5173` |
+| Auth (`POST /api/v2/auth/login`, Python `/auth/me`, change-password, rbac-probe) | ES256 access JWT from auth; API/SSR verify public key; Python login/refresh **410** | UI refresh (#14); abuse controls #213/#214; delete Python login mounts (follow-up) |
+| Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` on `/api/v2/auth/`; Caddy local-edge; Playwright HTTP `:5173` via Vite/`http_edge` | Auth-service refresh/me/change-password (#14 / later #33) |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
@@ -527,9 +531,9 @@ Authenticated browser traffic stays on the web tier (SSR loaders/actions). Do no
 ```text
 backend/     Python FastAPI application (src layout; Dockerfile for api)
 frontend/    React Router v7 framework-mode SSR app (Dockerfile for web)
-auth/        Dedicated JS/TS auth service (Dockerfile for local-edge)
+auth/        Dedicated JS/TS auth service (Dockerfile; always started)
 docs/        Developer documentation
-compose.yaml postgres + redis + api + web; profile local-edge adds auth + proxy
+compose.yaml postgres + redis + api + web + auth; profile local-edge adds proxy
 Makefile     Primary command entrypoint
 ```
 

@@ -6,10 +6,12 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+from jwt_mint import bearer_for
 from psycopg import Connection, sql
 from psycopg.rows import dict_row
 
 from untangled.auth.passwords import verify_password
+from untangled.auth.store import authenticate_user
 from untangled.main import app
 from untangled.mapping.well_known import SYSTEM_CONFIG_ID
 from untangled.seed.users import SEED_USERS, password_for
@@ -32,19 +34,8 @@ def auth_client(demo_schema, db_conn: Connection) -> Iterator[TestClient]:
         yield client
 
 
-def _login(client: TestClient, username: str, password: str):
-    return client.post(
-        "/auth/login",
-        data={"username": username, "password": password},
-    )
-
-
-def _bearer(client: TestClient, username: str, password: str | None = None) -> str:
-    seed = next(s for s in SEED_USERS if s.username == username)
-    pw = password if password is not None else password_for(seed)
-    login = _login(client, seed.username, pw)
-    assert login.status_code == 200
-    return login.json()["access_token"]
+def _bearer(_client: TestClient, username: str, password: str | None = None) -> str:
+    return bearer_for(username)
 
 
 def _change(
@@ -107,11 +98,11 @@ def test_change_password_success_updates_hash_and_keeps_session(
     assert verify_password(new_hash, _STRONG_NEW)
     assert not verify_password(new_hash, password_for(admin))
 
-    # Existing access token still works; login accepts new password only.
+    # Existing access token still works; store auth accepts new password only.
     me = auth_client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
-    assert _login(auth_client, admin.username, _STRONG_NEW).status_code == 200
-    assert _login(auth_client, admin.username, password_for(admin)).status_code == 401
+    assert authenticate_user(db_conn, admin.username, _STRONG_NEW) is not None
+    assert authenticate_user(db_conn, admin.username, password_for(admin)) is None
 
 
 @pytest.mark.parametrize(

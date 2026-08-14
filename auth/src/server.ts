@@ -1,12 +1,10 @@
 import http from "node:http";
 import { pathToFileURL } from "node:url";
 
-import { load_config_from_env } from "./config.js";
+import { load_config_from_env, type AuthConfig } from "./config.js";
 import { handle_request } from "./http.js";
 
-export function create_server(
-  config = load_config_from_env(),
-): http.Server {
+export function create_server(config: AuthConfig): http.Server {
   return http.createServer((request, response) => {
     void handle_request(request, response, config).catch(() => {
       if (!response.headersSent) {
@@ -33,7 +31,15 @@ const is_main =
   process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (is_main) {
   const port = listen_port();
-  create_server().listen(port, "0.0.0.0", () => {
-    process.stdout.write(`untangled-auth listening on ${port}\n`);
-  });
+  void load_config_from_env()
+    .then((config) => {
+      create_server(config).listen(port, "0.0.0.0", () => {
+        process.stdout.write(`untangled-auth listening on ${port}\n`);
+      });
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : "failed to start";
+      process.stderr.write(`untangled-auth failed to start: ${message}\n`);
+      process.exit(1);
+    });
 }

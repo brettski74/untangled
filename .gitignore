@@ -161,6 +161,8 @@ docs/TESTPLAN-161.md
 # Local Compose reverse-proxy TLS material (`make local-certs` / `make up`).
 deploy/caddy/certs/dev.crt
 deploy/caddy/certs/dev.key
+# Local ES256 JWT material (`make local-jwt-keys` / `make up`). Never commit.
+deploy/jwt/*.pem
 .venv
 env/
 venv/

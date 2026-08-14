@@ -1,11 +1,11 @@
 /**
- * Server-side auth API seam: login, /auth/me, Bearer fetch.
+ * Server-side auth API seam: /auth/me, Bearer fetch, change-password.
+ * Browser login posts to the auth service; this module never sees passwords.
  * Refresh is deferred to #14 — this module is the single place to extend later.
  */
 import { ApiForbiddenError, ApiUnauthorizedError } from "./errors";
 import {
   change_password_response_schema,
-  token_pair_schema,
   user_profile_schema,
   type UserProfile,
 } from "./schemas";
@@ -18,37 +18,6 @@ export function api_base_url(): string {
     );
   }
   return base.replace(/\/$/, "");
-}
-
-/**
- * Login via OAuth2 password form. Returns only the access token;
- * refresh_token is discarded immediately and never logged.
- */
-export async function login_with_password(
-  username: string,
-  password: string,
-): Promise<{ access_token: string }> {
-  const response = await fetch(`${api_base_url()}/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: new URLSearchParams({ username, password }),
-  });
-
-  if (response.status === 401) {
-    throw new ApiUnauthorizedError("Invalid username or password");
-  }
-  if (!response.ok) {
-    throw new Error(`Login failed with status ${response.status}`);
-  }
-
-  const body: unknown = await response.json();
-  const pair = token_pair_schema.parse(body);
-  // Explicitly drop refresh_token — do not return or retain it.
-  const { access_token } = pair;
-  return { access_token };
 }
 
 export async function fetch_me(access_token: string): Promise<UserProfile> {

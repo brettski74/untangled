@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { session_action_for_status } from "./api.server";
 import { safe_next_path } from "./next_path";
-import { token_pair_schema, user_profile_schema } from "./schemas";
+import { user_profile_schema } from "./schemas";
 import { forbidden_response, login_redirect_url } from "./gate.server";
 
 describe("safe_next_path", () => {
@@ -49,17 +49,6 @@ describe("forbidden_response", () => {
     const response = forbidden_response();
     expect(response.status).toBe(403);
     expect(response.statusText).toBe("Forbidden");
-  });
-});
-
-describe("token_pair_schema", () => {
-  it("parses the login envelope and allows missing refresh_token", () => {
-    const pair = token_pair_schema.parse({
-      access_token: "access-abc",
-      token_type: "bearer",
-    });
-    expect(pair.access_token).toBe("access-abc");
-    expect(pair.refresh_token).toBeUndefined();
   });
 });
 

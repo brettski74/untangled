@@ -18,6 +18,11 @@
 :443 {
 	tls /etc/caddy/certs/dev.crt /etc/caddy/certs/dev.key
 
+	# One public origin: auth Origin checks are exact (no localhost alias folding).
+	# Host port is published as UNTANGLED_PROXY_HOST_PORT (container listens on 443).
+	@not_canonical header_regexp Host (?i)^(localhost|\[::1\]|::1)(:\d+)?$
+	redir @not_canonical https://127.0.0.1:{$UNTANGLED_PROXY_HOST_PORT:8443}{uri} 308
+
 	@auth_session path /api/v2/auth /api/v2/auth/*
 
 	handle @auth_session {

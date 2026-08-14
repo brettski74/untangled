@@ -15,6 +15,6 @@ Future tickets extend the existing `backend/` and `frontend/` trees in place. Th
 
 See [local-development.md](./local-development.md) for setup, PostgreSQL (`make db-up`),
 smoke tests, intentional `make migrate` / `make seed`, and auth/`/docs` Authorize.
-See [edge-proxy.md](./edge-proxy.md) for the local HTTPS origin, path contract, and cookie/CSRF skeleton.
+See [edge-proxy.md](./edge-proxy.md) for the local HTTPS origin, path contract, and cookie/CSRF rules.
 See [class-definitions.md](./class-definitions.md) for YAML class definitions,
 `make models` (Pydantic / Zod codegen), and diff-based migrate / persistence.

@@ -18,7 +18,7 @@ make frontend-lint
 make frontend-test
 ```
 
-Or from this directory after `npm ci` (export `UNTANGLED_API_BASE_URL` and `UNTANGLED_SESSION_SECRET` for `dev`/`start`):
+Or from this directory after `npm ci` (export `UNTANGLED_API_BASE_URL` and `UNTANGLED_JWT_PUBLIC_KEY_PATH` for `dev`/`start`):
 
 ```bash
 npm run dev

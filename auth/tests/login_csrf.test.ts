@@ -3,15 +3,15 @@ import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 
-import { load_config_from_env } from "../src/config.js";
+import { jwtVerify } from "jose";
+
 import {
+  ACCESS_COOKIE_NAME,
   CSRF_COOKIE_NAME,
   parse_cookie_header,
-  SKELETON_COOKIE_NAME,
 } from "../src/cookies.js";
 import { create_server } from "../src/server.js";
-
-const PUBLIC_ORIGIN = "https://127.0.0.1:8443";
+import { PUBLIC_ORIGIN, TEST_USER_ID, test_config } from "./helpers.js";
 
 function cookie_from_set_cookie(set_cookies: string[], name: string): string | undefined {
   for (const line of set_cookies) {
@@ -31,14 +31,15 @@ function cookie_value(set_cookies: string[], name: string): string | undefined {
   return parse_cookie_header(line.split(";")[0])?.get(name);
 }
 
-describe("auth csrf + login skeleton", () => {
+describe("auth csrf + login", () => {
   let server: Server;
   let base_url: string;
+  let public_key: CryptoKey;
 
   before(async () => {
-    process.env.UNTANGLED_PUBLIC_ORIGIN = PUBLIC_ORIGIN;
-    process.env.UNTANGLED_COOKIE_SECURE = "true";
-    server = create_server(load_config_from_env());
+    const config = await test_config();
+    public_key = config.public_key;
+    server = create_server(config);
     await new Promise<void>((resolve) => {
       server.listen(0, "127.0.0.1", () => resolve());
     });
@@ -86,10 +87,10 @@ describe("auth csrf + login skeleton", () => {
         "X-CSRF-Token": token,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: "username=admin&password=secret",
+      body: "username=admin&password=admin-change-me",
     });
     assert.equal(response.status, 403);
-    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), SKELETON_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
   });
 
   it("rejects login with a different origin (localhost vs 127.0.0.1)", async () => {
@@ -102,10 +103,10 @@ describe("auth csrf + login skeleton", () => {
         "X-CSRF-Token": token,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: "username=admin&password=secret",
+      body: "username=admin&password=admin-change-me",
     });
     assert.equal(response.status, 403);
-    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), SKELETON_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
   });
 
   it("rejects login with missing csrf", async () => {
@@ -115,10 +116,10 @@ describe("auth csrf + login skeleton", () => {
         Origin: PUBLIC_ORIGIN,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: "username=admin&password=secret",
+      body: "username=admin&password=admin-change-me",
     });
     assert.equal(response.status, 403);
-    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), SKELETON_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
   });
 
   it("rejects login with wrong csrf", async () => {
@@ -132,13 +133,13 @@ describe("auth csrf + login skeleton", () => {
         "X-CSRF-Token": other.token,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: "username=admin&password=secret",
+      body: "username=admin&password=admin-change-me",
     });
     assert.equal(response.status, 403);
-    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), SKELETON_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
   });
 
-  it("accepts matching Origin and header csrf and sets the skeleton cookie", async () => {
+  it("rejects invalid credentials with 401 and no access cookie", async () => {
     const { token, cookie } = await issue_csrf();
     const response = await fetch(`${base_url}/api/v2/auth/login`, {
       method: "POST",
@@ -146,20 +147,47 @@ describe("auth csrf + login skeleton", () => {
         Origin: PUBLIC_ORIGIN,
         Cookie: cookie,
         "X-CSRF-Token": token,
+        Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: "username=admin&password=secret",
+      body: "username=admin&password=wrong-password",
+    });
+    assert.equal(response.status, 401);
+    const body: unknown = await response.json();
+    assert.deepEqual(body, { detail: "Invalid username or password" });
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
+  });
+
+  it("accepts matching Origin and header csrf and sets an ES256 access cookie", async () => {
+    const { token, cookie } = await issue_csrf();
+    const response = await fetch(`${base_url}/api/v2/auth/login`, {
+      method: "POST",
+      headers: {
+        Origin: PUBLIC_ORIGIN,
+        Cookie: cookie,
+        "X-CSRF-Token": token,
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "username=admin&password=admin-change-me",
     });
     assert.equal(response.status, 200);
-    const line = cookie_from_set_cookie(response.headers.getSetCookie(), SKELETON_COOKIE_NAME);
+    assert.deepEqual(await response.json(), { ok: true });
+    const line = cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME);
     assert.ok(line != null);
     assert.match(line, /HttpOnly/i);
     assert.match(line, /Secure/i);
     assert.match(line, /SameSite=Lax/i);
     assert.match(line, /Path=\//);
+    assert.match(line, /Max-Age=/i);
     assert.doesNotMatch(line, /Domain=/i);
-    const value = cookie_value(response.headers.getSetCookie(), SKELETON_COOKIE_NAME);
-    assert.ok(value != null && value.length >= 32);
+    const value = cookie_value(response.headers.getSetCookie(), ACCESS_COOKIE_NAME);
+    assert.ok(value != null);
+    const { payload } = await jwtVerify(value, public_key, { algorithms: ["ES256"] });
+    assert.equal(payload.sub, TEST_USER_ID);
+    assert.equal(payload.typ, "access");
+    assert.equal(typeof payload.iat, "number");
+    assert.equal(typeof payload.exp, "number");
   });
 
   it("accepts matching Origin and form csrf_token", async () => {
@@ -167,10 +195,33 @@ describe("auth csrf + login skeleton", () => {
     const body = new URLSearchParams({
       csrf_token: token,
       username: "admin",
-      password: "secret",
+      password: "admin-change-me",
     });
     const response = await fetch(`${base_url}/api/v2/auth/login`, {
       method: "POST",
+      headers: {
+        Origin: PUBLIC_ORIGIN,
+        Cookie: cookie,
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    assert.equal(response.status, 200);
+    assert.ok(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME) != null);
+  });
+
+  it("redirects form posts without JSON Accept to a safe next path", async () => {
+    const { token, cookie } = await issue_csrf();
+    const body = new URLSearchParams({
+      csrf_token: token,
+      username: "admin",
+      password: "admin-change-me",
+      next: "/incident/lists/all",
+    });
+    const response = await fetch(`${base_url}/api/v2/auth/login`, {
+      method: "POST",
+      redirect: "manual",
       headers: {
         Origin: PUBLIC_ORIGIN,
         Cookie: cookie,
@@ -178,7 +229,29 @@ describe("auth csrf + login skeleton", () => {
       },
       body,
     });
-    assert.equal(response.status, 200);
-    assert.ok(cookie_from_set_cookie(response.headers.getSetCookie(), SKELETON_COOKIE_NAME) != null);
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("Location"), "/incident/lists/all");
+  });
+
+  it("rejects open-redirect next values", async () => {
+    const { token, cookie } = await issue_csrf();
+    const body = new URLSearchParams({
+      csrf_token: token,
+      username: "admin",
+      password: "admin-change-me",
+      next: "https://evil.example/phish",
+    });
+    const response = await fetch(`${base_url}/api/v2/auth/login`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        Origin: PUBLIC_ORIGIN,
+        Cookie: cookie,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("Location"), "/");
   });
 });
