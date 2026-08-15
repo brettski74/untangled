@@ -98,7 +98,7 @@ describe("auth csrf + login", () => {
     const response = await fetch(`${base_url}/api/v2/auth/login`, {
       method: "POST",
       headers: {
-        Origin: "https://localhost:8443",
+        Origin: "https://127.0.0.1:8443",
         Cookie: cookie,
         "X-CSRF-Token": token,
         "Content-Type": "application/x-www-form-urlencoded",

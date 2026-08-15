@@ -357,6 +357,7 @@ AI agents must:
 * Follow this document strictly
 * Prefer simple, maintainable solutions
 * Avoid unnecessary complexity
+* Prefer `localhost` over `127.0.0.1` or `::1` as the loopback hostname in new URLs, docs, and defaults. Do not refactor unrelated existing `127.0.0.1` (bind addresses, literal client IPs, connection strings) unless the change already touches that behaviour.
 * never use raw git commands for operations covered by the git-ai skill and its scripts
 * always use git-ai scripts when they provide what is needed
 * never chain gi-ai scripts with other commands

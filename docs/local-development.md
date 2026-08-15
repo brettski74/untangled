@@ -99,7 +99,7 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 | `UNTANGLED_JWT_PRIVATE_KEY_PATH` / `UNTANGLED_JWT_PUBLIC_KEY_PATH` | Gitignored `deploy/jwt/dev-es256-*.pem` (`make local-jwt-keys`). Auth gets both; API and web get the public key only. |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
 | `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days; unused until #14) |
-| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose HTTPS: `https://127.0.0.1:8443`. Host-dev/Playwright: `http://127.0.0.1:5173` |
+| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose HTTPS: `https://localhost:8443`. Host-dev/Playwright: `http://127.0.0.1:5173` |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
 | `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` (coherence signaling; shared with future authz cache) |
@@ -180,7 +180,7 @@ Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
 
 ### UI login (SSR gate)
 
-Local-dev convention: after `make up` + `make migrate` + `make seed`, open `https://127.0.0.1:8443` (trust the local cert or use `curl -k`) and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above). `https://localhost:8443` redirects there (`localhost` is a different origin). Host-dev: `make auth-dev` in one terminal and `make frontend-dev` in another, then `http://127.0.0.1:5173`.
+Local-dev convention: after `make up` + `make migrate` + `make seed`, open `https://localhost:8443` (trust the local cert or use `curl -k`) and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above). `https://127.0.0.1:8443` redirects there (`127.0.0.1` is a different origin). Host-dev: `make auth-dev` in one terminal and `make frontend-dev` in another, then `http://127.0.0.1:5173`.
 
 - Unauthenticated routes redirect to `/login` (fail-closed).
 - The login page is SSR; the browser posts to `POST /api/v2/auth/login` after `GET /api/v2/auth/csrf`. Auth sets HttpOnly `__untangled_access` (ES256). The JWT is not in the JSON body.
@@ -459,7 +459,7 @@ After `make up` → `make migrate` → `make seed`:
 - API health: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`
 - API docs: open `http://127.0.0.1:8000/docs` and run the Authorize loop above
 - Web: open `http://127.0.0.1:3000` (SSR only; login needs the public origin or http_edge)
-- HTTPS proxy (browser origin): `curl -k https://127.0.0.1:8443/` and `curl -k https://127.0.0.1:8443/api/v2/auth/csrf` — see [edge-proxy.md](./edge-proxy.md)
+- HTTPS proxy (browser origin): `curl -k https://localhost:8443/` and `curl -k https://localhost:8443/api/v2/auth/csrf` — see [edge-proxy.md](./edge-proxy.md)
 - Postgres: `docker compose exec postgres pg_isready -U untangled -d untangled`
 - Redis: `docker compose exec redis redis-cli ping` → `PONG`
 - Web → API on the Compose network:

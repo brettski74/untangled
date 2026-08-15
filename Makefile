@@ -79,8 +79,8 @@ $(LOCAL_EDGE_CERT) $(LOCAL_EDGE_KEY) &:
 	mkdir -p deploy/caddy/certs; \
 	openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
 		-keyout "$$key" -out "$$cert" \
-		-subj "/CN=127.0.0.1" \
-		-addext "subjectAltName=IP:127.0.0.1,DNS:localhost"; \
+		-subj "/CN=localhost" \
+		-addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"; \
 	echo "generated self-signed $$cert and $$key"
 
 local-certs: $(LOCAL_EDGE_CERT) $(LOCAL_EDGE_KEY) ## Create self-signed proxy TLS files when both are missing
@@ -120,7 +120,7 @@ ifeq ($(WITH_HOST_INSTALL),1)
 endif
 	$(MAKE) up migrate seed
 	@echo "==> Reinstall complete"
-	@echo "    Proxy (browser origin, interim HTTPS): https://127.0.0.1:8443"
+	@echo "    Proxy (browser origin, interim HTTPS): https://localhost:8443"
 	@echo "    Web: http://127.0.0.1:3000"
 	@echo "    Auth: http://127.0.0.1:3001"
 	@echo "    Host-dev / Playwright: http://127.0.0.1:5173 (Vite or http_edge)"
@@ -133,7 +133,7 @@ ifeq ($(WITH_HOST_INSTALL),1)
 endif
 	$(MAKE) up migrate seed
 	@echo "==> Reinstall complete"
-	@echo "    Proxy (browser origin, interim HTTPS): https://127.0.0.1:8443"
+	@echo "    Proxy (browser origin, interim HTTPS): https://localhost:8443"
 	@echo "    Web: http://127.0.0.1:3000"
 	@echo "    Auth: http://127.0.0.1:3001"
 	@echo "    Host-dev / Playwright: http://127.0.0.1:5173 (Vite or http_edge)"

@@ -15,7 +15,7 @@ function require_exact_origin(raw: string, label: string): string {
   const public_origin = raw.trim();
   if (public_origin === "") {
     throw new Error(
-      `${label} is required (exact origin, e.g. https://127.0.0.1:8443)`,
+      `${label} is required (exact origin, e.g. https://localhost:8443)`,
     );
   }
   try {

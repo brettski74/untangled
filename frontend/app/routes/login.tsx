@@ -91,7 +91,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
       }
       if (response.status === 403) {
         set_error(
-          "Sign-in was blocked from this origin. Use the exact site address (127.0.0.1 and localhost are different), then refresh.",
+          "Sign-in was blocked from this origin. Use the exact site address (localhost and 127.0.0.1 are different), then refresh.",
         );
         return;
       }

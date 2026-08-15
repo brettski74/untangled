@@ -19,7 +19,7 @@ describe("config", () => {
     await assert.rejects(
       () =>
         load_config_from_env({
-          UNTANGLED_PUBLIC_ORIGIN: "https://127.0.0.1:8443/extra",
+          UNTANGLED_PUBLIC_ORIGIN: "https://localhost:8443/extra",
         } as NodeJS.ProcessEnv),
       /exact origin/,
     );
@@ -35,11 +35,11 @@ describe("config", () => {
 });
 
 describe("origin", () => {
-  const public_origin = "https://127.0.0.1:8443";
+  const public_origin = "https://localhost:8443";
   it("matches only the exact origin", () => {
-    assert.equal(origin_is_exact_match("https://127.0.0.1:8443", public_origin), true);
-    assert.equal(origin_is_exact_match("https://localhost:8443", public_origin), false);
-    assert.equal(origin_is_exact_match("https://127.0.0.1:443", public_origin), false);
+    assert.equal(origin_is_exact_match("https://localhost:8443", public_origin), true);
+    assert.equal(origin_is_exact_match("https://127.0.0.1:8443", public_origin), false);
+    assert.equal(origin_is_exact_match("https://localhost:443", public_origin), false);
     assert.equal(origin_is_exact_match(undefined, public_origin), false);
     assert.equal(origin_is_exact_match("", public_origin), false);
   });

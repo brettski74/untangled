@@ -14,7 +14,7 @@ Untangled M1 uses **React Router v7 in framework mode** for the web application.
 
 The login **page** is SSR (`GET /login`). The browser posts credentials to `POST /api/v2/auth/login` (same origin via Caddy, Vite, or `http_edge`). Auth sets HttpOnly `__untangled_access`. SSR loaders read and verify that cookie with the ES256 public key, then call the API with Bearer. The JWT is never exposed to JavaScript and is not returned in the login JSON body. Token refresh is #14; broader auth hardening is #67 / #213–#216.
 
-The local HTTPS reverse proxy and browser→auth CSRF/cookie contract are documented in [edge-proxy.md](./edge-proxy.md). Playwright and `make frontend-dev` use HTTP `:5173` (Vite proxies `/api/v2/auth` to the auth service). Compose browser login uses `https://127.0.0.1:8443`.
+The local HTTPS reverse proxy and browser→auth CSRF/cookie contract are documented in [edge-proxy.md](./edge-proxy.md). Playwright and `make frontend-dev` use HTTP `:5173` (Vite proxies `/api/v2/auth` to the auth service). Compose browser login uses `https://localhost:8443`.
 
 Required web env (Compose sets these; `make frontend-dev` supplies local defaults):
 

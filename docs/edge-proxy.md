@@ -39,7 +39,7 @@ Rocky Compose publishes auth on host port **3001** (`UNTANGLED_AUTH_HOST_PORT`) 
 
 `make up` enables Compose profile `local-edge` (Caddy only). Auth runs without that profile so Rocky `./deploy.sh` starts it too.
 
-- Browser origin: `https://127.0.0.1:8443` (`UNTANGLED_PROXY_HOST_PORT`, default 8443 → container 443). `https://localhost:8443` and `https://[::1]:8443` **308** to that origin so auth's exact-Origin check still sees one host.
+- Browser origin: `https://localhost:8443` (`UNTANGLED_PROXY_HOST_PORT`, default 8443 → container 443). `https://127.0.0.1:8443` and `https://[::1]:8443` **308** to that origin so auth's exact-Origin check still sees one host.
 - Host `3000` (web), `3001` (auth), and `8000` (api) stay published for host-dev and `/docs`. They are **not** the browser credential origin.
 - Playwright / `make frontend-dev`: `http://127.0.0.1:5173` via Vite proxy or `node auth/scripts/http_edge.mjs`.
 
@@ -49,7 +49,7 @@ Caddy uses gitignored `deploy/caddy/certs/dev.crt` and `dev.key`. You always nee
 
 | State | `make up` / `make local-certs` |
 | ----- | ------------------------------ |
-| Both missing | Generate a self-signed pair (`127.0.0.1` + `localhost` SAN) |
+| Both missing | Generate a self-signed pair (`DNS:localhost`, `IP:127.0.0.1`, `IP:::1`) |
 | Both present | Use as-is (drop in mkcert or another local CA) |
 | Exactly one present | Fail; copy the matching file or remove the orphan |
 
@@ -70,7 +70,7 @@ Auth-set cookies are **host-only** (no `Domain`), `Path=/`, `SameSite=Lax`, `Sec
 
 `SameSite=Lax` is **not** enough for login CSRF (forced login does not need an existing cookie). `POST /api/v2/auth/login` requires:
 
-1. Exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` (scheme + host + port). Default local Compose `https://127.0.0.1:8443`. Host-dev Playwright `http://127.0.0.1:5173`. `localhost` is a different origin; no alias folding.
+1. Exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` (scheme + host + port). Default local Compose `https://localhost:8443`. Host-dev Playwright `http://127.0.0.1:5173`. `127.0.0.1` is a different origin; no alias folding.
 2. CSRF token from `X-CSRF-Token` or form field `csrf_token` matching the CSRF cookie (CSPRNG; double-submit). The login page fetches CSRF from the **browser**.
 
 Missing or mismatched Origin/CSRF → **403**, no access cookie. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Invalid password → **401** `Invalid username or password`.
@@ -86,9 +86,9 @@ Full production trusted-proxy / hop-count productization is out of scope. Spoofe
 After `make up`:
 
 ```bash
-curl -k https://127.0.0.1:8443/
-curl -k https://127.0.0.1:8443/api/v2/auth/csrf
-curl -k -X POST https://127.0.0.1:8443/api/v2/auth/login
+curl -k https://localhost:8443/
+curl -k https://localhost:8443/api/v2/auth/csrf
+curl -k -X POST https://localhost:8443/api/v2/auth/login
 ```
 
 The last call should be **403** (no Origin/CSRF). The csrf call should be **200** with a `Set-Cookie` for `__untangled_csrf`.

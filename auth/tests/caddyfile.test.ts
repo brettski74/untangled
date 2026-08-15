@@ -35,14 +35,14 @@ describe("Caddyfile path contract", () => {
     assert.match(caddyfile, /tls \/etc\/caddy\/certs\/dev\.crt \/etc\/caddy\/certs\/dev\.key/);
   });
 
-  it("canonicalizes localhost and ::1 to 127.0.0.1 without folding Origin in auth", () => {
+  it("canonicalizes 127.0.0.1 and ::1 to localhost without folding Origin in auth", () => {
     assert.match(
       caddyfile,
-      /header_regexp Host \(\?i\)\^\(localhost\|\\\[::1\\\]\|::1\)\(:\\d\+\)\?\$/,
+      /header_regexp Host \(\?i\)\^\(127\\\.0\\\.0\\\.1\|\\\[::1\\\]\|::1\)\(:\\d\+\)\?\$/,
     );
     assert.match(
       caddyfile,
-      /redir @not_canonical https:\/\/127\.0\.0\.1:\{\$UNTANGLED_PROXY_HOST_PORT:8443\}\{uri\} 308/,
+      /redir @not_canonical https:\/\/localhost:\{\$UNTANGLED_PROXY_HOST_PORT:8443\}\{uri\} 308/,
     );
   });
 });

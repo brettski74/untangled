@@ -4,7 +4,7 @@ import type { AuthConfig } from "../src/config.js";
 import { cookie_secure_from_env } from "../src/cookie_secure.js";
 import type { AuthenticateFn } from "../src/users.js";
 
-export const PUBLIC_ORIGIN = "https://127.0.0.1:8443";
+export const PUBLIC_ORIGIN = "https://localhost:8443";
 export const TEST_USER_ID = "01900000-0000-7000-8000-000000000001";
 
 export async function test_config(
