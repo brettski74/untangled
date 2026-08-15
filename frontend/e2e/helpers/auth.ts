@@ -79,7 +79,7 @@ export async function login_expect_error(
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("alert")).toContainText(
-    /Invalid username or password|required/i,
+    /Access denied|required/i,
   );
   await expect(page).toHaveURL(/\/login/);
 }

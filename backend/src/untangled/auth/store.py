@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from uuid import UUID
 
@@ -12,10 +13,27 @@ from untangled.auth.passwords import verify_password
 from untangled.auth.tokens import hash_refresh_token
 from untangled.mapping.datetime_utc import utc_now
 
+_USERNAME_RE = re.compile(r"^[a-z0-9_]{3,32}$")
+
 
 def normalize_username(username: str) -> str:
     """Case-fold login identifiers for storage and lookup."""
     return username.strip().lower()
+
+
+def username_is_valid(folded: str) -> bool:
+    """True when ``folded`` already matches stored username rules."""
+    return _USERNAME_RE.fullmatch(folded) is not None
+
+
+def validate_username(username: str) -> str:
+    """Fold and reject usernames that fail length/charset rules."""
+    folded = normalize_username(username)
+    if not username_is_valid(folded):
+        raise ValueError(
+            "username must be 3-32 ASCII letters, digits, or underscores"
+        )
+    return folded
 
 
 def fetch_user_by_username(conn: Connection, username: str) -> dict[str, Any] | None:
@@ -23,7 +41,8 @@ def fetch_user_by_username(conn: Connection, username: str) -> dict[str, Any] | 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             sql.SQL(
-                "SELECT id, username, password_hash, display_name, is_active "
+                "SELECT id, username, password_hash, display_name, is_active, "
+                "failed_login_count "
                 'FROM {} WHERE username = {}'
             ).format(sql.Identifier("user"), sql.Placeholder()),
             (normalize_username(username),),
@@ -37,7 +56,8 @@ def fetch_user_by_id(conn: Connection, user_id: UUID) -> dict[str, Any] | None:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             sql.SQL(
-                "SELECT id, username, password_hash, display_name, is_active "
+                "SELECT id, username, password_hash, display_name, is_active, "
+                "failed_login_count "
                 'FROM {} WHERE id = {}'
             ).format(sql.Identifier("user"), sql.Placeholder()),
             (user_id,),

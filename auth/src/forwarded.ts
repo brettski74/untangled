@@ -1,21 +1,20 @@
 import type { IncomingMessage } from "node:http";
 
-/** Client IP Caddy asserted via overwritten Forwarded, else the socket peer. */
-export function client_ip(request: IncomingMessage): string | undefined {
-  const forwarded = header_value(request.headers.forwarded);
-  const from_forwarded = parse_forwarded_for(forwarded);
-  if (from_forwarded != null) {
-    return from_forwarded;
-  }
-  return request.socket.remoteAddress ?? undefined;
-}
+export type ForwardedIdentity = {
+  for?: string;
+  proto?: string;
+  host?: string;
+};
 
-export function parse_forwarded_for(header: string | undefined): string | undefined {
-  if (header == null || header === "") {
+function header_value(value: string | string[] | undefined): string | undefined {
+  if (value == null) {
     return undefined;
   }
-  const first = header.split(",")[0]?.trim() ?? "";
-  const match = /(?:^|;)\s*for=([^;]+)/i.exec(first);
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function param(segment: string, name: string): string | undefined {
+  const match = new RegExp(`(?:^|;)\\s*${name}=([^;]+)`, "i").exec(segment);
   if (match == null || match[1] == null) {
     return undefined;
   }
@@ -42,9 +41,50 @@ function normalize_forwarded_node(raw: string): string | undefined {
   return value;
 }
 
-function header_value(value: string | string[] | undefined): string | undefined {
-  if (value == null) {
-    return undefined;
+export function parse_forwarded(header: string | undefined): ForwardedIdentity {
+  if (header == null || header === "") {
+    return {};
   }
-  return Array.isArray(value) ? value[0] : value;
+  const first = header.split(",")[0]?.trim() ?? "";
+  return {
+    for: param(first, "for"),
+    proto: param(first, "proto"),
+    host: param(first, "host"),
+  };
+}
+
+/** Client IP Caddy asserted via overwritten Forwarded, else the socket peer. */
+export function parse_forwarded_for(header: string | undefined): string | undefined {
+  return parse_forwarded(header).for;
+}
+
+export function client_ip(request: IncomingMessage): string | undefined {
+  return request_identity(request, undefined).source_ip;
+}
+
+export function request_identity(
+  request: IncomingMessage,
+  public_origin: string | undefined,
+): {
+  source_ip: string | undefined;
+  protocol: string | undefined;
+  host: string | undefined;
+} {
+  const forwarded = parse_forwarded(header_value(request.headers.forwarded));
+  let protocol = forwarded.proto;
+  let host = forwarded.host;
+  if ((protocol == null || host == null) && public_origin != null && public_origin !== "") {
+    try {
+      const origin = new URL(public_origin);
+      protocol = protocol ?? origin.protocol.replace(":", "");
+      host = host ?? origin.host;
+    } catch {
+      // public_origin is validated at config load
+    }
+  }
+  return {
+    source_ip: forwarded.for ?? request.socket.remoteAddress ?? undefined,
+    protocol,
+    host,
+  };
 }

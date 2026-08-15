@@ -1,6 +1,19 @@
+import pg from "pg";
+
+import { make_file_audit_sink, type AuditSink } from "./audit.js";
 import { cookie_secure_from_env } from "./cookie_secure.js";
+import { stub_expiry, type ExpiryEvaluator } from "./expiry.js";
+import { make_hash_slot_limiter, type HashSlotLimiter } from "./hash_slots.js";
 import { load_private_key, load_public_key } from "./keys.js";
-import { make_authenticate, type AuthenticateFn } from "./users.js";
+import {
+  LOGIN_HASH_CONCURRENCY_DEFAULT,
+  type LoginProcessSettings,
+} from "./login_settings.js";
+import { draw_process_time_ms, sleep_ms } from "./padding.js";
+import { make_dummy_hash, verify_password } from "./passwords.js";
+import { stub_rate_limit, type RateLimitEvaluator } from "./rate_limit.js";
+import { make_login_settings_cache, type LoginSettingsSource } from "./system_config.js";
+import { make_user_repository, type UserRepository } from "./users.js";
 
 export type AuthConfig = {
   public_origin: string;
@@ -8,7 +21,17 @@ export type AuthConfig = {
   private_key: CryptoKey;
   public_key: CryptoKey;
   access_token_ttl_seconds: number;
-  authenticate: AuthenticateFn;
+  get_settings: () => Promise<LoginProcessSettings>;
+  hash_slots: HashSlotLimiter;
+  rate_limit: RateLimitEvaluator;
+  expiry: ExpiryEvaluator;
+  users: UserRepository;
+  verify_password: (hash: string, password: string) => Promise<boolean>;
+  dummy_hash: string;
+  audit: AuditSink;
+  draw_t: (min: number, max: number) => number;
+  now_ms: () => number;
+  sleep: (ms: number) => Promise<void>;
 };
 
 function require_exact_origin(raw: string, label: string): string {
@@ -54,6 +77,30 @@ function require_database_url(env: NodeJS.ProcessEnv): string {
   return url;
 }
 
+function audit_log_dir(env: NodeJS.ProcessEnv): string {
+  const dir = env.UNTANGLED_AUDIT_LOG_DIR?.trim() ?? "";
+  if (dir !== "") {
+    return dir;
+  }
+  return "/var/log/untangled/audit";
+}
+
+function audit_rollover_bytes(env: NodeJS.ProcessEnv): number {
+  const raw = env.UNTANGLED_AUDIT_ROLLOVER_BYTES?.trim() ?? "";
+  if (raw === "") {
+    return 1_048_576;
+  }
+  return Number(raw);
+}
+
+function audit_rollover_seconds(env: NodeJS.ProcessEnv): number {
+  const raw = env.UNTANGLED_AUDIT_ROLLOVER_SECONDS?.trim() ?? "";
+  if (raw === "") {
+    return 86_400;
+  }
+  return Number(raw);
+}
+
 export async function load_config_from_env(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<AuthConfig> {
@@ -61,10 +108,23 @@ export async function load_config_from_env(
     env.UNTANGLED_PUBLIC_ORIGIN ?? "",
     "UNTANGLED_PUBLIC_ORIGIN",
   );
-  const [private_key, public_key] = await Promise.all([
+  const [private_key, public_key, dummy_hash] = await Promise.all([
     load_private_key(env),
     load_public_key(env),
+    make_dummy_hash(),
   ]);
+  const pool = new pg.Pool({
+    connectionString: require_database_url(env),
+    max: 4,
+  });
+  const settings_source: LoginSettingsSource = make_login_settings_cache(pool);
+  const live_hash_limit = { value: LOGIN_HASH_CONCURRENCY_DEFAULT };
+  const get_settings = async (): Promise<LoginProcessSettings> => {
+    const settings = await settings_source.get();
+    live_hash_limit.value = settings.hash_concurrency_limit;
+    return settings;
+  };
+  await get_settings();
   return {
     public_origin,
     cookie_secure: cookie_secure_from_env(env.UNTANGLED_COOKIE_SECURE),
@@ -73,7 +133,20 @@ export async function load_config_from_env(
     access_token_ttl_seconds: access_token_ttl_seconds(
       env.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS,
     ),
-    authenticate: make_authenticate(require_database_url(env)),
+    get_settings,
+    hash_slots: make_hash_slot_limiter(() => live_hash_limit.value),
+    rate_limit: stub_rate_limit(),
+    expiry: stub_expiry(),
+    users: make_user_repository(pool),
+    verify_password,
+    dummy_hash,
+    audit: make_file_audit_sink(audit_log_dir(env), {
+      rollover_bytes: audit_rollover_bytes(env),
+      rollover_seconds: audit_rollover_seconds(env),
+    }),
+    draw_t: draw_process_time_ms,
+    now_ms: () => performance.now(),
+    sleep: sleep_ms,
   };
 }
 

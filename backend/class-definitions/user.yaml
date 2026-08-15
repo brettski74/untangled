@@ -5,7 +5,10 @@ display_name: User
 display_attribute: display_name
 description: >
   Authenticated principal for login and audit stamps. Password hashes are for
-  server use only and must never appear in API responses.
+  server use only and must never appear in API responses. Username is stored
+  folded lowercase (ASCII alnum or underscore, length 3–32).
+check_constraint:
+  - "username ~ '^[a-z0-9_]{3,32}$'::text"
 attributes:
   username:
     type: compact_text
@@ -20,3 +23,8 @@ attributes:
   is_active:
     type: boolean
     required: true
+  failed_login_count:
+    type: integer
+    required: true
+    create_default: 0
+    min_value: 0

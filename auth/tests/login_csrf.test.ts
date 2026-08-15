@@ -154,7 +154,7 @@ describe("auth csrf + login", () => {
     });
     assert.equal(response.status, 401);
     const body: unknown = await response.json();
-    assert.deepEqual(body, { detail: "Invalid username or password" });
+    assert.deepEqual(body, { detail: "Access denied" });
     assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
   });
 

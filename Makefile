@@ -190,14 +190,17 @@ frontend-dev: frontend-install local-jwt-keys ## Run the React Router dev server
 		npm run dev -- --host 127.0.0.1 --port 5173
 
 auth-dev: auth-install local-jwt-keys ## Run the auth service on :3001 (host-dev / Playwright)
+	@mkdir -p $(RUN_DIR)/audit
 	cd $(AUTH_DIR) && \
 		DATABASE_URL=$${DATABASE_URL:-postgresql://untangled:untangled@127.0.0.1:5432/untangled} \
 		UNTANGLED_PUBLIC_ORIGIN=$${UNTANGLED_PUBLIC_ORIGIN:-http://127.0.0.1:5173} \
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
 		UNTANGLED_JWT_PRIVATE_KEY_PATH=$${UNTANGLED_JWT_PRIVATE_KEY_PATH:-$(CURDIR)/$(JWT_PRIVATE)} \
 		UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
+		UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
+		UV_THREADPOOL_SIZE=$${UV_THREADPOOL_SIZE:-12} \
 		PORT=$${PORT:-3001} \
-		npx tsx src/server.ts
+		npx tsx src/main.ts
 
 models: backend-install ## Generate Pydantic, Zod, and field-meta from YAML class definitions
 	$(BACKEND_PYTHON) -m untangled.mapping

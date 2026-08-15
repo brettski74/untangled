@@ -4,7 +4,7 @@ import { generateKeyPair, SignJWT } from "jose";
 
 import { load_config_from_env } from "../src/config.js";
 import { cookie_secure_from_env } from "../src/cookie_secure.js";
-import { parse_forwarded_for } from "../src/forwarded.js";
+import { parse_forwarded, parse_forwarded_for } from "../src/forwarded.js";
 import { sign_access_token, verify_access_token } from "../src/jwt.js";
 import { load_private_key, load_public_key } from "../src/keys.js";
 import { origin_is_exact_match } from "../src/origin.js";
@@ -52,6 +52,10 @@ describe("forwarded", () => {
     assert.equal(parse_forwarded_for("for=198.51.100.10:1234"), "198.51.100.10");
     assert.equal(parse_forwarded_for(undefined), undefined);
     assert.equal(parse_forwarded_for(""), undefined);
+    assert.deepEqual(
+      parse_forwarded("for=203.0.113.9;proto=https;host=localhost:8443"),
+      { for: "203.0.113.9", proto: "https", host: "localhost:8443" },
+    );
   });
 });
 

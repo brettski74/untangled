@@ -64,6 +64,7 @@ def test_system_config_definition_flags(repo_definitions: Path) -> None:
     assert defn.check_constraints == (
         f"id = '{SYSTEM_CONFIG_ID}'::uuid",
         "password_maximum_chars > password_minimum_chars",
+        "login_process_time_minimum <= login_process_time_maximum",
     )
     by_name = {a.name_snake: a for a in defn.attributes}
     assert by_name["max_search_nesting_depth"].create_default == 3
@@ -78,6 +79,15 @@ def test_system_config_definition_flags(repo_definitions: Path) -> None:
     assert by_name["password_estimate_drift_factor"].create_default == "1.1"
     assert by_name["password_minimum_chars"].max_value == 256
     assert by_name["password_maximum_chars"].max_value == 256
+    assert by_name["login_process_time_minimum"].create_default == 300
+    assert by_name["login_process_time_minimum"].min_value == 100
+    assert by_name["login_process_time_maximum"].create_default == 500
+    assert by_name["login_process_time_maximum"].min_value == 200
+    assert by_name["login_hash_concurrency_limit"].create_default == 4
+    assert by_name["login_hash_concurrency_limit"].min_value == 1
+    assert by_name["login_hash_concurrency_limit"].max_value == 10
+    assert by_name["login_maximum_failed_count"].create_default == 5
+    assert by_name["login_maximum_failed_count"].min_value == 1
 
 
 def test_migrate_bootstraps_system_config_singleton(
@@ -101,7 +111,11 @@ def test_migrate_bootstraps_system_config_singleton(
             password_maximum_chars,
             password_acceptable_crack_time_days,
             password_guess_per_second,
-            password_estimate_drift_factor
+            password_estimate_drift_factor,
+            login_process_time_minimum,
+            login_process_time_maximum,
+            login_hash_concurrency_limit,
+            login_maximum_failed_count
         FROM system_config
         WHERE id = %s
         """,
@@ -122,6 +136,10 @@ def test_migrate_bootstraps_system_config_singleton(
         crack_days,
         guesses,
         drift,
+        login_min,
+        login_max,
+        hash_limit,
+        max_failed,
     ) = row
     assert row_id == SYSTEM_CONFIG_ID
     assert created_by == SYSTEM_USER_ID
@@ -136,6 +154,10 @@ def test_migrate_bootstraps_system_config_singleton(
     assert crack_days == SYSTEM_CONFIG_DEFAULTS["password_acceptable_crack_time_days"]
     assert guesses == SYSTEM_CONFIG_DEFAULTS["password_guess_per_second"]
     assert drift == SYSTEM_CONFIG_DEFAULTS["password_estimate_drift_factor"]
+    assert login_min == SYSTEM_CONFIG_DEFAULTS["login_process_time_minimum"]
+    assert login_max == SYSTEM_CONFIG_DEFAULTS["login_process_time_maximum"]
+    assert hash_limit == SYSTEM_CONFIG_DEFAULTS["login_hash_concurrency_limit"]
+    assert max_failed == SYSTEM_CONFIG_DEFAULTS["login_maximum_failed_count"]
 
     check = db_conn.execute(
         """
@@ -211,9 +233,13 @@ def test_check_constraint_rejects_extra_system_config_id(
                 system_config_cache_ttl_seconds,
                 password_minimum_chars, password_maximum_chars,
                 password_acceptable_crack_time_days, password_guess_per_second,
-                password_estimate_drift_factor
+                password_estimate_drift_factor,
+                login_process_time_minimum, login_process_time_maximum,
+                login_hash_concurrency_limit, login_maximum_failed_count,
+                audit_bulk_read_window_seconds, audit_bulk_read_max_searches
             ) VALUES (
-                %s, %s, %s, %s, %s, 3, 20, 50, 3, 900, 12, 128, 1000, 10000, 1.1
+                %s, %s, %s, %s, %s, 3, 20, 50, 3, 900, 12, 128, 1000, 10000, 1.1,
+                300, 500, 4, 5, 600, 100
             )
             """,
             (other_id, now, now, SYSTEM_USER_ID, SYSTEM_USER_ID),
@@ -232,6 +258,24 @@ def test_check_constraint_rejects_password_max_not_greater_than_min(
             """
             UPDATE system_config
             SET password_minimum_chars = 20, password_maximum_chars = 20
+            WHERE id = %s
+            """,
+            (SYSTEM_CONFIG_ID,),
+        )
+        db_conn.commit()
+    db_conn.rollback()
+
+
+def test_check_constraint_rejects_login_process_min_greater_than_max(
+    demo_schema,
+    db_conn: Connection,
+) -> None:
+    assert demo_schema
+    with pytest.raises(Exception):
+        db_conn.execute(
+            """
+            UPDATE system_config
+            SET login_process_time_minimum = 500, login_process_time_maximum = 200
             WHERE id = %s
             """,
             (SYSTEM_CONFIG_ID,),
@@ -506,6 +550,10 @@ def test_clamp_uses_definition_bounds() -> None:
             "password_acceptable_crack_time_days": 1000,
             "password_guess_per_second": 10000,
             "password_estimate_drift_factor": "1.1",
+            "login_process_time_minimum": 300,
+            "login_process_time_maximum": 500,
+            "login_hash_concurrency_limit": 4,
+            "login_maximum_failed_count": 5,
             "audit_bulk_read_window_seconds": 600,
             "audit_bulk_read_max_searches": 100,
         }
