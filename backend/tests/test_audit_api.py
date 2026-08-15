@@ -77,15 +77,18 @@ def _assert_no_secrets(events: list[AuditEvent]) -> None:
                 assert _STRONG_NEW not in value
 
 
-def test_python_login_and_refresh_are_gone(client: TestClient) -> None:
+def test_python_login_and_refresh_are_unregistered(client: TestClient) -> None:
     recorder = _recorder()
     recorder.events.clear()
+    expected = client.post("/auth/no-such-route").json()
     bad = _login(client, password="wrong")
-    assert bad.status_code == 410
+    assert bad.status_code == 404
+    assert bad.json() == expected
     ok = _login(client)
-    assert ok.status_code == 410
+    assert ok.status_code == 404
     refresh = client.post("/auth/refresh", json={"refresh_token": "x"})
-    assert refresh.status_code == 410
+    assert refresh.status_code == 404
+    assert "api/v2/auth/login" not in bad.text
     assert not any(e.event_type == EventType.AUTH_LOGIN for e in recorder.events)
     assert not any(e.event_type == EventType.AUTH_REFRESH for e in recorder.events)
 
@@ -140,13 +143,15 @@ def test_auth_logout_password_and_correlation(client: TestClient) -> None:
     _assert_no_secrets(recorder.events)
 
 
-def test_login_gone_even_when_audit_logger_fails(demo_schema, db_conn: Connection) -> None:
+def test_login_unregistered_even_when_audit_logger_fails(
+    demo_schema, db_conn: Connection
+) -> None:
     seed_all(db_conn)
     db_conn.commit()
     with TestClient(app) as client:
         set_audit_logger(FailingAuditLogger())
         response = _login(client)
-        assert response.status_code == 410
+        assert response.status_code == 404
     set_audit_logger(RecordingAuditLogger())
 
 

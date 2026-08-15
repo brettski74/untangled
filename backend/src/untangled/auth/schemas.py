@@ -7,20 +7,6 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
-class TokenPair(BaseModel):
-    """OAuth2-compatible token response plus rotating refresh token."""
-
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-
-
-class RefreshRequest(BaseModel):
-    """Body for exchanging a refresh token."""
-
-    refresh_token: str = Field(min_length=1)
-
-
 class LogoutRequest(BaseModel):
     """Body for revoking a refresh token."""
 
