@@ -63,7 +63,14 @@ describe("http_edge proxy", () => {
   let auth: http.Server;
   let edge: http.Server;
   let edge_port = 0;
-  let last_web: { method?: string; path?: string; body?: string } = {};
+  let web_port = 0;
+  let last_web: {
+    method?: string;
+    path?: string;
+    body?: string;
+    host?: string;
+    origin?: string;
+  } = {};
   let last_auth: { method?: string; path?: string } = {};
 
   before(async () => {
@@ -73,6 +80,8 @@ describe("http_edge proxy", () => {
         method: req.method,
         path: req.url,
         body: body.toString("utf8"),
+        host: req.headers.host,
+        origin: req.headers.origin,
       };
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
@@ -93,7 +102,7 @@ describe("http_edge proxy", () => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
     });
-    const web_port = await listen(web);
+    web_port = await listen(web);
     const auth_port = await listen(auth);
     edge = create_edge_server(
       new URL(`http://127.0.0.1:${web_port}`),
@@ -162,6 +171,22 @@ describe("http_edge proxy", () => {
       path: "/",
       body: payload,
     });
+  });
+
+  it("forwards public Host and Origin, not the upstream listen address", async () => {
+    const origin = `http://127.0.0.1:${edge_port}`;
+    const response = await fetch(edge_url("/incident/x.data"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+      },
+      body: "{}",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(last_web.host, `127.0.0.1:${edge_port}`);
+    assert.notEqual(last_web.host, `127.0.0.1:${web_port}`);
+    assert.equal(last_web.origin, origin);
   });
 
   it("PATCH JSON goes to web with body", async () => {

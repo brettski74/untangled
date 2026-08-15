@@ -66,7 +66,10 @@ export function proxy(req, res, target) {
   const incoming = new URL(req.url ?? "/", "http://127.0.0.1");
   const dest = new URL(incoming.pathname + incoming.search, target);
   const headers = copy_headers(req.headers, true);
-  headers.host = dest.host;
+  const incoming_host = req.headers.host;
+  if (typeof incoming_host !== "string" || incoming_host === "") {
+    headers.host = dest.host;
+  }
   const upstream = http.request(
     dest,
     { method: req.method, headers },
