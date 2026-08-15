@@ -2,13 +2,19 @@ import { expect, type Page, type Request } from "@playwright/test";
 
 import { SEED_USERS, type SeedUserKey } from "./users";
 
-/** True if the browser request targets the domain API (forbidden for ADR 002). */
+/** True if the browser request targets the domain API (not auth-session). */
 export function is_domain_api_request(request: Request): boolean {
   const url = request.url();
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
+    return false;
+  }
+  if (
+    parsed.pathname === "/api/v2/auth" ||
+    parsed.pathname.startsWith("/api/v2/auth/")
+  ) {
     return false;
   }
   if (

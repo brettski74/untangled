@@ -1,85 +1,131 @@
 /**
- * httpOnly session cookie holding only the access JWT.
- * See architecture/decisions/002-httponly-cookie-ssr-token-delivery.md.
+ * HttpOnly `__untangled_access` cookie: issued by the auth service, verified
+ * here with the ES256 public key. The JWT is never exposed to browser JS.
  */
-import {
-  createCookieSessionStorage,
-  type Session,
-  type SessionStorage,
-} from "react-router";
+import { importSPKI, jwtVerify } from "jose";
 
 import {
   access_token_remaining_seconds,
   cookie_secure_from_env,
+  read_jwt_public_pem,
 } from "./config.server";
 
-const ACCESS_TOKEN_KEY = "access_token";
+export const ACCESS_COOKIE_NAME = "__untangled_access";
 
-let session_storage: SessionStorage | null = null;
+let public_key: CryptoKey | null = null;
 
-function require_session_secret(): string {
-  const secret = process.env.UNTANGLED_SESSION_SECRET;
-  if (secret == null || secret === "") {
-    throw new Error(
-      "UNTANGLED_SESSION_SECRET is required; refusing to run without an explicit signing secret",
-    );
+async function jwt_public_key(): Promise<CryptoKey> {
+  if (public_key != null) {
+    return public_key;
   }
-  return secret;
+  public_key = await importSPKI(read_jwt_public_pem(), "ES256");
+  return public_key;
 }
 
-/** Lazily build storage so typecheck/build imports do not require UNTANGLED_SESSION_SECRET. */
-export function get_session_storage(): SessionStorage {
-  if (session_storage != null) {
-    return session_storage;
+/** Test helper: drop the cached key so env changes take effect. */
+export function reset_access_verifier_for_tests(): void {
+  public_key = null;
+}
+
+function parse_cookie_header(header: string | null): Map<string, string> {
+  const out = new Map<string, string>();
+  if (header == null || header === "") {
+    return out;
   }
-  const secret = require_session_secret();
-  session_storage = createCookieSessionStorage({
-    cookie: {
-      name: "__untangled_session",
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-      secure: cookie_secure_from_env(),
-      secrets: [secret],
-      // maxAge is set per commit from the access JWT exp claim.
-    },
-  });
-  return session_storage;
+  for (const part of header.split(";")) {
+    const cut = part.indexOf("=");
+    if (cut <= 0) {
+      continue;
+    }
+    const name = part.slice(0, cut).trim();
+    const value = part.slice(cut + 1).trim();
+    if (name !== "") {
+      out.set(name, value);
+    }
+  }
+  return out;
 }
 
-/** Test helper: drop the cached storage so env changes take effect. */
-export function reset_session_storage_for_tests(): void {
-  session_storage = null;
+function serialize_cookie(
+  name: string,
+  value: string,
+  attrs: {
+    http_only: boolean;
+    secure: boolean;
+    same_site: "Lax";
+    path: "/";
+    max_age: number;
+  },
+): string {
+  const parts = [
+    `${name}=${value}`,
+    `Path=${attrs.path}`,
+    `SameSite=${attrs.same_site}`,
+    `Max-Age=${attrs.max_age}`,
+  ];
+  if (attrs.http_only) {
+    parts.push("HttpOnly");
+  }
+  if (attrs.secure) {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
 }
 
-export async function get_session(request: Request): Promise<Session> {
-  const storage = get_session_storage();
-  return storage.getSession(request.headers.get("Cookie"));
+async function verified_access_token(
+  token: string,
+  key: CryptoKey,
+): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, key, {
+      algorithms: ["ES256"],
+      requiredClaims: ["sub", "iat", "exp"],
+    });
+    if (payload.typ !== "access") {
+      return null;
+    }
+    if (typeof payload.sub !== "string" || payload.sub === "") {
+      return null;
+    }
+    return token;
+  } catch {
+    return null;
+  }
 }
 
 export async function get_access_token(
   request: Request,
 ): Promise<string | null> {
-  const session = await get_session(request);
-  const token = session.get(ACCESS_TOKEN_KEY);
-  return typeof token === "string" && token.length > 0 ? token : null;
+  const token = parse_cookie_header(request.headers.get("Cookie")).get(
+    ACCESS_COOKIE_NAME,
+  );
+  if (token == null || token === "") {
+    return null;
+  }
+  const key = await jwt_public_key();
+  return verified_access_token(token, key);
 }
 
+/** Test/helper: emit the same access-cookie attributes auth sets on login. */
 export async function commit_access_token(
-  request: Request,
+  _request: Request,
   access_token: string,
 ): Promise<string> {
-  const storage = get_session_storage();
-  const session = await storage.getSession(request.headers.get("Cookie"));
-  session.set(ACCESS_TOKEN_KEY, access_token);
-  return storage.commitSession(session, {
-    maxAge: access_token_remaining_seconds(access_token),
+  return serialize_cookie(ACCESS_COOKIE_NAME, access_token, {
+    http_only: true,
+    secure: cookie_secure_from_env(),
+    same_site: "Lax",
+    path: "/",
+    max_age: access_token_remaining_seconds(access_token),
   });
 }
 
-export async function destroy_session(request: Request): Promise<string> {
-  const storage = get_session_storage();
-  const session = await storage.getSession(request.headers.get("Cookie"));
-  session.unset(ACCESS_TOKEN_KEY);
-  return storage.destroySession(session);
+export async function destroy_session(_request: Request): Promise<string> {
+  return serialize_cookie(ACCESS_COOKIE_NAME, "", {
+    http_only: true,
+    secure: cookie_secure_from_env(),
+    same_site: "Lax",
+    path: "/",
+    max_age: 0,
+  });
 }

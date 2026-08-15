@@ -3,7 +3,9 @@
 # Local-dev stays on Make (make up / migrate / seed). This script is the remote deploy path.
 #
 # Usage (from directory with compose.yaml + .env):
-#   ./deploy.sh --api-image ghcr.io/owner/untangled-api:sha-… --web-image ghcr.io/owner/untangled-web:sha-…
+#   ./deploy.sh --api-image ghcr.io/owner/untangled-api:sha-… \
+#               --web-image ghcr.io/owner/untangled-web:sha-… \
+#               --auth-image ghcr.io/owner/untangled-auth:sha-…
 #
 # Failsafes: never `down -v`, never volume wipe, never --allow-destructive.
 # Seed passwords: regenerate seed-credentials.env every run; never echo/print values.
@@ -21,10 +23,11 @@ SEED_PASSWORD_VARS=(
 
 API_IMAGE=""
 WEB_IMAGE=""
+AUTH_IMAGE=""
 
 usage() {
   cat <<'EOF'
-Usage: ./deploy.sh --api-image <ref> --web-image <ref>
+Usage: ./deploy.sh --api-image <ref> --web-image <ref> --auth-image <ref>
 
 Requires compose.yaml and .env in the current directory (CI writes .env from
 Environment secrets; values must not be logged).
@@ -52,6 +55,11 @@ while [[ $# -gt 0 ]]; do
       WEB_IMAGE="$2"
       shift 2
       ;;
+    --auth-image)
+      [[ $# -ge 2 ]] || die "--auth-image requires a value"
+      AUTH_IMAGE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -64,8 +72,11 @@ done
 
 [[ -n "$API_IMAGE" ]] || die "--api-image is required"
 [[ -n "$WEB_IMAGE" ]] || die "--web-image is required"
+[[ -n "$AUTH_IMAGE" ]] || die "--auth-image is required"
 [[ -f compose.yaml ]] || die "compose.yaml missing (run from deploy directory)"
 [[ -f .env ]] || die ".env missing (CI or operator must provision it; see .env.example)"
+[[ -f deploy/jwt/dev-es256-private.pem ]] || die "deploy/jwt/dev-es256-private.pem missing"
+[[ -f deploy/jwt/dev-es256-public.pem ]] || die "deploy/jwt/dev-es256-public.pem missing"
 
 resolve_compose() {
   if [[ -n "${COMPOSE:-}" ]]; then
@@ -89,6 +100,7 @@ resolve_compose() {
 compose() {
   # Fail closed: never inherit a developer COMPOSE_PROFILES=local-edge into Rocky.
   COMPOSE_PROFILES= UNTANGLED_API_IMAGE="$API_IMAGE" UNTANGLED_WEB_IMAGE="$WEB_IMAGE" \
+    UNTANGLED_AUTH_IMAGE="$AUTH_IMAGE" \
     "${COMPOSE_CMD[@]}" "$@"
 }
 
@@ -100,10 +112,11 @@ fi
 
 echo "deploy.sh: api=${API_IMAGE}"
 echo "deploy.sh: web=${WEB_IMAGE}"
+echo "deploy.sh: auth=${AUTH_IMAGE}"
 echo "deploy.sh: compose=${COMPOSE_CMD[*]}"
 
 echo "step: pull images"
-compose pull api web || die "[pull] image pull failed"
+compose pull api web auth || die "[pull] image pull failed"
 
 echo "step: up stack (no build; keeps named volumes; no migrate/seed yet)"
 compose up -d --no-build "${COMPOSE_WAIT_FLAG[@]}" || die "[up] compose up --no-build failed"
@@ -112,13 +125,15 @@ echo "step: health check (unauthenticated alive only)"
 ok=0
 for _ in $(seq 1 36); do
   if compose exec -T api curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 \
-    && compose exec -T web wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1; then
+    && compose exec -T web wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 \
+    && compose exec -T auth node -e "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" \
+      >/dev/null 2>&1; then
     ok=1
     break
   fi
   sleep 5
 done
-[[ "$ok" -eq 1 ]] || die "[health] stack did not become healthy (api /health or web /)"
+[[ "$ok" -eq 1 ]] || die "[health] stack did not become healthy (api /health, web /, or auth /health)"
 
 echo "step: safe migrate (refuse destructive; no volume wipe)"
 compose exec -T api python -m untangled.schema \

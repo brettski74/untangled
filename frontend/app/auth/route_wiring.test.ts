@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { public_route_ids } from "../routes";
-import { action as login_action, loader as login_loader } from "../routes/login";
+import { loader as login_loader } from "../routes/login";
 import { loader as authenticated_loader } from "../routes/authenticated";
 import { loader as home_loader } from "../routes/home";
 import { action as logout_action } from "../routes/logout";
-import { reset_session_storage_for_tests } from "./session.server";
-import { fake_access_token } from "./test_tokens";
+import { reset_access_verifier_for_tests } from "./session.server";
+import { fake_access_token, install_test_jwt_keys } from "./test_tokens";
 
 const READWRITE_PERMISSIONS = [
   "incident:create",
@@ -31,10 +31,10 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
 
 describe("route wiring", () => {
   beforeEach(() => {
-    process.env.UNTANGLED_SESSION_SECRET = "test-only-session-secret-not-for-prod";
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
-    reset_session_storage_for_tests();
+    install_test_jwt_keys();
+    reset_access_verifier_for_tests();
     vi.restoreAllMocks();
   });
 
@@ -210,39 +210,6 @@ describe("route wiring", () => {
     ).resolves.toBeNull();
   });
 
-  it("login action commits a session cookie on success", async () => {
-    const token = fake_access_token();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json({
-          access_token: token,
-          refresh_token: "discard-me",
-          token_type: "bearer",
-        }),
-      ),
-    );
-
-    const body = new URLSearchParams({
-      username: "admin",
-      password: "admin-change-me",
-      next: "/",
-    });
-    const response = (await login_action({
-      request: new Request("http://web.test/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-      }),
-      params: {},
-      context: {},
-    } as never)) as Response;
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/");
-    expect(response.headers.get("Set-Cookie")).toContain("__untangled_session");
-  });
-
   it("login loader redirects away when already authenticated", async () => {
     const { commit_access_token } = await import("./session.server");
     const set_cookie = await commit_access_token(
@@ -276,6 +243,9 @@ describe("route wiring", () => {
     } as never);
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/login");
+    expect(response.headers.get("Set-Cookie") ?? "").toMatch(
+      /__untangled_access/,
+    );
     expect(response.headers.get("Set-Cookie") ?? "").toMatch(
       /Max-Age=0|max-age=0|Expires=/i,
     );

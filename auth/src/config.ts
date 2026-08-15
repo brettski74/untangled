@@ -1,33 +1,21 @@
+import { cookie_secure_from_env } from "./cookie_secure.js";
+import { load_private_key, load_public_key } from "./keys.js";
+import { make_authenticate, type AuthenticateFn } from "./users.js";
+
 export type AuthConfig = {
   public_origin: string;
   cookie_secure: boolean;
+  private_key: CryptoKey;
+  public_key: CryptoKey;
+  access_token_ttl_seconds: number;
+  authenticate: AuthenticateFn;
 };
 
-export function cookie_secure_from_env(
-  raw: string | undefined = process.env.UNTANGLED_COOKIE_SECURE,
-): boolean {
-  if (raw == null || raw === "") {
-    return true;
-  }
-  const normalized = raw.trim().toLowerCase();
-  if (normalized === "1" || normalized === "true") {
-    return true;
-  }
-  if (normalized === "0" || normalized === "false") {
-    return false;
-  }
-  throw new Error(
-    `UNTANGLED_COOKIE_SECURE must be true/false (or 1/0); got ${JSON.stringify(raw)}`,
-  );
-}
-
-export function load_config_from_env(
-  env: NodeJS.ProcessEnv = process.env,
-): AuthConfig {
-  const public_origin = env.UNTANGLED_PUBLIC_ORIGIN?.trim() ?? "";
+function require_exact_origin(raw: string, label: string): string {
+  const public_origin = raw.trim();
   if (public_origin === "") {
     throw new Error(
-      "UNTANGLED_PUBLIC_ORIGIN is required (exact origin, e.g. https://127.0.0.1:8443)",
+      `${label} is required (exact origin, e.g. https://localhost:8443)`,
     );
   }
   try {
@@ -37,11 +25,56 @@ export function load_config_from_env(
     }
   } catch {
     throw new Error(
-      `UNTANGLED_PUBLIC_ORIGIN must be an exact origin (scheme + host + port); got ${JSON.stringify(public_origin)}`,
+      `${label} must be an exact origin (scheme + host + port); got ${JSON.stringify(raw)}`,
     );
   }
+  return public_origin;
+}
+
+function access_token_ttl_seconds(
+  raw: string | undefined = process.env.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS,
+): number {
+  if (raw == null || raw.trim() === "") {
+    return 15 * 60;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(
+      `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS must be a positive integer; got ${JSON.stringify(raw)}`,
+    );
+  }
+  return value;
+}
+
+function require_database_url(env: NodeJS.ProcessEnv): string {
+  const url = env.DATABASE_URL?.trim() ?? "";
+  if (url === "") {
+    throw new Error("DATABASE_URL is required");
+  }
+  return url;
+}
+
+export async function load_config_from_env(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<AuthConfig> {
+  const public_origin = require_exact_origin(
+    env.UNTANGLED_PUBLIC_ORIGIN ?? "",
+    "UNTANGLED_PUBLIC_ORIGIN",
+  );
+  const [private_key, public_key] = await Promise.all([
+    load_private_key(env),
+    load_public_key(env),
+  ]);
   return {
     public_origin,
     cookie_secure: cookie_secure_from_env(env.UNTANGLED_COOKIE_SECURE),
+    private_key,
+    public_key,
+    access_token_ttl_seconds: access_token_ttl_seconds(
+      env.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS,
+    ),
+    authenticate: make_authenticate(require_database_url(env)),
   };
 }
+
+export { cookie_secure_from_env };

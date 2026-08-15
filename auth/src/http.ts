@@ -5,19 +5,22 @@ import { z } from "zod";
 
 import type { AuthConfig } from "./config.js";
 import {
+  ACCESS_COOKIE_NAME,
   CSRF_COOKIE_NAME,
+  access_cookie,
   csrf_cookie,
   parse_cookie_header,
-  SKELETON_COOKIE_NAME,
-  skeleton_cookie,
 } from "./cookies.js";
 import { random_token, tokens_equal } from "./csrf.js";
+import { sign_access_token } from "./jwt.js";
+import { safe_next_path } from "./next_path.js";
 import { origin_is_exact_match } from "./origin.js";
 
 const CSRF_PATH = "/api/v2/auth/csrf";
 const LOGIN_PATH = "/api/v2/auth/login";
 const HEALTH_PATH = "/health";
 const MAX_BODY_BYTES = 8192;
+const INVALID_CREDENTIALS = "Invalid username or password";
 
 export async function handle_request(
   request: IncomingMessage,
@@ -68,7 +71,8 @@ async function handle_login(
 
   const cookies = parse_cookie_header(header_value(request.headers.cookie));
   const cookie_token = cookies.get(CSRF_COOKIE_NAME) ?? "";
-  const submitted = submitted_csrf_token(request, body);
+  const parsed_body = parse_login_body(request, body);
+  const submitted = submitted_csrf_token(request, parsed_body);
   if (
     cookie_token === "" ||
     submitted === "" ||
@@ -78,32 +82,70 @@ async function handle_login(
     return;
   }
 
-  const placeholder = random_token();
+  const username = parsed_body.username ?? "";
+  const password = parsed_body.password ?? "";
+  const user = await config.authenticate(username, password);
+  if (user == null) {
+    json(response, 401, { detail: INVALID_CREDENTIALS });
+    return;
+  }
+
+  const token = await sign_access_token(
+    config.private_key,
+    user.id,
+    config.access_token_ttl_seconds,
+  );
   const set_cookies = [
     csrf_cookie(cookie_token, config.cookie_secure),
-    skeleton_cookie(placeholder, config.cookie_secure),
+    access_cookie(token, config.cookie_secure, config.access_token_ttl_seconds),
   ];
   response.setHeader("Set-Cookie", set_cookies);
+
+  const wants_json = (header_value(request.headers.accept) ?? "").includes(
+    "application/json",
+  );
+  if (!wants_json) {
+    redirect(response, safe_next_path(parsed_body.next, "/"));
+    return;
+  }
   json(response, 200, { ok: true });
 }
 
 const login_form_schema = z.object({
   csrf_token: z.string().min(1).optional(),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  next: z.string().optional(),
 });
 
-function submitted_csrf_token(request: IncomingMessage, body: string): string {
+type LoginBody = z.infer<typeof login_form_schema>;
+
+function parse_login_body(request: IncomingMessage, body: string): LoginBody {
+  const content_type = header_value(request.headers["content-type"]) ?? "";
+  if (content_type.includes("application/json")) {
+    try {
+      const parsed: unknown = JSON.parse(body);
+      const result = login_form_schema.safeParse(parsed);
+      return result.success ? result.data : {};
+    } catch {
+      return {};
+    }
+  }
+  if (content_type.includes("application/x-www-form-urlencoded")) {
+    const result = login_form_schema.safeParse(
+      Object.fromEntries(new URLSearchParams(body)),
+    );
+    return result.success ? result.data : {};
+  }
+  return {};
+}
+
+function submitted_csrf_token(request: IncomingMessage, parsed: LoginBody): string {
   const header_token = header_value(request.headers["x-csrf-token"]);
   if (header_token != null && header_token !== "") {
     return header_token;
   }
-  const content_type = header_value(request.headers["content-type"]) ?? "";
-  if (content_type.includes("application/x-www-form-urlencoded")) {
-    const parsed = login_form_schema.safeParse(
-      Object.fromEntries(new URLSearchParams(body)),
-    );
-    return parsed.success ? (parsed.data.csrf_token ?? "") : "";
-  }
-  return "";
+  return parsed.csrf_token ?? "";
 }
 
 function json(
@@ -116,6 +158,12 @@ function json(
   response.setHeader("Content-Type", "application/json");
   response.setHeader("Content-Length", String(body.length));
   response.end(body);
+}
+
+function redirect(response: ServerResponse, location: string): void {
+  response.statusCode = 302;
+  response.setHeader("Location", location);
+  response.end();
 }
 
 function header_value(value: string | string[] | undefined): string | undefined {
@@ -142,6 +190,6 @@ async function read_body(request: IncomingMessage): Promise<string> {
 export const AUTH_SESSION_PATHS = {
   csrf: CSRF_PATH,
   login: LOGIN_PATH,
-  skeleton_cookie: SKELETON_COOKIE_NAME,
+  access_cookie: ACCESS_COOKIE_NAME,
   csrf_cookie: CSRF_COOKIE_NAME,
 } as const;

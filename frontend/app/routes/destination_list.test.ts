@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reset_session_storage_for_tests } from "../auth/session.server";
-import { fake_access_token } from "../auth/test_tokens";
+import { reset_access_verifier_for_tests } from "../auth/session.server";
+import { fake_access_token, install_test_jwt_keys } from "../auth/test_tokens";
 import { reset_default_nav_cache_for_tests } from "../shell/nav_config.server";
 
 const search_collection = vi.fn();
@@ -25,10 +25,10 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
 
 describe("destination_list loader", () => {
   beforeEach(() => {
-    process.env.UNTANGLED_SESSION_SECRET = "test-only-session-secret-not-for-prod";
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
-    reset_session_storage_for_tests();
+    install_test_jwt_keys();
+    reset_access_verifier_for_tests();
     reset_default_nav_cache_for_tests();
     search_collection.mockReset();
   });
@@ -146,10 +146,10 @@ describe("destination_list loader", () => {
 
 describe("destination_list action", () => {
   beforeEach(() => {
-    process.env.UNTANGLED_SESSION_SECRET = "test-only-session-secret-not-for-prod";
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
-    reset_session_storage_for_tests();
+    install_test_jwt_keys();
+    reset_access_verifier_for_tests();
     reset_default_nav_cache_for_tests();
     search_collection.mockReset();
   });

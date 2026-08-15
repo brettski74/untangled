@@ -5,42 +5,39 @@ import {
   assert_web_auth_config,
   cookie_secure_from_env,
 } from "./config.server";
-import {
-  api_fetch_with_token,
-  login_with_password,
-  session_action_for_status,
-} from "./api.server";
+import { api_fetch_with_token, session_action_for_status } from "./api.server";
 import { ApiForbiddenError, ApiUnauthorizedError } from "./errors";
 import {
   redirect_unauthenticated,
   redirect_unauthorized,
 } from "./gate.server";
 import {
+  ACCESS_COOKIE_NAME,
   commit_access_token,
   get_access_token,
-  reset_session_storage_for_tests,
+  reset_access_verifier_for_tests,
 } from "./session.server";
 
-import { fake_access_token } from "./test_tokens";
+import { fake_access_token, install_test_jwt_keys } from "./test_tokens";
 
 describe("auth gate + session", () => {
   beforeEach(() => {
-    process.env.UNTANGLED_SESSION_SECRET = "test-only-session-secret-not-for-prod";
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
-    reset_session_storage_for_tests();
+    install_test_jwt_keys();
+    reset_access_verifier_for_tests();
     vi.restoreAllMocks();
   });
 
   afterEach(() => {
-    reset_session_storage_for_tests();
+    reset_access_verifier_for_tests();
   });
 
-  it("assert_web_auth_config requires UNTANGLED_SESSION_SECRET and UNTANGLED_API_BASE_URL", () => {
+  it("assert_web_auth_config requires public key and UNTANGLED_API_BASE_URL", () => {
     expect(() => assert_web_auth_config()).not.toThrow();
-    delete process.env.UNTANGLED_SESSION_SECRET;
-    expect(() => assert_web_auth_config()).toThrow(/UNTANGLED_SESSION_SECRET/);
-    process.env.UNTANGLED_SESSION_SECRET = "x";
+    delete process.env.UNTANGLED_JWT_PUBLIC_KEY;
+    expect(() => assert_web_auth_config()).toThrow(/UNTANGLED_JWT_PUBLIC_KEY/);
+    install_test_jwt_keys();
     delete process.env.UNTANGLED_API_BASE_URL;
     expect(() => assert_web_auth_config()).toThrow(/UNTANGLED_API_BASE_URL/);
   });
@@ -71,11 +68,11 @@ describe("auth gate + session", () => {
     );
   });
 
-  it("stores access_token in the session cookie and reads it back", async () => {
+  it("stores access_token in the access cookie and reads it back", async () => {
     const request = new Request("http://web.test/");
     const token = fake_access_token();
     const set_cookie = await commit_access_token(request, token);
-    expect(set_cookie).toContain("__untangled_session");
+    expect(set_cookie).toContain(ACCESS_COOKIE_NAME);
     expect(set_cookie.toLowerCase()).toContain("httponly");
     expect(set_cookie).toMatch(/Max-Age=9\d{2}/i);
 
@@ -85,7 +82,7 @@ describe("auth gate + session", () => {
     expect(await get_access_token(authed)).toBe(token);
   });
 
-  it("clears the session cookie on unauthorized redirect", async () => {
+  it("clears the access cookie on unauthorized redirect", async () => {
     const primed = new Request("http://web.test/");
     const set_cookie = await commit_access_token(primed, fake_access_token());
     const request = new Request("http://web.test/home", {
@@ -96,24 +93,8 @@ describe("auth gate + session", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/login?next=%2Fhome");
     const cleared = response.headers.get("Set-Cookie") ?? "";
+    expect(cleared).toContain(ACCESS_COOKIE_NAME);
     expect(cleared).toMatch(/Max-Age=0|max-age=0|Expires=/i);
-  });
-
-  it("login_with_password returns only access_token and discards refresh", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json({
-          access_token: fake_access_token(),
-          refresh_token: "must-not-escape",
-          token_type: "bearer",
-        }),
-      ),
-    );
-
-    const result = await login_with_password("admin", "admin-change-me");
-    expect(result).toHaveProperty("access_token");
-    expect(result).not.toHaveProperty("refresh_token");
   });
 
   it("api_fetch_with_token throws unauthorized on 401 and forbidden on 403", async () => {
@@ -133,12 +114,15 @@ describe("auth gate + session", () => {
     expect(session_action_for_status(403)).toBe("preserve_session");
   });
 
-  it("refuses session storage without UNTANGLED_SESSION_SECRET", async () => {
-    delete process.env.UNTANGLED_SESSION_SECRET;
-    reset_session_storage_for_tests();
-    await expect(
-      commit_access_token(new Request("http://web.test/"), fake_access_token()),
-    ).rejects.toThrow(/UNTANGLED_SESSION_SECRET/);
+  it("refuses to verify without UNTANGLED_JWT_PUBLIC_KEY", async () => {
+    delete process.env.UNTANGLED_JWT_PUBLIC_KEY;
+    reset_access_verifier_for_tests();
+    const request = new Request("http://web.test/", {
+      headers: { Cookie: `${ACCESS_COOKIE_NAME}=not-a-real-token` },
+    });
+    await expect(get_access_token(request)).rejects.toThrow(
+      /UNTANGLED_JWT_PUBLIC_KEY/,
+    );
   });
 });
 

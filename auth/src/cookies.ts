@@ -1,11 +1,12 @@
 export const CSRF_COOKIE_NAME = "__untangled_csrf";
-export const SKELETON_COOKIE_NAME = "__untangled_auth_skeleton";
+export const ACCESS_COOKIE_NAME = "__untangled_access";
 
 export type CookieAttrs = {
   http_only: boolean;
   secure: boolean;
   same_site: "Lax";
   path: "/";
+  max_age?: number;
 };
 
 export function parse_cookie_header(header: string | undefined): Map<string, string> {
@@ -39,6 +40,9 @@ export function serialize_cookie(
   if (attrs.secure) {
     parts.push("Secure");
   }
+  if (attrs.max_age != null) {
+    parts.push(`Max-Age=${attrs.max_age}`);
+  }
   return parts.join("; ");
 }
 
@@ -51,11 +55,26 @@ export function csrf_cookie(value: string, secure: boolean): string {
   });
 }
 
-export function skeleton_cookie(value: string, secure: boolean): string {
-  return serialize_cookie(SKELETON_COOKIE_NAME, value, {
+export function access_cookie(
+  value: string,
+  secure: boolean,
+  max_age: number,
+): string {
+  return serialize_cookie(ACCESS_COOKIE_NAME, value, {
     http_only: true,
     secure,
     same_site: "Lax",
     path: "/",
+    max_age,
+  });
+}
+
+export function expire_access_cookie(secure: boolean): string {
+  return serialize_cookie(ACCESS_COOKIE_NAME, "", {
+    http_only: true,
+    secure,
+    same_site: "Lax",
+    path: "/",
+    max_age: 0,
   });
 }

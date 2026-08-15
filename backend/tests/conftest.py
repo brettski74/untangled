@@ -15,14 +15,36 @@ os.environ.setdefault(
     tempfile.mkdtemp(prefix="untangled-audit-"),
 )
 
-import pytest
-from psycopg import Connection, sql
 
-from untangled.mapping.definition import ClassDefinition, load_definition
-from untangled.mapping.generate import generate_models
-from untangled.persistence.connection import connect
-from untangled.schema.migrate import migrate
-from untangled.seed import ensure_stub_actor_user
+def _install_test_es256_keys() -> None:
+    """Session keys for API verify + test minting. Must run before app import."""
+    if os.environ.get("UNTANGLED_JWT_PUBLIC_KEY", "").strip():
+        return
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    os.environ["UNTANGLED_JWT_PRIVATE_KEY"] = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    os.environ["UNTANGLED_JWT_PUBLIC_KEY"] = key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("utf-8")
+
+
+_install_test_es256_keys()
+
+import pytest  # noqa: E402
+from psycopg import Connection, sql  # noqa: E402
+
+from untangled.mapping.definition import ClassDefinition, load_definition  # noqa: E402
+from untangled.mapping.generate import generate_models  # noqa: E402
+from untangled.persistence.connection import connect  # noqa: E402
+from untangled.schema.migrate import migrate  # noqa: E402
+from untangled.seed import ensure_stub_actor_user  # noqa: E402
 
 
 @pytest.fixture(scope="session")

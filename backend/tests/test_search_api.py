@@ -6,11 +6,11 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+from jwt_mint import bearer_for
 from psycopg import Connection
 
 from untangled.main import app
 from untangled.seed.tickets import SEED_INCIDENT_1_ID, SEED_INCIDENT_2_ID
-from untangled.seed.users import SEED_USERS, password_for
 
 
 @pytest.fixture
@@ -20,18 +20,8 @@ def tickets_client(demo_schema, db_conn: Connection) -> Iterator[TestClient]:
         yield client
 
 
-def _login(client: TestClient, username: str, password: str):
-    return client.post(
-        "/auth/login",
-        data={"username": username, "password": password},
-    )
-
-
-def _bearer(client: TestClient, username: str) -> str:
-    seed = next(s for s in SEED_USERS if s.username == username)
-    login = _login(client, seed.username, password_for(seed))
-    assert login.status_code == 200
-    return login.json()["access_token"]
+def _bearer(_client: TestClient, username: str) -> str:
+    return bearer_for(username)
 
 
 def _headers(client: TestClient, username: str) -> dict[str, str]:

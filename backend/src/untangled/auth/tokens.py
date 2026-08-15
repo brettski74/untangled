@@ -1,44 +1,31 @@
-"""JWT access tokens and opaque refresh-token helpers."""
+"""JWT access-token verify (ES256 public key) and opaque refresh-token helpers."""
 
 from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import datetime, timedelta
 from uuid import UUID
 
 import jwt
 
-from untangled.auth.settings import (
-    access_token_ttl_seconds,
-    jwt_secret,
-    refresh_token_ttl_seconds,
-)
+from untangled.auth.settings import jwt_public_key, refresh_token_ttl_seconds
 from untangled.mapping.datetime_utc import require_utc_seconds, utc_now
 
-ACCESS_TOKEN_ALGORITHM = "HS256"
-
-
-def create_access_token(user_id: UUID, *, now: datetime | None = None) -> str:
-    """Mint a short-lived JWT access token with ``sub`` = user id."""
-    # Do not round iat forward — PyJWT rejects tokens with a future ``iat``.
-    issued = now or datetime.now(timezone.utc)
-    payload: dict[str, Any] = {
-        "sub": str(user_id),
-        "iat": int(issued.timestamp()),
-        "exp": int((issued + timedelta(seconds=access_token_ttl_seconds())).timestamp()),
-        "typ": "access",
-    }
-    return jwt.encode(payload, jwt_secret(), algorithm=ACCESS_TOKEN_ALGORITHM)
+ACCESS_TOKEN_ALGORITHM = "ES256"
 
 
 def decode_access_token(token: str) -> UUID:
-    """Validate an access JWT and return the subject user id.
+    """Validate an ES256 access JWT and return the subject user id.
 
     Raises ``jwt.PyJWTError`` (or subclasses) on failure.
     """
-    payload = jwt.decode(token, jwt_secret(), algorithms=[ACCESS_TOKEN_ALGORITHM])
+    payload = jwt.decode(
+        token,
+        jwt_public_key(),
+        algorithms=[ACCESS_TOKEN_ALGORITHM],
+        options={"require": ["exp", "iat", "sub"]},
+    )
     if payload.get("typ") != "access":
         raise jwt.InvalidTokenError("not an access token")
     sub = payload.get("sub")

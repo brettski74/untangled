@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 
-import { reset_session_storage_for_tests } from "../auth/session.server";
-import { fake_access_token } from "../auth/test_tokens";
+import { reset_access_verifier_for_tests } from "../auth/session.server";
+import { fake_access_token, install_test_jwt_keys } from "../auth/test_tokens";
 
 const fetch_me = vi.fn();
 const create_record = vi.fn();
@@ -53,11 +53,10 @@ const CREATED_INC = {
 
 describe("destination_new loader", () => {
   beforeEach(() => {
-    process.env.UNTANGLED_SESSION_SECRET =
-      "test-only-session-secret-not-for-prod";
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
-    reset_session_storage_for_tests();
+    install_test_jwt_keys();
+    reset_access_verifier_for_tests();
     fetch_me.mockReset();
     create_record.mockReset();
   });
@@ -223,11 +222,10 @@ describe("destination_new datetime chrome (#109)", () => {
 
 describe("destination_new action", () => {
   beforeEach(() => {
-    process.env.UNTANGLED_SESSION_SECRET =
-      "test-only-session-secret-not-for-prod";
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
-    reset_session_storage_for_tests();
+    install_test_jwt_keys();
+    reset_access_verifier_for_tests();
     fetch_me.mockReset();
     create_record.mockReset();
     fetch_me.mockResolvedValue({

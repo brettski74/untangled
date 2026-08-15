@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from jwt_mint import bearer_for
 from psycopg import Connection, sql
 
 from untangled.audit.deps import get_audit_logger, set_audit_logger
@@ -49,6 +50,10 @@ def _login(client: TestClient, username: str = "admin", password: str = "admin-c
     )
 
 
+def _token(username: str = "admin") -> str:
+    return bearer_for(username)
+
+
 def _incident_body() -> dict:
     return {"summary": "audit-test", "status": "new", "severity": "Low"}
 
@@ -72,73 +77,36 @@ def _assert_no_secrets(events: list[AuditEvent]) -> None:
                 assert _STRONG_NEW not in value
 
 
-def test_login_success_and_failure_emit(client: TestClient) -> None:
+def test_python_login_and_refresh_are_gone(client: TestClient) -> None:
     recorder = _recorder()
     recorder.events.clear()
     bad = _login(client, password="wrong")
-    assert bad.status_code == 401
+    assert bad.status_code == 410
     ok = _login(client)
-    assert ok.status_code == 200
-    assert any(
-        e.event_type == EventType.AUTH_LOGIN and e.outcome.value == "failure"
-        for e in recorder.events
-    )
-    assert any(
-        e.event_type == EventType.AUTH_LOGIN and e.outcome.value == "success"
-        for e in recorder.events
-    )
-    _assert_no_secrets(recorder.events)
+    assert ok.status_code == 410
+    refresh = client.post("/auth/refresh", json={"refresh_token": "x"})
+    assert refresh.status_code == 410
+    assert not any(e.event_type == EventType.AUTH_LOGIN for e in recorder.events)
+    assert not any(e.event_type == EventType.AUTH_REFRESH for e in recorder.events)
 
 
-def test_auth_refresh_logout_password_and_correlation(client: TestClient) -> None:
-    """Refresh, logout, password-change, and correlation-id on one client lifespan."""
+def test_auth_logout_password_and_correlation(client: TestClient) -> None:
+    """Logout, password-change, and correlation-id on one client lifespan."""
     recorder = _recorder()
     cid = "manual-correlation-test-001"
     recorder.events.clear()
-    login = client.post(
-        "/auth/login",
-        data={"username": "admin", "password": "admin-change-me"},
+    logout = client.post(
+        "/auth/logout",
+        json={"refresh_token": "not-a-real-token"},
         headers={"X-Correlation-Id": cid},
     )
-    assert login.status_code == 200
-    assert login.headers.get("X-Correlation-Id") == cid
-    login_events = [e for e in recorder.events if e.event_type == EventType.AUTH_LOGIN]
-    assert login_events and all(e.correlation_id == cid for e in login_events)
-
-    refresh = login.json()["refresh_token"]
-    access = login.json()["access_token"]
-    recorder.events.clear()
-
-    bad_refresh = client.post("/auth/refresh", json={"refresh_token": "not-a-real-token"})
-    assert bad_refresh.status_code == 401
-    rotated = client.post("/auth/refresh", json={"refresh_token": refresh})
-    assert rotated.status_code == 200
-    new_refresh = rotated.json()["refresh_token"]
-    assert any(
-        e.event_type == EventType.AUTH_REFRESH and e.outcome.value == "failure"
-        for e in recorder.events
-    )
-    assert any(
-        e.event_type == EventType.AUTH_REFRESH and e.outcome.value == "success"
-        for e in recorder.events
-    )
-
-    recorder.events.clear()
-    logout = client.post("/auth/logout", json={"refresh_token": new_refresh})
     assert logout.status_code == 204
-    assert any(
-        e.event_type == EventType.AUTH_LOGOUT and e.reason == "logout_revoke"
-        for e in recorder.events
-    )
-    again = client.post("/auth/logout", json={"refresh_token": new_refresh})
-    assert again.status_code == 204
-    assert any(
-        e.event_type == EventType.AUTH_LOGOUT and e.reason == "logout_idempotent"
-        for e in recorder.events
-    )
+    assert logout.headers.get("X-Correlation-Id") == cid
+    logout_events = [e for e in recorder.events if e.event_type == EventType.AUTH_LOGOUT]
+    assert logout_events and all(e.correlation_id == cid for e in logout_events)
+    assert any(e.reason == "logout_idempotent" for e in logout_events)
 
-    # Fresh login for password-change (refresh was revoked).
-    access = _login(client).json()["access_token"]
+    access = _token()
     headers = {"Authorization": f"Bearer {access}"}
     recorder.events.clear()
     failed = client.post(
@@ -172,13 +140,13 @@ def test_auth_refresh_logout_password_and_correlation(client: TestClient) -> Non
     _assert_no_secrets(recorder.events)
 
 
-def test_login_fail_closed_on_audit_failure(demo_schema, db_conn: Connection) -> None:
+def test_login_gone_even_when_audit_logger_fails(demo_schema, db_conn: Connection) -> None:
     seed_all(db_conn)
     db_conn.commit()
     with TestClient(app) as client:
         set_audit_logger(FailingAuditLogger())
         response = _login(client)
-        assert response.status_code == 500
+        assert response.status_code == 410
     set_audit_logger(RecordingAuditLogger())
 
 
@@ -199,9 +167,7 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
     )
 
     recorder.events.clear()
-    readonly = _login(client, username="readonly", password="readonly-change-me")
-    assert readonly.status_code == 200
-    ro_headers = {"Authorization": f"Bearer {readonly.json()['access_token']}"}
+    ro_headers = {"Authorization": f"Bearer {_token('readonly')}"}
     forbidden = client.post("/api/v2/incident", headers=ro_headers, json=_incident_body())
     assert forbidden.status_code == 403
     assert any(
@@ -212,7 +178,7 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
     )
 
     # Seed an incident as admin for update/delete authz checks below.
-    admin_token = _login(client).json()["access_token"]
+    admin_token = _token()
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     seed_incident = client.post(
         "/api/v2/incident", headers=admin_headers, json=_incident_body()
@@ -234,9 +200,8 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
         for e in recorder.events
     )
 
-    readwrite = _login(client, username="readwrite", password="readwrite-change-me")
-    assert readwrite.status_code == 200
-    rw_headers = {"Authorization": f"Bearer {readwrite.json()['access_token']}"}
+    readwrite = _token("readwrite")
+    rw_headers = {"Authorization": f"Bearer {readwrite}"}
     recorder.events.clear()
     delete_denied = client.delete(f"/api/v2/incident/{seed_locator}", headers=rw_headers)
     assert delete_denied.status_code == 403
@@ -288,7 +253,7 @@ def test_record_access_denials_and_crud_emit(client: TestClient) -> None:
 
 
 def test_delete_fail_closed_prevents_delete(client: TestClient) -> None:
-    token = _login(client).json()["access_token"]
+    token = _token()
     headers = {"Authorization": f"Bearer {token}"}
     created = client.post("/api/v2/incident", headers=headers, json=_incident_body())
     assert created.status_code == 201
@@ -307,7 +272,7 @@ def test_delete_fail_closed_prevents_delete(client: TestClient) -> None:
 
 
 def test_update_fail_closed_restores_row(client: TestClient) -> None:
-    token = _login(client).json()["access_token"]
+    token = _token()
     headers = {"Authorization": f"Bearer {token}"}
     created = client.post("/api/v2/incident", headers=headers, json=_incident_body())
     assert created.status_code == 201
@@ -329,7 +294,7 @@ def test_update_fail_closed_restores_row(client: TestClient) -> None:
 
 def test_create_compensate_on_audit_failure(client: TestClient) -> None:
     """Create audit failure must compensate-delete the row (recovery, not fail-closed)."""
-    token = _login(client).json()["access_token"]
+    token = _token()
     headers = {"Authorization": f"Bearer {token}"}
     before = client.post("/api/v2/incident/search", headers=headers, json={})
     assert before.status_code == 200
@@ -390,7 +355,7 @@ def test_bulk_read_volume_signal(client: TestClient, db_conn: Connection) -> Non
     default_cache.invalidate()
     recorder = _recorder()
     recorder.events.clear()
-    token = _login(client).json()["access_token"]
+    token = _token()
     headers = {"Authorization": f"Bearer {token}"}
     for _ in range(3):
         response = client.post("/api/v2/incident/search", headers=headers, json={})
@@ -417,10 +382,14 @@ def test_app_wired_file_sink_writes_valid_ndjson(
         logger = get_audit_logger()
         assert isinstance(logger, FileAuditLogger)
         assert getattr(client.app.state, "audit_logger", None) is logger
+        token = bearer_for("admin")
         response = client.post(
-            "/auth/login",
-            data={"username": "admin", "password": "admin-change-me"},
-            headers={"X-Correlation-Id": "ndjson-wire-1"},
+            "/api/v2/incident/search",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Correlation-Id": "ndjson-wire-1",
+            },
+            json={},
         )
         assert response.status_code == 200
 
@@ -446,7 +415,7 @@ def test_app_wired_file_sink_writes_valid_ndjson(
             assert key in payload
         assert "password" not in json.dumps(payload).lower()
     assert any(
-        p["event_type"] == EventType.AUTH_LOGIN
+        p["event_type"] == EventType.RECORD_SEARCH
         and p["outcome"] == "success"
         and p["correlation_id"] == "ndjson-wire-1"
         for p in payloads
