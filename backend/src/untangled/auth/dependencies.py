@@ -8,7 +8,7 @@ from uuid import UUID
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg import Connection
 
 from untangled.audit.context import client_ip
@@ -18,7 +18,9 @@ from untangled.auth.store import fetch_user_by_id
 from untangled.auth.tokens import decode_access_token
 from untangled.persistence.connection import connect
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=True)
+# auto_error=False: default HTTPBearer raises 403 on a missing header.
+# Leftover /auth/me and peers keep 401 + WWW-Authenticate: Bearer.
+_bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_db() -> Iterator[Connection]:
@@ -41,9 +43,21 @@ def _credentials_exc() -> HTTPException:
     )
 
 
+def _access_token(
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
+) -> str:
+    """Extract the Bearer JWT, or 401 if the Authorization header is missing/non-Bearer."""
+    if creds is None or not creds.credentials:
+        raise _credentials_exc()
+    return creds.credentials
+
+
+AccessToken = Annotated[str, Depends(_access_token)]
+
+
 def get_current_user(
     request: Request,
-    token: Annotated[str, Depends(oauth2_scheme)],
+    token: AccessToken,
     conn: DbConn,
 ) -> dict[str, Any]:
     """Resolve the Bearer access token to an active user row."""
@@ -81,7 +95,7 @@ def get_current_user(
 
 
 def get_password_change_subject(
-    token: Annotated[str, Depends(oauth2_scheme)],
+    token: AccessToken,
     conn: DbConn,
 ) -> dict[str, Any]:
     """Resolve Bearer → user for change-password (inactive admitted past the gate).

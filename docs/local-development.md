@@ -184,7 +184,7 @@ Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http
 
 - Unauthenticated routes redirect to `/login` (fail-closed).
 - The login page is SSR; the browser posts to `POST /api/v2/auth/login` after `GET /api/v2/auth/csrf`. Auth sets HttpOnly `__untangled_access` (ES256). The JWT is not in the JSON body.
-- SSR verifies that cookie with the public key and calls the API with Bearer. The authenticated layout loads `GET /auth/me` once per navigation tree; the header user chip uses display name (hover = username).
+- SSR verifies that cookie with the public key and calls the API with Bearer. The authenticated layout loads legacy unversioned `GET /auth/me` once per navigation tree; the header user chip uses display name (hover = username).
 - Access expiry / API **401** expires the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67. Login abuse controls are #213 / #214.
 
 Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default with explicit local opt-out, cookie `Max-Age` from the access JWT TTL. The JWT is never exposed to browser JavaScript. Path and CSRF details: [edge-proxy.md](./edge-proxy.md).
@@ -193,24 +193,23 @@ Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default wi
 
 1. Open `http://127.0.0.1:8000/docs`.
 2. Sign in through the UI (Compose `:8443` or host-dev `:5173`), then copy the `__untangled_access` cookie value from the browser's cookie inspector (HttpOnly: not visible to page script).
-3. Click **Authorize**, paste that JWT as Bearer, then Try-it-out on `GET /auth/me` (roles + effective permission keys).
-4. Python `POST /auth/login` and `POST /auth/refresh` return **410** — they no longer issue tokens.
-5. Hit `GET /auth/rbac-probe` (requires `demo_item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo_item:read`) get **403**; a user with no roles gets **403**.
-6. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
+3. Click **Authorize**, paste that JWT as Bearer, then Try-it-out on legacy unversioned `GET /auth/me` (roles + effective permission keys). Python does not mount `/auth/login` or `/auth/refresh`.
+4. Hit legacy unversioned `GET /auth/rbac-probe` (requires `demo_item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo_item:read`) get **403**; a user with no roles gets **403**.
+5. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
    - Live record contract: `GET /api/v2/incident/{locator}` /
      `GET /api/v2/change_request/{locator}` (UUID or friendly number; path
      segment is the class `name`, no pluralization).
    - `POST` create / `PATCH` update / `DELETE` on `/api/v2/{class_name}`
      (admin only among seed roles for delete).
    - Junk locators → **422**; missing records → **404**; readonly cannot create → **403**.
-7. Exercise predicate search (same Authorize token; requires `{class}:search` or `admin` / `public`):
+6. Exercise predicate search (same Authorize token; requires `{class}:search` or `admin` / `public`):
    - `POST /api/v2/incident/search` and
      `POST /api/v2/change_request/search` (see [Predicate search](#predicate-search)
      and [API versioning](#api-versioning) below).
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
    - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
-8. When the access token expires (~15m), sign in again through the UI (refresh is #14).
-9. Sign out from the header menu (expires `__untangled_access`). Python `POST /auth/logout` still accepts a refresh token body for leftover rows.
+7. When the access token expires (~15m), sign in again through the UI (refresh is #14).
+8. Sign out from the header menu (expires `__untangled_access`). Legacy unversioned Python `POST /auth/logout` still accepts a refresh token body for leftover rows.
 
 ### API versioning
 
@@ -511,7 +510,7 @@ Authenticated browser login posts to `/api/v2/auth/` on the public origin. Domai
 | `make up` / `make down` | Full Compose runtime (postgres + redis + api + web + auth + local-edge proxy); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
-| Auth (`POST /api/v2/auth/login`, Python `/auth/me`, change-password, rbac-probe) | ES256 access JWT from auth; API/SSR verify public key; Python login/refresh **410** | UI refresh (#14); abuse controls #213/#214; delete Python login mounts (follow-up) |
+| Auth (`POST /api/v2/auth/login`; legacy unversioned Python `/auth/me`, change-password, rbac-probe) | ES256 access JWT from auth; API/SSR verify public key; Python login/refresh mounts absent | UI refresh (#14); abuse controls #213/#214 |
 | Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` on `/api/v2/auth/`; Caddy local-edge; Playwright HTTP `:5173` via Vite/`http_edge` | Auth-service refresh/me/change-password (#14 / later #33) |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |

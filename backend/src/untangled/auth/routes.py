@@ -1,4 +1,4 @@
-"""Auth HTTP routes: login, refresh, logout, ``/auth/me``, change-password, RBAC probe."""
+"""Auth HTTP routes: legacy unversioned logout, ``/auth/me``, change-password, RBAC probe."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from untangled.auth.schemas import (
     ChangePasswordResponse,
     LogoutRequest,
     RbacProbeResponse,
-    RefreshRequest,
     UserProfile,
 )
 from untangled.auth.store import (
@@ -36,28 +35,7 @@ from untangled.rbac.store import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 _LOG = logging.getLogger("untangled.audit")
 
-_LOGIN_GONE = HTTPException(
-    status_code=status.HTTP_410_GONE,
-    detail="Login moved to POST /api/v2/auth/login",
-)
-_REFRESH_GONE = HTTPException(
-    status_code=status.HTTP_410_GONE,
-    detail="Token refresh moved off this API; use the auth service",
-)
-
 _DEMO_ITEM_READ = class_operation_key("demo_item", "read")
-
-
-@router.post("/login", status_code=status.HTTP_410_GONE)
-def login() -> None:
-    """Removed: browser and machine login issue ES256 tokens from the auth service."""
-    raise _LOGIN_GONE
-
-
-@router.post("/refresh", status_code=status.HTTP_410_GONE)
-def refresh(_body: RefreshRequest) -> None:
-    """Removed: this process does not mint access tokens."""
-    raise _REFRESH_GONE
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

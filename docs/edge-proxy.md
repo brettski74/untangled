@@ -22,10 +22,10 @@ Auth-session paths (group stays on **v2** together):
 | `POST` | `/api/v2/auth/login` | Real login; ES256 access cookie |
 | `POST` | `/api/v2/auth/logout` | Later (#14 / later #33 slices) |
 | `POST` | `/api/v2/auth/refresh` | Later (#14) |
-| `GET` | `/api/v2/auth/me` | Later; SSR still uses Python `GET /auth/me` |
-| `POST` | `/api/v2/auth/change-password` | Later; SSR still uses Python `POST /auth/change-password` |
+| `GET` | `/api/v2/auth/me` | Later; SSR still uses legacy unversioned Python `GET /auth/me` |
+| `POST` | `/api/v2/auth/change-password` | Later; SSR still uses legacy unversioned Python `POST /auth/change-password` |
 
-Python unversioned `/auth/login` and `/auth/refresh` return **410**. `/auth/me`, change-password, logout, and rbac-probe stay on the API. Those Python login/refresh mounts will be deleted in a follow-up after this cutover.
+Python does not mount `/auth/login` or `/auth/refresh` (ordinary **404**). Remaining Python `/auth/me`, change-password, logout, and rbac-probe are **legacy unversioned** leftovers, not the standing identity contract. Login is `POST /api/v2/auth/login`.
 
 Approved **anonymous** auth-session bootstrap (with `/health` on the API): `GET /api/v2/auth/csrf` and `POST /api/v2/auth/login`.
 
