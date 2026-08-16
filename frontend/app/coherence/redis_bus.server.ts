@@ -7,7 +7,7 @@ import { createClient, type RedisClientType } from "redis";
 import { redact_redis_url } from "./redact";
 import type { CoherenceBus, CoherenceHandler } from "./types";
 
-export const DEFAULT_REDIS_URL = "redis://127.0.0.1:6379/0";
+export const DEFAULT_REDIS_URL = "redis://localhost:6379/0";
 
 export function redis_url_from_env(
   raw: string | undefined = process.env.UNTANGLED_REDIS_URL,

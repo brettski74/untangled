@@ -326,7 +326,7 @@ Real environments run the same entrypoint Make wraps:
 
 ```bash
 # Uses DATABASE_URL, or the documented local default:
-# postgresql://untangled:untangled@127.0.0.1:5432/untangled
+# postgresql://untangled:untangled@localhost:5432/untangled
 backend/.venv/bin/python -m untangled.schema
 
 backend/.venv/bin/python -m untangled.schema \

@@ -61,4 +61,4 @@ Or from this directory after `make install`:
 .venv/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Smoke test: `GET http://127.0.0.1:8000/health` (docs at `/docs`; Authorize by pasting the `__untangled_access` JWT as Bearer, then Try-it-out on legacy unversioned `/auth/me`)
+Smoke test: `GET http://localhost:8000/health` (docs at `/docs`; Authorize by pasting the `__untangled_access` JWT as Bearer, then Try-it-out on legacy unversioned `/auth/me`)

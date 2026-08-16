@@ -16,6 +16,7 @@ from untangled.redis import (
 
 def test_redis_url_default_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("UNTANGLED_REDIS_URL", raising=False)
+    assert DEFAULT_REDIS_URL == "redis://localhost:6379/0"
     assert redis_url() == DEFAULT_REDIS_URL
 
 

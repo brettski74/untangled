@@ -63,7 +63,7 @@ make install
 Default DB connection from the **host** (override with `DATABASE_URL`):
 
 ```text
-postgresql://untangled:untangled@127.0.0.1:5432/untangled
+postgresql://untangled:untangled@localhost:5432/untangled
 ```
 
 Default Redis URL from the **host** (override with `UNTANGLED_REDIS_URL`):
@@ -99,9 +99,9 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 | `UNTANGLED_JWT_PRIVATE_KEY_PATH` / `UNTANGLED_JWT_PUBLIC_KEY_PATH` | Gitignored `deploy/jwt/dev-es256-*.pem` (`make local-jwt-keys`). Auth gets both; API and web get the public key only. |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
 | `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days; unused until #14) |
-| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose HTTPS: `https://localhost:8443`. Host-dev/Playwright: `http://127.0.0.1:5173` |
+| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose HTTPS: `https://localhost:8443`. Host-dev/Playwright: `http://localhost:5173` |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
-| `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
+| `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://localhost:8000` |
 | `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host-dev: `redis://localhost:6379/0` (coherence signaling + auth login RL; shared with future authz cache). Auth fails closed at boot if Redis is unreachable. |
 | `UNTANGLED_AUDIT_LOG_DIR` | Container path: `/var/log/untangled/audit`. Local `make up` bind-mounts host `.run/audit` there. Rocky `./deploy.sh` uses named volume `untangled_audit` (prep chowns the dir to uid 1000). Host `make migrate` / `make seed` / `make auth-dev`: defaults to `.run/audit` when unset. |
 | `UNTANGLED_AUDIT_ROLLOVER_BYTES` | `1048576` (1 MiB) |
@@ -186,7 +186,7 @@ Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
 
 ### UI login (SSR gate)
 
-Local-dev convention: after `make up` + `make migrate` + `make seed`, open `https://localhost:8443` (trust the local cert or use `curl -k`) and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above). `https://127.0.0.1:8443` redirects there (`127.0.0.1` is a different origin). Host-dev: `make auth-dev` in one terminal and `make frontend-dev` in another, then `http://127.0.0.1:5173`.
+Local-dev convention: after `make up` + `make migrate` + `make seed`, open `https://localhost:8443` (trust the local cert or use `curl -k`) and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above). `https://127.0.0.1:8443` redirects there (`127.0.0.1` is a different origin). Host-dev: `make auth-dev` in one terminal and `make frontend-dev` in another, then `http://localhost:5173`.
 
 - Unauthenticated routes redirect to `/login` (fail-closed).
 - The login page is SSR; the browser posts to `POST /api/v2/auth/login` after `GET /api/v2/auth/csrf`. Auth sets HttpOnly `__untangled_access` (ES256). The JWT is not in the JSON body.
@@ -197,7 +197,7 @@ Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default wi
 
 ### `/docs` Authorize loop
 
-1. Open `http://127.0.0.1:8000/docs`.
+1. Open `http://localhost:8000/docs`.
 2. Sign in through the UI (Compose `:8443` or host-dev `:5173`), then copy the `__untangled_access` cookie value from the browser's cookie inspector (HttpOnly: not visible to page script).
 3. Click **Authorize**, paste that JWT as Bearer, then Try-it-out on legacy unversioned `GET /auth/me` (roles + effective permission keys). Python does not mount `/auth/login` or `/auth/refresh`.
 4. Hit legacy unversioned `GET /auth/rbac-probe` (requires `demo_item:read` or `admin`). Seed users with broad class read (`admin` / `readonly` / `readwrite`) succeed; `change` / `incident` (no `demo_item:read`) get **403**; a user with no roles gets **403**.
@@ -431,7 +431,7 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck + auth typecheck |
 | `make test` | Backend pytest (starts DB + Redis; uses migrate path) + frontend build smoke + auth unit tests |
 | `make test-ci` | Same as lint + test, but skip Compose `db-up` / `redis-up` (services must already be up; used by Actions) |
-| `make e2e` | Full Playwright browser suite against `http://127.0.0.1:5173` (Vite or `http_edge`, not raw Compose web) |
+| `make e2e` | Full Playwright browser suite against `http://localhost:5173` (Vite or `http_edge`, not raw Compose web) |
 | `make e2e-smoke` | Playwright `@smoke` subset (CI gate; same stack prereqs as `e2e`) |
 | `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
@@ -461,9 +461,9 @@ Ensure host ports **5432**, **6379**, **8000**, **3000**, **3001**, **5173**, an
 
 After `make up` → `make migrate` → `make seed`:
 
-- API health: `curl http://127.0.0.1:8000/health` → `{"status":"ok"}`
-- API docs: open `http://127.0.0.1:8000/docs` and run the Authorize loop above
-- Web: open `http://127.0.0.1:3000` (SSR only; login needs the public origin or http_edge)
+- API health: `curl http://localhost:8000/health` → `{"status":"ok"}`
+- API docs: open `http://localhost:8000/docs` and run the Authorize loop above
+- Web: open `http://localhost:3000` (SSR only; login needs the public origin or http_edge)
 - HTTPS proxy (browser origin): `curl -k https://localhost:8443/` and `curl -k https://localhost:8443/api/v2/auth/csrf` — see [edge-proxy.md](./edge-proxy.md)
 - Postgres: `docker compose exec postgres pg_isready -U untangled -d untangled`
 - Redis: `docker compose exec redis redis-cli ping` → `PONG`
@@ -505,7 +505,7 @@ After `make redis-up` only (redis):
 | Caller | URL |
 | ------ | ---- |
 | Server-side / from web container | `http://api:8000` (`UNTANGLED_API_BASE_URL` in Compose) |
-| Host `make frontend-dev` | `http://127.0.0.1:8000` (Makefile default) |
+| Host `make frontend-dev` | `http://localhost:8000` (Makefile default) |
 
 Authenticated browser login posts to `/api/v2/auth/` on the public origin. Domain API calls stay on the web tier (SSR loaders/actions). Do not put the access JWT in JavaScript.
 

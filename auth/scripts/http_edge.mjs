@@ -63,6 +63,7 @@ export function is_auth_path(url_path) {
 }
 
 export function proxy(req, res, target) {
+  // Dummy base to parse a relative request.url; not a published origin.
   const incoming = new URL(req.url ?? "/", "http://127.0.0.1");
   const dest = new URL(incoming.pathname + incoming.search, target);
   const headers = copy_headers(req.headers, true);
@@ -96,6 +97,7 @@ export function proxy(req, res, target) {
 
 export function create_edge_server(web, auth) {
   return http.createServer((req, res) => {
+    // Dummy base to parse a relative request.url; not a published origin.
     const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
     proxy(req, res, is_auth_path(path) ? auth : web);
   });
@@ -117,10 +119,10 @@ if (invoked_as_cli()) {
       `PORT must be an integer 1–65535; got ${JSON.stringify(listen_raw)}`,
     );
   }
-  const web = origin_url(process.env.UNTANGLED_WEB_ORIGIN ?? "", "http://127.0.0.1:3000");
+  const web = origin_url(process.env.UNTANGLED_WEB_ORIGIN ?? "", "http://localhost:3000");
   const auth = origin_url(
     process.env.UNTANGLED_AUTH_ORIGIN ?? "",
-    "http://127.0.0.1:3001",
+    "http://localhost:3001",
   );
   create_edge_server(web, auth).listen(listen, "127.0.0.1", () => {
     process.stdout.write(

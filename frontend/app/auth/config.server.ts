@@ -64,7 +64,7 @@ export function assert_web_auth_config(): void {
     process.env.UNTANGLED_API_BASE_URL === ""
   ) {
     throw new Error(
-      "UNTANGLED_API_BASE_URL is required (e.g. http://api:8000 in Compose, http://127.0.0.1:8000 for host frontend-dev)",
+      "UNTANGLED_API_BASE_URL is required (e.g. http://api:8000 in Compose, http://localhost:8000 for host frontend-dev)",
     );
   }
   assert_p256_public_pem(read_jwt_public_pem());
