@@ -125,7 +125,7 @@ endif
 	@echo "    Proxy (browser origin, interim HTTPS): https://localhost:8443"
 	@echo "    Web: http://localhost:3000"
 	@echo "    Auth: http://localhost:3001"
-	@echo "    Host-dev / Playwright: http://localhost:5173 (Vite or http_edge)"
+	@echo "    Host-dev (Vite, not e2e): http://localhost:5173"
 	@echo "    API: http://localhost:8000"
 
 reinstall-keep-data: ## Restart stack without wiping DB volume, then migrate and seed
@@ -138,7 +138,7 @@ endif
 	@echo "    Proxy (browser origin, interim HTTPS): https://localhost:8443"
 	@echo "    Web: http://localhost:3000"
 	@echo "    Auth: http://localhost:3001"
-	@echo "    Host-dev / Playwright: http://localhost:5173 (Vite or http_edge)"
+	@echo "    Host-dev (Vite, not e2e): http://localhost:5173"
 	@echo "    API: http://localhost:8000"
 
 db-up: ## Start containerized PostgreSQL only (for host-run tests / persistence)
@@ -193,7 +193,7 @@ frontend-dev: frontend-install local-jwt-keys ## Run the React Router dev server
 		UNTANGLED_AUTH_ORIGIN=$${UNTANGLED_AUTH_ORIGIN:-http://localhost:3001} \
 		npm run dev -- --host 127.0.0.1 --port 5173
 
-auth-dev: auth-install local-jwt-keys ## Run the auth service on :3001 (host-dev / Playwright)
+auth-dev: auth-install local-jwt-keys ## Run the auth service on :3001 (host-dev)
 	@mkdir -p $(RUN_DIR)/audit
 	cd $(AUTH_DIR) && \
 		DATABASE_URL=$${DATABASE_URL:-postgresql://untangled:untangled@localhost:5432/untangled} \
@@ -261,10 +261,9 @@ ifneq ($(SKIP_REDIS_UP),1)
 endif
 	cd $(AUTH_DIR) && npm test
 
-# Playwright browser E2E. Requires API + auth + web + same-origin edge on :5173
-# (Vite `make frontend-dev` + `make auth-dev`, or production web on :3000 +
-# `node auth/scripts/http_edge.mjs`). Does not start services.
-e2e: frontend-install ## Run full Playwright suite against PLAYWRIGHT_BASE_URL (default :5173)
+# Playwright browser E2E against Compose Caddy (https://localhost:8443).
+# Requires `make up` (includes local-edge) + migrate + seed. Does not start services.
+e2e: frontend-install ## Run full Playwright suite against PLAYWRIGHT_BASE_URL (default :8443)
 	cd $(FRONTEND_DIR) && npx playwright test
 
 e2e-smoke: frontend-install ## Run Playwright @smoke suite (CI gate)

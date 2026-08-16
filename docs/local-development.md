@@ -99,7 +99,7 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 | `UNTANGLED_JWT_PRIVATE_KEY_PATH` / `UNTANGLED_JWT_PUBLIC_KEY_PATH` | Gitignored `deploy/jwt/dev-es256-*.pem` (`make local-jwt-keys`). Auth gets both; API and web get the public key only. |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
 | `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days; unused until #14) |
-| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose HTTPS: `https://localhost:8443`. Host-dev/Playwright: `http://localhost:5173` |
+| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose / Playwright: `https://localhost:8443`. Host-dev Vite: `http://localhost:5173` |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://localhost:8000` |
 | `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host-dev: `redis://localhost:6379/0` (coherence signaling + auth login RL; shared with future authz cache). Auth fails closed at boot if Redis is unreachable. |
@@ -431,7 +431,7 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck + auth typecheck |
 | `make test` | Backend pytest (starts DB + Redis; uses migrate path) + frontend build smoke + auth unit tests |
 | `make test-ci` | Same as lint + test, but skip Compose `db-up` / `redis-up` (services must already be up; used by Actions) |
-| `make e2e` | Full Playwright browser suite against `http://localhost:5173` (Vite or `http_edge`, not raw Compose web) |
+| `make e2e` | Full Playwright browser suite against Compose Caddy `https://localhost:8443` (`make up` + migrate + seed) |
 | `make e2e-smoke` | Playwright `@smoke` subset (CI gate; same stack prereqs as `e2e`) |
 | `make models` | Generate Pydantic, Zod, and field-meta from `backend/class-definitions/` |
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
@@ -454,8 +454,8 @@ Ensure host ports **5432**, **6379**, **8000**, **3000**, **3001**, **5173**, an
 | api | `8000` | FastAPI; docs at `/docs`. Not the browser credential origin. |
 | web | `3000` | Maps to container port **3000**. |
 | auth | `3001` | Maps to container port **3000**. Customer edge / host-dev. Not the browser credential origin. |
-| proxy | `8443` | Local HTTPS browser origin (`local-edge` profile). See [edge-proxy.md](./edge-proxy.md). |
-| http_edge / Vite | `5173` | Host-dev and Playwright same-origin edge. |
+| proxy | `8443` | Local HTTPS browser origin (`local-edge` profile). Playwright default. See [edge-proxy.md](./edge-proxy.md). |
+| Vite | `5173` | Host-dev only (`make frontend-dev`). Not the e2e origin. |
 
 ## Smoke tests
 
@@ -463,7 +463,7 @@ After `make up` → `make migrate` → `make seed`:
 
 - API health: `curl http://localhost:8000/health` → `{"status":"ok"}`
 - API docs: open `http://localhost:8000/docs` and run the Authorize loop above
-- Web: open `http://localhost:3000` (SSR only; login needs the public origin or http_edge)
+- Web: open `http://localhost:3000` (SSR only; login needs the public origin)
 - HTTPS proxy (browser origin): `curl -k https://localhost:8443/` and `curl -k https://localhost:8443/api/v2/auth/csrf` — see [edge-proxy.md](./edge-proxy.md)
 - Postgres: `docker compose exec postgres pg_isready -U untangled -d untangled`
 - Redis: `docker compose exec redis redis-cli ping` → `PONG`
@@ -477,7 +477,7 @@ docker compose exec web wget -qO- http://api:8000/health
 
 Specs live under `frontend/e2e/`. CI **gates** on the `@smoke` tag (`make e2e-smoke`). The full suite also runs in CI afterward as a **non-gating** step (`continue-on-error`) so regressions show up without failing the check. Locally: `make e2e`.
 
-Prerequisites: Postgres + Redis + migrated/seeded DB, API on `:8000`, auth on `:3001`, and a same-origin edge on `:5173` (`make auth-dev` + `make frontend-dev`, or production web on `:3000` plus `node auth/scripts/http_edge.mjs`). First-time browser install:
+Prerequisites: `make up` (postgres, redis, api, web, auth, and Caddy on `:8443`) plus `make migrate` and `make seed`. CI uses the same origin in front of Compose Caddy; `compose.ci-e2e.yaml` is the e2e job overlay only (GitHub postgres/redis stay as Actions services). First-time browser install:
 
 ```bash
 cd frontend && npx playwright install chromium
@@ -490,7 +490,7 @@ make e2e-smoke   # CI-equivalent gate
 make e2e         # full suite
 ```
 
-Override base URL with `PLAYWRIGHT_BASE_URL` if needed.
+Override base URL with `PLAYWRIGHT_BASE_URL` if needed. Playwright ignores the self-signed local Caddy cert (`ignoreHTTPSErrors`); that is a test fixture, not a product TLS profile. `make frontend-dev` on `:5173` is interactive host-dev only (Vite proxies `/api/v2/auth` to the auth service) and is not an e2e origin.
 
 After `make db-up` only (postgres):
 
@@ -517,7 +517,7 @@ Authenticated browser login posts to `/api/v2/auth/` on the public origin. Domai
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
 | Auth (`POST /api/v2/auth/login`; legacy unversioned Python `/auth/me`, change-password, rbac-probe) | ES256 access JWT from auth; API/SSR verify public key; Python login/refresh mounts absent; login padding / hash cap / PG failed-count lock (#213); Redis RL delay/L3/purge (#214) | UI refresh (#14); expiry (#215); change-password Argon2 (#216); unlock (#209); auth `system_config` coherence subscribe (#224) |
-| Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` on `/api/v2/auth/`; Caddy local-edge; Playwright HTTP `:5173` via Vite/`http_edge` | Auth-service refresh/me/change-password (#14 / later #33) |
+| Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` on `/api/v2/auth/`; Caddy local-edge; Playwright `https://localhost:8443` | Auth-service refresh/me/change-password (#14 / later #33) |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |

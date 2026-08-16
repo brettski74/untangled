@@ -78,13 +78,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://untangled:untangled@localhost:5432/untangled
       UNTANGLED_REDIS_URL: redis://localhost:6379/0
-      UNTANGLED_API_BASE_URL: http://localhost:8000
-      UNTANGLED_PUBLIC_ORIGIN: http://localhost:5173
-      UNTANGLED_COOKIE_SECURE: "false"
-      UNTANGLED_JWT_PRIVATE_KEY_PATH: ${{ github.workspace }}/deploy/jwt/dev-es256-private.pem
-      UNTANGLED_JWT_PUBLIC_KEY_PATH: ${{ github.workspace }}/deploy/jwt/dev-es256-public.pem
-      UNTANGLED_AUDIT_LOG_DIR: /tmp/untangled-audit-e2e
-      PLAYWRIGHT_BASE_URL: http://localhost:5173
+      PLAYWRIGHT_BASE_URL: https://localhost:8443
+      COMPOSE: docker compose
       CI: "1"
     services:
       postgres:
@@ -128,51 +123,30 @@ jobs:
             auth/package-lock.json
 
       - name: Install backend and frontend
-        run: make install models local-jwt-keys
+        run: make install models local-jwt-keys local-certs
 
       - name: Install Playwright Chromium
         run: cd frontend && npx playwright install chromium --with-deps
 
       - name: Migrate and seed
-        run: |
-          mkdir -p "$UNTANGLED_AUDIT_LOG_DIR"
-          make migrate seed
+        run: make migrate seed
 
-      - name: Build web and auth
-        run: |
-          cd frontend && CI=1 npm run build
-          cd ../auth && npm run build
-
-      - name: Start API, auth, web, and HTTP edge
+      - name: Start api, web, auth, and Caddy
         run: |
           set -euo pipefail
           mkdir -p .run
-          backend/.venv/bin/uvicorn untangled.main:app --host 127.0.0.1 --port 8000 \
-            > .run/e2e-api.log 2>&1 &
-          echo $! > .run/e2e-api.pid
-          (
-            cd auth
-            PORT=3001 npm run start > ../.run/e2e-auth.log 2>&1 &
-            echo $! > ../.run/e2e-auth.pid
-          )
-          (
-            cd frontend
-            PORT=3000 npm run start > ../.run/e2e-web.log 2>&1 &
-            echo $! > ../.run/e2e-web.pid
-          )
-          PORT=5173 node auth/scripts/http_edge.mjs > .run/e2e-edge.log 2>&1 &
-          echo $! > .run/e2e-edge.pid
+          docker compose -f compose.yaml -f compose.ci-e2e.yaml --profile local-edge \
+            up -d --build --wait --wait-timeout 180 api web auth proxy
           for i in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 \
-              && curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1 \
-              && curl -fsS -o /dev/null http://127.0.0.1:5173/ 2>&1; then
-              echo "API, auth, web edge are ready"
+            if curl -kfsS -o /dev/null https://localhost:8443/ \
+              && curl -kfsS -o /dev/null https://localhost:8443/api/v2/auth/csrf; then
+              echo "Caddy origin is ready"
               exit 0
             fi
             sleep 1
           done
-          echo "API/auth/web/edge failed to become ready"
-          tail -n 200 .run/e2e-api.log .run/e2e-auth.log .run/e2e-web.log .run/e2e-edge.log || true
+          echo "Caddy origin failed to become ready"
+          docker compose -f compose.yaml -f compose.ci-e2e.yaml --profile local-edge logs --no-color || true
           exit 1
 
       - name: Playwright smoke
@@ -184,6 +158,13 @@ jobs:
         id: e2e_full
         run: make e2e
 
+      - name: Collect Compose logs
+        if: failure() || steps.e2e_full.outcome == 'failure'
+        run: |
+          mkdir -p .run
+          docker compose -f compose.yaml -f compose.ci-e2e.yaml --profile local-edge \
+            logs --no-color > .run/e2e-compose.log || true
+
       - name: Upload Playwright report
         if: failure() || steps.e2e_full.outcome == 'failure'
         uses: actions/upload-artifact@v4
@@ -192,10 +173,7 @@ jobs:
           path: |
             frontend/playwright-report
             frontend/test-results
-            .run/e2e-api.log
-            .run/e2e-auth.log
-            .run/e2e-web.log
-            .run/e2e-edge.log
+            .run/e2e-compose.log
           if-no-files-found: ignore
 
   publish-api:

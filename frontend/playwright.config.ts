@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "https://localhost:8443";
 
 /**
- * Browser E2E against a live web + API stack (Compose or host-dev).
+ * Browser E2E against Compose Caddy (`make up` local-edge).
  * CI gates on ``--grep @smoke`` only; full suite via ``npm run test:e2e``.
  */
 export default defineConfig({
@@ -17,6 +17,7 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   use: {
     baseURL,
+    ignoreHTTPSErrors: true,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "off",
