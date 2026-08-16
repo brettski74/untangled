@@ -97,6 +97,47 @@ attributes:
     required: true
     create_default: 5
     min_value: 1
+  login_rate_limit_per_user_threshold:
+    type: integer
+    required: true
+    create_default: 10
+    min_value: 1
+  login_rate_limit_per_user_sample_period:
+    type: integer
+    required: true
+    create_default: 300
+    min_value: 1
+  login_rate_limit_per_ip_threshold:
+    type: integer
+    required: true
+    create_default: 10
+    min_value: 1
+  login_rate_limit_per_ip_sample_period:
+    type: integer
+    required: true
+    create_default: 300
+    min_value: 1
+  login_rate_limit_l1_delay:
+    type: integer
+    required: true
+    create_default: 500
+    min_value: 0
+  login_rate_limit_l2_delay:
+    type: integer
+    required: true
+    create_default: 2000
+    min_value: 0
+  login_rate_limit_lockout_seconds:
+    type: integer
+    required: true
+    create_default: 900
+    min_value: 1
+  login_rate_limit_max_kib:
+    type: integer
+    required: true
+    create_default: 16384
+    min_value: 8192
+    max_value: 262144
   audit_bulk_read_window_seconds:
     type: integer
     required: true

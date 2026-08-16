@@ -1,4 +1,5 @@
 import pg from "pg";
+import { createClient } from "redis";
 
 import { make_file_audit_sink, type AuditSink } from "./audit.js";
 import { cookie_secure_from_env } from "./cookie_secure.js";
@@ -11,7 +12,9 @@ import {
 } from "./login_settings.js";
 import { draw_process_time_ms, sleep_ms } from "./padding.js";
 import { make_dummy_hash, verify_password } from "./passwords.js";
-import { stub_rate_limit, type RateLimitEvaluator } from "./rate_limit.js";
+import type { RateLimitEvaluator } from "./rate_limit.js";
+import { make_redis_rate_limit } from "./rate_limit_redis.js";
+import { redact_redis_url, redis_url_from_env } from "./redis_url.js";
 import { make_login_settings_cache, type LoginSettingsSource } from "./system_config.js";
 import { make_user_repository, type UserRepository } from "./users.js";
 
@@ -125,6 +128,26 @@ export async function load_config_from_env(
     return settings;
   };
   await get_settings();
+  const audit = make_file_audit_sink(audit_log_dir(env), {
+    rollover_bytes: audit_rollover_bytes(env),
+    rollover_seconds: audit_rollover_seconds(env),
+  });
+  const redis_url = redis_url_from_env(env.UNTANGLED_REDIS_URL);
+  const redis = createClient({ url: redis_url });
+  redis.on("error", (error: Error) => {
+    process.stderr.write(
+      `untangled-auth redis error (${redact_redis_url(redis_url)}): ${error.message}\n`,
+    );
+  });
+  try {
+    await redis.connect();
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "unknown";
+    throw new Error(
+      `Redis unreachable for auth rate-limit (${redact_redis_url(redis_url)}): ${message}`,
+      { cause: error },
+    );
+  }
   return {
     public_origin,
     cookie_secure: cookie_secure_from_env(env.UNTANGLED_COOKIE_SECURE),
@@ -135,15 +158,17 @@ export async function load_config_from_env(
     ),
     get_settings,
     hash_slots: make_hash_slot_limiter(() => live_hash_limit.value),
-    rate_limit: stub_rate_limit(),
+    rate_limit: make_redis_rate_limit({
+      client: redis,
+      get_settings: async () => (await get_settings()).rate_limit,
+      audit,
+      redis_url,
+    }),
     expiry: stub_expiry(),
     users: make_user_repository(pool),
     verify_password,
     dummy_hash,
-    audit: make_file_audit_sink(audit_log_dir(env), {
-      rollover_bytes: audit_rollover_bytes(env),
-      rollover_seconds: audit_rollover_seconds(env),
-    }),
+    audit,
     draw_t: draw_process_time_ms,
     now_ms: () => performance.now(),
     sleep: sleep_ms,

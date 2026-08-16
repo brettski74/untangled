@@ -195,6 +195,7 @@ auth-dev: auth-install local-jwt-keys ## Run the auth service on :3001 (host-dev
 	@mkdir -p $(RUN_DIR)/audit
 	cd $(AUTH_DIR) && \
 		DATABASE_URL=$${DATABASE_URL:-postgresql://untangled:untangled@127.0.0.1:5432/untangled} \
+		UNTANGLED_REDIS_URL=$${UNTANGLED_REDIS_URL:-redis://localhost:6379/0} \
 		UNTANGLED_PUBLIC_ORIGIN=$${UNTANGLED_PUBLIC_ORIGIN:-http://127.0.0.1:5173} \
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
 		UNTANGLED_JWT_PRIVATE_KEY_PATH=$${UNTANGLED_JWT_PRIVATE_KEY_PATH:-$(CURDIR)/$(JWT_PRIVATE)} \
@@ -253,6 +254,9 @@ auth-lint: auth-install ## Typecheck the auth service
 	cd $(AUTH_DIR) && npm run typecheck
 
 auth-test: auth-install ## Run auth-service unit tests
+ifneq ($(SKIP_REDIS_UP),1)
+	@$(MAKE) redis-up
+endif
 	cd $(AUTH_DIR) && npm test
 
 # Playwright browser E2E. Requires API + auth + web + same-origin edge on :5173

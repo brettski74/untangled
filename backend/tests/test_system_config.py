@@ -88,6 +88,18 @@ def test_system_config_definition_flags(repo_definitions: Path) -> None:
     assert by_name["login_hash_concurrency_limit"].max_value == 10
     assert by_name["login_maximum_failed_count"].create_default == 5
     assert by_name["login_maximum_failed_count"].min_value == 1
+    assert by_name["login_rate_limit_per_user_threshold"].create_default == 10
+    assert by_name["login_rate_limit_per_user_threshold"].min_value == 1
+    assert by_name["login_rate_limit_per_user_sample_period"].create_default == 300
+    assert by_name["login_rate_limit_per_ip_threshold"].create_default == 10
+    assert by_name["login_rate_limit_per_ip_sample_period"].create_default == 300
+    assert by_name["login_rate_limit_l1_delay"].create_default == 500
+    assert by_name["login_rate_limit_l1_delay"].min_value == 0
+    assert by_name["login_rate_limit_l2_delay"].create_default == 2000
+    assert by_name["login_rate_limit_lockout_seconds"].create_default == 900
+    assert by_name["login_rate_limit_max_kib"].create_default == 16384
+    assert by_name["login_rate_limit_max_kib"].min_value == 8192
+    assert by_name["login_rate_limit_max_kib"].max_value == 262144
 
 
 def test_migrate_bootstraps_system_config_singleton(
@@ -115,7 +127,15 @@ def test_migrate_bootstraps_system_config_singleton(
             login_process_time_minimum,
             login_process_time_maximum,
             login_hash_concurrency_limit,
-            login_maximum_failed_count
+            login_maximum_failed_count,
+            login_rate_limit_per_user_threshold,
+            login_rate_limit_per_user_sample_period,
+            login_rate_limit_per_ip_threshold,
+            login_rate_limit_per_ip_sample_period,
+            login_rate_limit_l1_delay,
+            login_rate_limit_l2_delay,
+            login_rate_limit_lockout_seconds,
+            login_rate_limit_max_kib
         FROM system_config
         WHERE id = %s
         """,
@@ -140,6 +160,14 @@ def test_migrate_bootstraps_system_config_singleton(
         login_max,
         hash_limit,
         max_failed,
+        rl_user_th,
+        rl_user_s,
+        rl_ip_th,
+        rl_ip_s,
+        rl_d1,
+        rl_d2,
+        rl_l,
+        rl_max_kib,
     ) = row
     assert row_id == SYSTEM_CONFIG_ID
     assert created_by == SYSTEM_USER_ID
@@ -158,6 +186,14 @@ def test_migrate_bootstraps_system_config_singleton(
     assert login_max == SYSTEM_CONFIG_DEFAULTS["login_process_time_maximum"]
     assert hash_limit == SYSTEM_CONFIG_DEFAULTS["login_hash_concurrency_limit"]
     assert max_failed == SYSTEM_CONFIG_DEFAULTS["login_maximum_failed_count"]
+    assert rl_user_th == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_per_user_threshold"]
+    assert rl_user_s == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_per_user_sample_period"]
+    assert rl_ip_th == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_per_ip_threshold"]
+    assert rl_ip_s == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_per_ip_sample_period"]
+    assert rl_d1 == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_l1_delay"]
+    assert rl_d2 == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_l2_delay"]
+    assert rl_l == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_lockout_seconds"]
+    assert rl_max_kib == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_max_kib"]
 
     check = db_conn.execute(
         """
@@ -236,10 +272,16 @@ def test_check_constraint_rejects_extra_system_config_id(
                 password_estimate_drift_factor,
                 login_process_time_minimum, login_process_time_maximum,
                 login_hash_concurrency_limit, login_maximum_failed_count,
+                login_rate_limit_per_user_threshold,
+                login_rate_limit_per_user_sample_period,
+                login_rate_limit_per_ip_threshold,
+                login_rate_limit_per_ip_sample_period,
+                login_rate_limit_l1_delay, login_rate_limit_l2_delay,
+                login_rate_limit_lockout_seconds, login_rate_limit_max_kib,
                 audit_bulk_read_window_seconds, audit_bulk_read_max_searches
             ) VALUES (
                 %s, %s, %s, %s, %s, 3, 20, 50, 3, 900, 12, 128, 1000, 10000, 1.1,
-                300, 500, 4, 5, 600, 100
+                300, 500, 4, 5, 10, 300, 10, 300, 500, 2000, 900, 16384, 600, 100
             )
             """,
             (other_id, now, now, SYSTEM_USER_ID, SYSTEM_USER_ID),
@@ -554,6 +596,14 @@ def test_clamp_uses_definition_bounds() -> None:
             "login_process_time_maximum": 500,
             "login_hash_concurrency_limit": 4,
             "login_maximum_failed_count": 5,
+            "login_rate_limit_per_user_threshold": 10,
+            "login_rate_limit_per_user_sample_period": 300,
+            "login_rate_limit_per_ip_threshold": 10,
+            "login_rate_limit_per_ip_sample_period": 300,
+            "login_rate_limit_l1_delay": 500,
+            "login_rate_limit_l2_delay": 2000,
+            "login_rate_limit_lockout_seconds": 900,
+            "login_rate_limit_max_kib": 16384,
             "audit_bulk_read_window_seconds": 600,
             "audit_bulk_read_max_searches": 100,
         }
