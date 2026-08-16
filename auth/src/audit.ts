@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { open, mkdir, stat } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 
+import { USERNAME_EVENT_BOUND } from "./login_settings.js";
+
 export type AuditEvent = {
   event_type: string;
   actor_channel: string;
@@ -144,6 +146,39 @@ export function login_audit_event(args: {
     severity: success ? "info" : capacity ? "warning" : "notice",
     correlation_id: new_correlation_id(),
     user_id: args.user_id,
+    ip_address: args.ip_address ?? null,
+    timestamp: audit_timestamp(),
+    data: args.data,
+  };
+}
+
+export const AUTH_CSRF_DENIED = "auth.csrf_denied";
+export const CSRF_DENIED_ORIGIN = "origin_mismatch";
+export const CSRF_DENIED_CSRF = "csrf_mismatch";
+
+export function bound_event_text(
+  raw: string,
+  limit: number = USERNAME_EVENT_BOUND,
+): string {
+  if (raw.length <= limit) {
+    return raw;
+  }
+  return raw.slice(0, limit);
+}
+
+export function csrf_denied_audit_event(args: {
+  reason: typeof CSRF_DENIED_ORIGIN | typeof CSRF_DENIED_CSRF;
+  ip_address: string | undefined;
+  data: Record<string, unknown>;
+}): AuditEvent {
+  return {
+    event_type: AUTH_CSRF_DENIED,
+    actor_channel: "human",
+    outcome: "failure",
+    reason: args.reason,
+    severity: "notice",
+    correlation_id: new_correlation_id(),
+    user_id: null,
     ip_address: args.ip_address ?? null,
     timestamp: audit_timestamp(),
     data: args.data,

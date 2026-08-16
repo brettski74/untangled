@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
+import { AUTH_CSRF_DENIED } from "../src/audit.js";
 import {
   LOGIN_HASH_CONCURRENCY_DEFAULT,
   LOGIN_HASH_CONCURRENCY_MAX,
@@ -50,6 +51,15 @@ describe("login settings contract", () => {
       "utf8",
     );
     assert.match(user_yaml, /username ~ '\^\[a-z0-9_\]\{3,32\}\$'::text/);
+  });
+
+  it("shares auth.csrf_denied with the Python EventType catalog", () => {
+    const types = readFileSync(
+      join(repo_root, "backend/src/untangled/audit/types.py"),
+      "utf8",
+    );
+    assert.equal(AUTH_CSRF_DENIED, "auth.csrf_denied");
+    assert.match(types, /AUTH_CSRF_DENIED = "auth.csrf_denied"/);
   });
 
   it("auth image stays USER node without a root entrypoint", () => {

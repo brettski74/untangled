@@ -73,7 +73,7 @@ Auth-set cookies are **host-only** (no `Domain`), `Path=/`, `SameSite=Lax`, `Sec
 1. Exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` (scheme + host + port). Default local Compose `https://localhost:8443`. Host-dev Playwright `http://127.0.0.1:5173`. `127.0.0.1` is a different origin; no alias folding.
 2. CSRF token from `X-CSRF-Token` or form field `csrf_token` matching the CSRF cookie (CSPRNG; double-submit). The login page fetches CSRF from the **browser**.
 
-Missing or mismatched Origin/CSRF → **403**, no access cookie. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503**. Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).
+Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits `auth.csrf_denied` (`reason` is `origin_mismatch` or `csrf_mismatch` on that one event type). The event records `csrf_header_length` and `csrf_cookie_length` (0 if missing), not raw token values. The client body stays `{ detail: "Forbidden" }` with no reason. SSR and Python API Origin/CSRF failures are [#223](https://github.com/brettski74/untangled/issues/223); they do not emit yet. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503**. Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).
 
 ## Forwarded client identity
 
@@ -91,4 +91,4 @@ curl -k https://localhost:8443/api/v2/auth/csrf
 curl -k -X POST https://localhost:8443/api/v2/auth/login
 ```
 
-The last call should be **403** (no Origin/CSRF). The csrf call should be **200** with a `Set-Cookie` for `__untangled_csrf`.
+The last call should be **403** (no Origin/CSRF) and should write an `auth.csrf_denied` line under the audit mount (local-edge: `.run/audit`). The csrf call should be **200** with a `Set-Cookie` for `__untangled_csrf`.

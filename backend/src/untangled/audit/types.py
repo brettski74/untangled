@@ -35,6 +35,7 @@ class EventType(StrEnum):
     AUTH_RATE_LIMIT_TRIP = "auth.rate_limit_trip"
     AUTH_REFRESH_REUSE = "auth.refresh_reuse"
     AUTH_FAILED = "auth.failed"
+    AUTH_CSRF_DENIED = "auth.csrf_denied"
 
     RECORD_SEARCH = "record.search"
     RECORD_FETCH = "record.fetch"

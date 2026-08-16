@@ -3,6 +3,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { z } from "zod";
 
+import {
+  bound_event_text,
+  csrf_denied_audit_event,
+  CSRF_DENIED_CSRF,
+  CSRF_DENIED_ORIGIN,
+} from "./audit.js";
 import type { AuthConfig } from "./config.js";
 import {
   ACCESS_COOKIE_NAME,
@@ -53,13 +59,60 @@ function handle_csrf(response: ServerResponse, config: AuthConfig): void {
   json(response, 200, { csrf_token: token });
 }
 
+async function refuse_csrf_origin(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: AuthConfig,
+  args: {
+    reason: typeof CSRF_DENIED_ORIGIN | typeof CSRF_DENIED_CSRF;
+    context_path: string;
+    username?: string;
+  },
+): Promise<void> {
+  const identity = request_identity(request, config.public_origin);
+  const cookies = parse_cookie_header(header_value(request.headers.cookie));
+  const csrf_cookie_value = cookies.get(CSRF_COOKIE_NAME) ?? "";
+  const csrf_header = header_value(request.headers["x-csrf-token"]) ?? "";
+  const origin = header_value(request.headers.origin) ?? "";
+  const user_agent = header_value(request.headers["user-agent"]) ?? "";
+  const data: Record<string, unknown> = {
+    method: request.method ?? "",
+    context_path: args.context_path,
+    protocol: identity.protocol ?? null,
+    host: identity.host ?? null,
+    origin: bound_event_text(origin),
+    user_agent: bound_event_text(user_agent),
+    csrf_header_length: csrf_header.length,
+    csrf_cookie_length: csrf_cookie_value.length,
+  };
+  if (args.username != null && args.username !== "") {
+    data.username_provided = bound_event_text(args.username);
+  }
+  try {
+    await config.audit.emit(
+      csrf_denied_audit_event({
+        reason: args.reason,
+        ip_address: identity.source_ip,
+        data,
+      }),
+    );
+  } catch {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
+  json(response, 403, { detail: "Forbidden" });
+}
+
 async function handle_login(
   request: IncomingMessage,
   response: ServerResponse,
   config: AuthConfig,
 ): Promise<void> {
   if (!origin_is_exact_match(header_value(request.headers.origin), config.public_origin)) {
-    json(response, 403, { detail: "Forbidden" });
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_ORIGIN,
+      context_path: LOGIN_PATH,
+    });
     return;
   }
 
@@ -84,7 +137,11 @@ async function handle_login(
     submitted === "" ||
     !tokens_equal(cookie_token, submitted)
   ) {
-    json(response, 403, { detail: "Forbidden" });
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_CSRF,
+      context_path: LOGIN_PATH,
+      username: parsed_body.data.username,
+    });
     return;
   }
 
