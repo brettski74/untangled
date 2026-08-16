@@ -85,7 +85,7 @@ services:
       UNTANGLED_COOKIE_SECURE: ${UNTANGLED_COOKIE_SECURE:-true}
       PORT: "3000"
     ports:
-      # Local and Rocky default host 3000. Playwright / Vite use :5173 via http_edge.
+      # Local and Rocky default host 3000. Browser origin is Caddy :8443; Vite :5173 is host-dev only.
       - "${UNTANGLED_WEB_HOST_PORT:-3000}:3000"
     volumes:
       - ./deploy/jwt/dev-es256-public.pem:/jwt/public.pem:ro

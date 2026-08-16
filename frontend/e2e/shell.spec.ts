@@ -4,6 +4,7 @@ import {
   expect_shell,
   login,
   nav_goto,
+  open_identity_menu,
   sign_out,
   track_domain_api,
 } from "./helpers/auth";
@@ -53,8 +54,7 @@ test.describe("shell and auth", () => {
 
   test("P172: identity menu open/dismiss/sign out", async ({ page }) => {
     await login(page, "admin");
-    await page.locator("header button[aria-haspopup='menu']").click();
-    const menu = page.getByRole("menu");
+    const menu = await open_identity_menu(page);
     await expect(
       menu.getByRole("menuitem", { name: "Change Password" }),
     ).toBeVisible();
@@ -68,8 +68,8 @@ test.describe("shell and auth", () => {
     page,
   }) => {
     await login(page, "admin");
-    await page.locator("header button[aria-haspopup='menu']").click();
-    await page.getByRole("menuitem", { name: "Change Password" }).click();
+    const menu = await open_identity_menu(page);
+    await menu.getByRole("menuitem", { name: "Change Password" }).click();
     await page.getByLabel("Current Password", { exact: true }).fill("wrong");
     await page.getByLabel("New Password", { exact: true }).fill("x");
     await page.getByLabel("Verify New Password", { exact: true }).fill("y");

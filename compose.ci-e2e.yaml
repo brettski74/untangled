@@ -1,0 +1,42 @@
+# CI Playwright e2e job only. Not a customer, Rocky, or GitHub deploy topology.
+# GH Actions postgres/redis service containers stay the data plane; this overlay
+# starts api/web/auth/Caddy on the Compose network without a second postgres/redis.
+# JWT/audit bind-mounts: GH runner uid often differs from auth uid 1000; the
+# playwright smoke job (not this overlay) chowns the private PEM and audit
+# dir to 1000 so auth can read 0600 / write 0775.
+services:
+  postgres:
+    profiles: ["ci-unused"]
+  redis:
+    profiles: ["ci-unused"]
+
+  api:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DATABASE_URL: postgresql://untangled:untangled@host.docker.internal:5432/untangled
+      UNTANGLED_REDIS_URL: redis://host.docker.internal:6379/0
+      UNTANGLED_AUDIT_LOG_DIR: /var/log/untangled/audit
+    depends_on: !reset []
+
+  auth:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DATABASE_URL: postgresql://untangled:untangled@host.docker.internal:5432/untangled
+      UNTANGLED_REDIS_URL: redis://host.docker.internal:6379/0
+      UNTANGLED_PUBLIC_ORIGIN: https://localhost:8443
+      UNTANGLED_COOKIE_SECURE: "true"
+      UNTANGLED_AUDIT_LOG_DIR: /var/log/untangled/audit
+    depends_on: !reset []
+
+  web:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      UNTANGLED_API_BASE_URL: http://api:8000
+      UNTANGLED_REDIS_URL: redis://host.docker.internal:6379/0
+      UNTANGLED_COOKIE_SECURE: "true"
+    depends_on: !override
+      api:
+        condition: service_healthy

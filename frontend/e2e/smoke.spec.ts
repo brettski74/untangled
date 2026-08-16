@@ -3,9 +3,11 @@ import { expect, test } from "@playwright/test";
 import {
   expect_access_denied,
   expect_shell,
+  fill_expect_dirty,
   login,
   login_expect_error,
   nav_goto,
+  open_identity_menu,
   sign_out,
   track_domain_api,
 } from "./helpers/auth";
@@ -97,20 +99,21 @@ test.describe("smoke @smoke", () => {
     await page.getByRole("link", { name: /^INC/ }).first().click();
     await expect(page).toHaveURL(/\/incident\/INC/);
     const summary = page.locator("#detail-summary");
-    await expect(summary).toBeVisible();
+    await expect(summary).toBeEditable();
     const original = await summary.inputValue();
     const next = `${original} e2e`.slice(0, 200);
     const tracker = track_domain_api(page);
-    await summary.fill(next);
+    await fill_expect_dirty(page, summary, next);
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Save" })).toHaveAttribute(
       "title",
       "Save (no changes)",
     );
     await page.reload();
+    await expect(page.locator("#detail-summary")).toBeEditable();
     await expect(page.locator("#detail-summary")).toHaveValue(next);
     // Restore
-    await page.locator("#detail-summary").fill(original);
+    await fill_expect_dirty(page, page.locator("#detail-summary"), original);
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Save" })).toHaveAttribute(
       "title",
@@ -199,9 +202,10 @@ test.describe("smoke @smoke", () => {
     const nesting = page.locator("#detail-max_search_nesting_depth");
     if (await nesting.count()) {
       const tracker = track_domain_api(page);
+      await expect(nesting).toBeEditable();
       const val = await nesting.inputValue();
       const next = String(Number(val || "5") === 5 ? 6 : 5);
-      await nesting.fill(next);
+      await fill_expect_dirty(page, nesting, next);
       await page.getByRole("button", { name: "Save" }).click();
       await expect(page.getByRole("button", { name: "Save" })).toHaveAttribute(
         "title",
@@ -212,7 +216,7 @@ test.describe("smoke @smoke", () => {
         /01900000-0000-7000-8000-000000000001/,
       );
       // Restore
-      await nesting.fill(val);
+      await fill_expect_dirty(page, nesting, val);
       await page.getByRole("button", { name: "Save" }).click();
       tracker.assert_clean();
       tracker.dispose();
@@ -224,8 +228,8 @@ test.describe("smoke @smoke", () => {
     page,
   }) => {
     await login(page, "readwrite");
-    await page.locator("header button[aria-haspopup='menu']").click();
-    await page.getByRole("menuitem", { name: "Change Password" }).click();
+    const menu = await open_identity_menu(page);
+    await menu.getByRole("menuitem", { name: "Change Password" }).click();
     await expect(page).toHaveURL(/\/change-password/);
     await expect(
       page.getByText(`Change Password for ${SEED_USERS.readwrite.username}`),

@@ -1,4 +1,4 @@
-import { expect, type Page, type Request } from "@playwright/test";
+import { expect, type Locator, type Page, type Request } from "@playwright/test";
 
 import { SEED_USERS, type SeedUserKey } from "./users";
 
@@ -84,9 +84,17 @@ export async function login_expect_error(
   await expect(page).toHaveURL(/\/login/);
 }
 
-export async function sign_out(page: Page): Promise<void> {
+/** Open the header identity menu and wait until it is visible. */
+export async function open_identity_menu(page: Page): Promise<Locator> {
   await page.locator("header button[aria-haspopup='menu']").click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+export async function sign_out(page: Page): Promise<void> {
+  const menu = await open_identity_menu(page);
+  await menu.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
 }
 
@@ -111,5 +119,29 @@ export async function nav_goto(
   if ((await section_btn.getAttribute("aria-expanded")) !== "true") {
     await section_btn.click();
   }
-  await nav.getByRole("link", { name: option, exact: true }).click();
+  await expect(section_btn).toHaveAttribute("aria-expanded", "true");
+  const section_id = await section_btn.getAttribute("aria-controls");
+  expect(section_id, `nav section "${section}" is missing aria-controls`).toBeTruthy();
+  await nav
+    .locator(`#${section_id}`)
+    .getByRole("link", { name: option, exact: true })
+    .click();
+}
+
+/**
+ * Fill a detail field and assert the value stuck and Save became dirty.
+ * Does not click Save. Fails if the field is not editable or the value snaps back.
+ */
+export async function fill_expect_dirty(
+  page: Page,
+  field: Locator,
+  value: string,
+): Promise<void> {
+  await expect(field).toBeVisible();
+  await expect(field).toBeEditable();
+  await field.fill(value);
+  await expect(field).toHaveValue(value);
+  const save = page.getByRole("button", { name: "Save" });
+  await expect(save).toBeEnabled();
+  await expect(save).toHaveAttribute("title", "Save");
 }
