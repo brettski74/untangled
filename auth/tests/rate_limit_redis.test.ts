@@ -11,7 +11,24 @@ import { DEFAULT_REDIS_URL, redis_url_from_env, redact_redis_url } from "../src/
 describe("redis_url", () => {
   it("defaults to localhost when unset", () => {
     assert.equal(DEFAULT_REDIS_URL, "redis://localhost:6379/0");
-    assert.equal(redis_url_from_env(undefined), DEFAULT_REDIS_URL);
+    const previous = process.env.UNTANGLED_REDIS_URL;
+    delete process.env.UNTANGLED_REDIS_URL;
+    try {
+      assert.equal(redis_url_from_env(), DEFAULT_REDIS_URL);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.UNTANGLED_REDIS_URL;
+      } else {
+        process.env.UNTANGLED_REDIS_URL = previous;
+      }
+    }
+  });
+
+  it("uses an explicit URL as the override", () => {
+    assert.equal(
+      redis_url_from_env("redis://127.0.0.1:6379/0"),
+      "redis://127.0.0.1:6379/0",
+    );
   });
 
   it("fails closed on an explicit empty value", () => {
