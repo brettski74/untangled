@@ -180,7 +180,9 @@ redis-wait: ## Wait until Redis accepts connections
 	exit 1
 
 backend-dev: backend-install local-jwt-keys ## Run the FastAPI dev server in the foreground (host hot-reload)
+	@mkdir -p $(RUN_DIR)/audit
 	UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
+		UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
 		$(BACKEND_VENV)/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
 
 frontend-dev: frontend-install local-jwt-keys ## Run the React Router dev server in the foreground (host hot-reload)
