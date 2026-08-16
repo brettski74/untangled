@@ -1,5 +1,6 @@
 /**
  * Change-password form UI: maskable fields, live strength, rich client validation.
+ * Browser posts to the auth service (CSRF + Origin), same pattern as login.
  */
 import { Eye, EyeOff } from "lucide-react";
 import {
@@ -9,8 +10,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Form, useNavigation } from "react-router";
 
+import { change_password_response_schema } from "./schemas";
 import {
   evaluate_new_password_strength,
   validate_change_password_form,
@@ -26,6 +27,7 @@ export type ChangePasswordFormProps = {
   username: string;
   display_name: string;
   policy: PasswordPolicy;
+  after_success?: "stay" | "home";
   action_data?: ChangePasswordActionData;
 };
 
@@ -93,12 +95,13 @@ export function ChangePasswordForm({
   username,
   display_name,
   policy,
+  after_success = "stay",
   action_data,
 }: ChangePasswordFormProps) {
   const form_id = useId();
-  const navigation = useNavigation();
-  const submitting = navigation.state !== "idle";
 
+  const [csrf, set_csrf] = useState("");
+  const [pending, set_pending] = useState(false);
   const [current_password, set_current_password] = useState("");
   const [new_password, set_new_password] = useState("");
   const [verify_new_password, set_verify_new_password] = useState("");
@@ -106,22 +109,41 @@ export function ChangePasswordForm({
   const [mask_new, set_mask_new] = useState(true);
   const [mask_verify, set_mask_verify] = useState(true);
   const [client_errors, set_client_errors] = useState<string[]>([]);
-  const [success_message, set_success_message] = useState<string | null>(null);
+  const [success_message, set_success_message] = useState<string | null>(
+    action_data?.ok === true ? action_data.detail : null,
+  );
+  const [api_failure, set_api_failure] = useState<string | null>(
+    action_data?.ok === false ? action_data.detail : null,
+  );
 
   useEffect(() => {
-    if (action_data?.ok === true) {
-      set_current_password("");
-      set_new_password("");
-      set_verify_new_password("");
-      set_mask_current(true);
-      set_mask_new(true);
-      set_mask_verify(true);
-      set_client_errors([]);
-      set_success_message(action_data.detail);
-    } else if (action_data?.ok === false) {
-      set_success_message(null);
-    }
-  }, [action_data]);
+    let cancelled = false;
+    fetch("/api/v2/auth/csrf", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("csrf");
+        }
+        const body: unknown = await response.json();
+        const token =
+          typeof body === "object" &&
+          body != null &&
+          "csrf_token" in body &&
+          typeof body.csrf_token === "string"
+            ? body.csrf_token
+            : "";
+        if (!cancelled) {
+          set_csrf(token);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          set_api_failure("Unable to start password change. Refresh and try again.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const strength =
     new_password.length === 0
@@ -141,9 +163,11 @@ export function ChangePasswordForm({
     set_mask_verify(true);
     set_client_errors([]);
     set_success_message(null);
+    set_api_failure(null);
   }
 
-  function on_submit(event: FormEvent<HTMLFormElement>) {
+  async function on_submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     const result = validate_change_password_form({
       current_password,
       new_password,
@@ -153,19 +177,87 @@ export function ChangePasswordForm({
       policy,
     });
     if (!result.ok) {
-      event.preventDefault();
       set_client_errors(result.errors);
       set_success_message(null);
+      set_api_failure(null);
+      return;
+    }
+    if (csrf === "") {
+      set_client_errors([]);
+      set_api_failure("Unable to start password change. Refresh and try again.");
       return;
     }
     set_client_errors([]);
+    set_api_failure(null);
+    set_pending(true);
+    try {
+      const response = await fetch("/api/v2/auth/change-password", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-CSRF-Token": csrf,
+        },
+        body: JSON.stringify({
+          csrf_token: csrf,
+          current_password,
+          new_password,
+          verify_new_password,
+        }),
+      });
+      if (response.status === 401) {
+        window.location.assign("/login");
+        return;
+      }
+      if (response.status === 403) {
+        set_api_failure(
+          "Password change was blocked from this origin. Use the exact site address, then refresh.",
+        );
+        return;
+      }
+      if (response.status === 422) {
+        let detail = "Password change failed.";
+        try {
+          const payload: unknown = await response.json();
+          detail = change_password_response_schema.parse(payload).detail;
+        } catch {
+          // Keep generic failure when body is missing or malformed.
+        }
+        set_api_failure(detail || "Password change failed.");
+        return;
+      }
+      if (!response.ok) {
+        set_api_failure("Password change failed.");
+        return;
+      }
+      let detail = "Password change complete.";
+      try {
+        const payload: unknown = await response.json();
+        detail = change_password_response_schema.parse(payload).detail;
+      } catch {
+        // Keep generic success copy when body is missing or malformed.
+      }
+      if (after_success === "home") {
+        window.location.assign("/");
+        return;
+      }
+      set_current_password("");
+      set_new_password("");
+      set_verify_new_password("");
+      set_mask_current(true);
+      set_mask_new(true);
+      set_mask_verify(true);
+      set_success_message(detail);
+    } catch {
+      set_api_failure("Password change failed.");
+    } finally {
+      set_pending(false);
+    }
   }
 
-  const api_failure =
-    action_data?.ok === false ? action_data.detail : null;
-
   return (
-    <Form
+    <form
       method="post"
       className="mx-auto max-w-md space-y-4 px-4 py-6"
       onSubmit={on_submit}
@@ -246,19 +338,19 @@ export function ChangePasswordForm({
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          disabled={submitting}
+          disabled={pending || csrf === ""}
           className="rounded bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:outline-none disabled:opacity-60"
         >
           Submit
         </button>
         <button
           type="reset"
-          disabled={submitting}
+          disabled={pending}
           className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:outline-none disabled:opacity-60"
         >
           Reset
         </button>
       </div>
-    </Form>
+    </form>
   );
 }

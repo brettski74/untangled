@@ -75,9 +75,11 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     environment:
-      # Server-side / in-network API base (Compose DNS). Browser login posts to
-      # the auth service via the public origin; SSR verifies `__untangled_access`.
+      # Server-side / in-network API base (Compose DNS). Browser login and
+      # change-password post to the auth service via the public origin; SSR
+      # verifies `__untangled_access` and calls auth `/me` over AUTH_BASE_URL.
       UNTANGLED_API_BASE_URL: ${UNTANGLED_API_BASE_URL:-http://api:8000}
+      UNTANGLED_AUTH_BASE_URL: ${UNTANGLED_AUTH_BASE_URL:-http://auth:3000}
       UNTANGLED_JWT_PUBLIC_KEY_PATH: /jwt/public.pem
       # Shared Redis for future SSR bus subscribers (no DB in the web process).
       UNTANGLED_REDIS_URL: ${UNTANGLED_REDIS_URL:-redis://redis:6379/0}
@@ -91,6 +93,8 @@ services:
       - ./deploy/jwt/dev-es256-public.pem:/jwt/public.pem:ro
     depends_on:
       api:
+        condition: service_healthy
+      auth:
         condition: service_healthy
       redis:
         condition: service_healthy

@@ -1,19 +1,38 @@
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
 export const ACCESS_TOKEN_TYP = "access";
+export const PASSWORD_CHANGE_REQUIRED_CLAIM = "password_change_required";
+
+export type SignAccessTokenArgs = {
+  ttl_seconds?: number;
+  exp?: number;
+  password_change_required?: boolean;
+  now?: Date;
+};
 
 export async function sign_access_token(
   private_key: CryptoKey,
   user_id: string,
-  ttl_seconds: number,
-  now: Date = new Date(),
+  args: SignAccessTokenArgs = {},
 ): Promise<string> {
-  const issued = Math.floor(now.getTime() / 1000);
-  return new SignJWT({ typ: ACCESS_TOKEN_TYP })
+  const issued = Math.floor((args.now ?? new Date()).getTime() / 1000);
+  let exp = args.exp;
+  if (exp == null) {
+    const ttl = args.ttl_seconds;
+    if (ttl == null || !Number.isInteger(ttl) || ttl < 1) {
+      throw new Error("sign_access_token requires ttl_seconds or exp");
+    }
+    exp = issued + ttl;
+  }
+  const claims: Record<string, unknown> = { typ: ACCESS_TOKEN_TYP };
+  if (args.password_change_required === true) {
+    claims[PASSWORD_CHANGE_REQUIRED_CLAIM] = true;
+  }
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: "ES256" })
     .setSubject(user_id)
     .setIssuedAt(issued)
-    .setExpirationTime(issued + ttl_seconds)
+    .setExpirationTime(exp)
     .sign(private_key);
 }
 
@@ -32,6 +51,10 @@ export async function verify_access_token(
     throw new Error("missing subject");
   }
   return payload;
+}
+
+export function password_change_required(payload: JWTPayload): boolean {
+  return payload[PASSWORD_CHANGE_REQUIRED_CLAIM] === true;
 }
 
 export function access_max_age_seconds(token_payload: JWTPayload): number {

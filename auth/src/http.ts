@@ -19,14 +19,26 @@ import {
 } from "./cookies.js";
 import { random_token, tokens_equal } from "./csrf.js";
 import { request_identity } from "./forwarded.js";
-import { sign_access_token } from "./jwt.js";
+import {
+  sign_access_token,
+  verify_access_token,
+} from "./jwt.js";
 import { ACCESS_DENIED, SERVICE_UNAVAILABLE } from "./login_settings.js";
 import { run_login_pipeline } from "./login_pipeline.js";
 import { safe_next_path } from "./next_path.js";
 import { origin_is_exact_match } from "./origin.js";
+import {
+  PASSWORD_CHANGE_FAILED,
+  PASSWORD_CHANGE_OK,
+  password_change_audit,
+  remaining_access_exp,
+  run_change_password,
+} from "./change_password.js";
 
 const CSRF_PATH = "/api/v2/auth/csrf";
 const LOGIN_PATH = "/api/v2/auth/login";
+const ME_PATH = "/api/v2/auth/me";
+const CHANGE_PASSWORD_PATH = "/api/v2/auth/change-password";
 const HEALTH_PATH = "/health";
 const MAX_BODY_BYTES = 8192;
 
@@ -49,6 +61,14 @@ export async function handle_request(
   }
   if (request.method === "POST" && path === LOGIN_PATH) {
     await handle_login(request, response, config);
+    return;
+  }
+  if (request.method === "GET" && path === ME_PATH) {
+    await handle_me(request, response, config);
+    return;
+  }
+  if (request.method === "POST" && path === CHANGE_PASSWORD_PATH) {
+    await handle_change_password(request, response, config);
     return;
   }
   json(response, 404, { detail: "Not found" });
@@ -109,19 +129,19 @@ async function handle_login(
   response: ServerResponse,
   config: AuthConfig,
 ): Promise<void> {
-  if (!origin_is_exact_match(header_value(request.headers.origin), config.public_origin)) {
-    await refuse_csrf_origin(request, response, config, {
-      reason: CSRF_DENIED_ORIGIN,
-      context_path: LOGIN_PATH,
-    });
-    return;
-  }
-
   let body: string;
   try {
     body = await read_body(request);
   } catch {
     json(response, 413, { detail: "Forbidden" });
+    return;
+  }
+
+  if (!origin_is_exact_match(header_value(request.headers.origin), config.public_origin)) {
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_ORIGIN,
+      context_path: LOGIN_PATH,
+    });
     return;
   }
 
@@ -193,11 +213,10 @@ async function handle_login(
     return;
   }
 
-  const token = await sign_access_token(
-    config.private_key,
-    result.user_id,
-    config.access_token_ttl_seconds,
-  );
+  const token = await sign_access_token(config.private_key, result.user_id, {
+    ttl_seconds: config.access_token_ttl_seconds,
+    password_change_required: result.password_change_required,
+  });
   const set_cookies = [
     csrf_cookie(cookie_token, config.cookie_secure),
     access_cookie(token, config.cookie_secure, config.access_token_ttl_seconds),
@@ -212,6 +231,192 @@ async function handle_login(
     return;
   }
   json(response, 200, { ok: true });
+}
+
+function access_token_from_request(request: IncomingMessage): string | null {
+  const authorization = header_value(request.headers.authorization) ?? "";
+  if (authorization.toLowerCase().startsWith("bearer ")) {
+    const token = authorization.slice("bearer ".length).trim();
+    return token === "" ? null : token;
+  }
+  const cookies = parse_cookie_header(header_value(request.headers.cookie));
+  const cookie_token = cookies.get(ACCESS_COOKIE_NAME) ?? "";
+  return cookie_token === "" ? null : cookie_token;
+}
+
+async function handle_me(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: AuthConfig,
+): Promise<void> {
+  const token = access_token_from_request(request);
+  if (token == null) {
+    json(response, 401, { detail: "Could not validate credentials" });
+    return;
+  }
+  let sub: string;
+  try {
+    const payload = await verify_access_token(config.public_key, token);
+    sub = payload.sub as string;
+  } catch {
+    json(response, 401, { detail: "Could not validate credentials" });
+    return;
+  }
+  const user = await config.users.load_by_id(sub);
+  if (user == null || !user.is_active) {
+    json(response, 401, { detail: "Could not validate credentials" });
+    return;
+  }
+  const rbac = await config.users.roles_and_permissions(user.id);
+  json(response, 200, {
+    id: user.id,
+    username: user.username,
+    display_name: user.display_name,
+    is_active: user.is_active,
+    roles: rbac.roles,
+    permissions: rbac.permissions,
+  });
+}
+
+const change_password_schema = z.object({
+  csrf_token: z.string().min(1).optional(),
+  current_password: z.string().optional(),
+  new_password: z.string().optional(),
+  verify_new_password: z.string().optional(),
+});
+
+async function handle_change_password(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: AuthConfig,
+): Promise<void> {
+  let body: string;
+  try {
+    body = await read_body(request);
+  } catch {
+    json(response, 413, { detail: "Payload too large" });
+    return;
+  }
+
+  if (!origin_is_exact_match(header_value(request.headers.origin), config.public_origin)) {
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_ORIGIN,
+      context_path: CHANGE_PASSWORD_PATH,
+    });
+    return;
+  }
+
+  const content_type = header_value(request.headers["content-type"]) ?? "";
+  let parsed: z.infer<typeof change_password_schema> = {};
+  if (content_type.includes("application/json")) {
+    try {
+      const raw: unknown = JSON.parse(body);
+      const result = change_password_schema.safeParse(raw);
+      parsed = result.success ? result.data : {};
+    } catch {
+      json(response, 400, { detail: "Malformed JSON" });
+      return;
+    }
+  } else if (content_type.includes("application/x-www-form-urlencoded")) {
+    const result = change_password_schema.safeParse(
+      Object.fromEntries(new URLSearchParams(body)),
+    );
+    parsed = result.success ? result.data : {};
+  }
+
+  const cookies = parse_cookie_header(header_value(request.headers.cookie));
+  const csrf_cookie_value = cookies.get(CSRF_COOKIE_NAME) ?? "";
+  const submitted = header_value(request.headers["x-csrf-token"]) || parsed.csrf_token || "";
+  if (
+    csrf_cookie_value === "" ||
+    submitted === "" ||
+    !tokens_equal(csrf_cookie_value, submitted)
+  ) {
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_CSRF,
+      context_path: CHANGE_PASSWORD_PATH,
+    });
+    return;
+  }
+
+  const access = access_token_from_request(request);
+  if (access == null) {
+    json(response, 401, { detail: "Could not validate credentials" });
+    return;
+  }
+  let payload;
+  try {
+    payload = await verify_access_token(config.public_key, access);
+  } catch {
+    json(response, 401, { detail: "Could not validate credentials" });
+    return;
+  }
+  const user = await config.users.load_by_id(payload.sub as string);
+  if (user == null) {
+    json(response, 401, { detail: "Could not validate credentials" });
+    return;
+  }
+
+  const identity = request_identity(request, config.public_origin);
+  let settings;
+  try {
+    settings = await config.get_settings();
+  } catch {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
+
+  const outcome = await run_change_password(
+    user,
+    {
+      current_password: parsed.current_password ?? "",
+      new_password: parsed.new_password ?? "",
+      verify_new_password: parsed.verify_new_password ?? "",
+    },
+    settings,
+    config.users,
+    config.verify_password,
+  );
+
+  if (outcome.kind === "locked") {
+    await password_change_audit(config.audit, {
+      success: false,
+      user_id: user.id,
+      ip_address: identity.source_ip,
+      reason: "password_change_locked",
+      data: { username: user.username },
+    });
+    json(response, 401, { detail: ACCESS_DENIED });
+    return;
+  }
+  if (outcome.kind === "failed") {
+    await password_change_audit(config.audit, {
+      success: false,
+      user_id: user.id,
+      ip_address: identity.source_ip,
+      reason: "password_change_failed",
+      data: { username: user.username },
+    });
+    json(response, 422, { detail: PASSWORD_CHANGE_FAILED });
+    return;
+  }
+
+  const exp = remaining_access_exp(payload);
+  const token = await sign_access_token(config.private_key, user.id, {
+    exp,
+  });
+  response.setHeader(
+    "Set-Cookie",
+    access_cookie(token, config.cookie_secure, Math.max(1, (exp ?? 1) - Math.floor(Date.now() / 1000))),
+  );
+  await password_change_audit(config.audit, {
+    success: true,
+    user_id: user.id,
+    ip_address: identity.source_ip,
+    reason: "password_change_ok",
+    data: { username: user.username },
+  });
+  json(response, 200, { ok: true, detail: PASSWORD_CHANGE_OK });
 }
 
 const login_form_schema = z.object({
@@ -296,6 +501,8 @@ async function read_body(request: IncomingMessage): Promise<string> {
 export const AUTH_SESSION_PATHS = {
   csrf: CSRF_PATH,
   login: LOGIN_PATH,
+  me: ME_PATH,
+  change_password: CHANGE_PASSWORD_PATH,
   access_cookie: ACCESS_COOKIE_NAME,
   csrf_cookie: CSRF_COOKIE_NAME,
 } as const;

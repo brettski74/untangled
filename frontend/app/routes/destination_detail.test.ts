@@ -71,6 +71,7 @@ const CHG_RECORD = {
 describe("destination_detail loader", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
     install_test_jwt_keys();
     reset_access_verifier_for_tests();
@@ -269,6 +270,7 @@ describe("destination_detail context bar mount", () => {
 describe("destination_detail action", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
     install_test_jwt_keys();
     reset_access_verifier_for_tests();

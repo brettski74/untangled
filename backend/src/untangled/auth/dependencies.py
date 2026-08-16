@@ -15,11 +15,15 @@ from untangled.audit.context import client_ip
 from untangled.audit.emit import emit_best_effort, make_event
 from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.auth.store import fetch_user_by_id
-from untangled.auth.tokens import decode_access_token
+from untangled.auth.tokens import (
+    PASSWORD_CHANGE_REQUIRED_ERROR,
+    decode_access_payload,
+    password_change_required,
+)
+from untangled.mapping.well_known import SYSTEM_CONFIG_ID
 from untangled.persistence.connection import connect
 
 # auto_error=False: default HTTPBearer raises 403 on a missing header.
-# Leftover /auth/me and peers keep 401 + WWW-Authenticate: Bearer.
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -43,6 +47,16 @@ def _credentials_exc() -> HTTPException:
     )
 
 
+def _must_change_exc() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": PASSWORD_CHANGE_REQUIRED_ERROR,
+            "detail": "Password change required",
+        },
+    )
+
+
 def _access_token(
     creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
 ) -> str:
@@ -55,6 +69,12 @@ def _access_token(
 AccessToken = Annotated[str, Depends(_access_token)]
 
 
+def _system_config_singleton_get(request: Request) -> bool:
+    if request.method != "GET":
+        return False
+    return request.url.path == f"/api/v2/system_config/{SYSTEM_CONFIG_ID}"
+
+
 def get_current_user(
     request: Request,
     token: AccessToken,
@@ -63,7 +83,8 @@ def get_current_user(
     """Resolve the Bearer access token to an active user row."""
     credentials_exc = _credentials_exc()
     try:
-        user_id: UUID = decode_access_token(token)
+        payload = decode_access_payload(token)
+        user_id = UUID(payload["sub"])
     except jwt.PyJWTError as exc:
         emit_best_effort(
             make_event(
@@ -76,6 +97,11 @@ def get_current_user(
             )
         )
         raise credentials_exc from exc
+
+    if password_change_required(payload) and not _system_config_singleton_get(
+        request
+    ):
+        raise _must_change_exc()
 
     user = fetch_user_by_id(conn, user_id)
     if user is None or not user["is_active"]:
@@ -94,26 +120,4 @@ def get_current_user(
     return user
 
 
-def get_password_change_subject(
-    token: AccessToken,
-    conn: DbConn,
-) -> dict[str, Any]:
-    """Resolve Bearer → user for change-password (inactive admitted past the gate).
-
-    Missing/invalid/unresolvable token → 401. Inactive users continue into the
-    always-run pipeline so locked accounts still receive uniform 422.
-    """
-    credentials_exc = _credentials_exc()
-    try:
-        user_id: UUID = decode_access_token(token)
-    except jwt.PyJWTError as exc:
-        raise credentials_exc from exc
-
-    user = fetch_user_by_id(conn, user_id)
-    if user is None:
-        raise credentials_exc
-    return user
-
-
 CurrentUser = Annotated[dict[str, Any], Depends(get_current_user)]
-PasswordChangeSubject = Annotated[dict[str, Any], Depends(get_password_change_subject)]

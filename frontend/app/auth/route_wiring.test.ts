@@ -32,14 +32,40 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
 describe("route wiring", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
     install_test_jwt_keys();
     reset_access_verifier_for_tests();
     vi.restoreAllMocks();
   });
 
-  it("keeps only login/logout as public route ids", () => {
-    expect([...public_route_ids]).toEqual(["routes/login", "routes/logout"]);
+  it("keeps login, logout, and expired-password as public route ids", () => {
+    expect([...public_route_ids]).toEqual([
+      "routes/login",
+      "routes/logout",
+      "routes/expired_password",
+    ]);
+  });
+
+  it("authenticated loader redirects must-change sessions to expired-password", async () => {
+    const cookie = await session_cookie(
+      fake_access_token(900, { password_change_required: true }),
+    );
+    try {
+      await authenticated_loader({
+        request: new Request("http://web.test/change_request/lists/all", {
+          headers: { Cookie: cookie },
+        }),
+        params: {},
+        context: {},
+      } as never);
+      expect.unreachable("expected redirect");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      const response = error as Response;
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe("/expired-password");
+    }
   });
 
   it("authenticated loader redirects when there is no session", async () => {
@@ -52,7 +78,7 @@ describe("route wiring", () => {
     ).rejects.toMatchObject({ status: 302 });
   });
 
-  it("authenticated loader returns profile when session + /auth/me succeed", async () => {
+  it("authenticated loader returns profile when session + /api/v2/auth/me succeed", async () => {
     const cookie = await session_cookie();
 
     vi.stubGlobal(

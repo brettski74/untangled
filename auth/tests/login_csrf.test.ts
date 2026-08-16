@@ -274,6 +274,7 @@ describe("auth csrf + login", () => {
     const { payload } = await jwtVerify(value, public_key, { algorithms: ["ES256"] });
     assert.equal(payload.sub, TEST_USER_ID);
     assert.equal(payload.typ, "access");
+    assert.equal(payload.password_change_required, undefined);
     assert.equal(typeof payload.iat, "number");
     assert.equal(typeof payload.exp, "number");
   });

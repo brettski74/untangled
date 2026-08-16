@@ -432,5 +432,5 @@ def test_check_constraint_undefined_substitution(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    with pytest.raises(DefinitionError, match="undefined substitution"):
+    with pytest.raises(DefinitionError, match="not available in context"):
         load_definition(path)

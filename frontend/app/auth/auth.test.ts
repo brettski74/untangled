@@ -53,7 +53,7 @@ describe("forbidden_response", () => {
 });
 
 describe("user_profile_schema", () => {
-  it("parses consumed /auth/me fields only", () => {
+  it("parses consumed /api/v2/auth/me fields only", () => {
     const profile = user_profile_schema.parse({
       username: "admin",
       display_name: "Admin",

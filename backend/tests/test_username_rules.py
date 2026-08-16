@@ -58,12 +58,12 @@ def test_username_check_rejects_invalid(
             INSERT INTO "user" (
                 id, created_at, updated_at, created_by, updated_by,
                 username, password_hash, display_name, is_active,
-                failed_login_count
+                failed_login_count, password_expires_at
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, 'x', 'Bad', true, 0
+                %s, %s, %s, %s, %s, %s, 'x', 'Bad', true, 0, %s
             )
             """,
-            (user_id, now, now, SYSTEM_USER_ID, SYSTEM_USER_ID, "ab"),
+            (user_id, now, now, SYSTEM_USER_ID, SYSTEM_USER_ID, "ab", now),
         )
         db_conn.commit()
     db_conn.rollback()
@@ -74,12 +74,12 @@ def test_username_check_rejects_invalid(
             INSERT INTO "user" (
                 id, created_at, updated_at, created_by, updated_by,
                 username, password_hash, display_name, is_active,
-                failed_login_count
+                failed_login_count, password_expires_at
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, 'x', 'Bad', true, 0
+                %s, %s, %s, %s, %s, %s, 'x', 'Bad', true, 0, %s
             )
             """,
-            (user_id, now, now, SYSTEM_USER_ID, SYSTEM_USER_ID, "Admin"),
+            (user_id, now, now, SYSTEM_USER_ID, SYSTEM_USER_ID, "Admin", now),
         )
         db_conn.commit()
     db_conn.rollback()

@@ -18,7 +18,11 @@ from untangled.mapping.types import (
     SUPPORTED_TYPES,
     TEXT_STORAGE_FAMILY,
 )
-from untangled.mapping.well_known import SubstitutionError, substitute
+from untangled.mapping.well_known import (
+    CLOCK_TOKEN_NAMES,
+    SubstitutionError,
+    substitute,
+)
 
 
 class DefinitionError(ValueError):
@@ -640,7 +644,15 @@ def _parse_create_default(
             raise DefinitionError(
                 f"{label} must be a non-empty ISO-8601 datetime string"
             )
-        return raw.strip()
+        text = raw.strip()
+        if text.startswith("${") and text.endswith("}"):
+            name = text[2:-1]
+            if name not in CLOCK_TOKEN_NAMES:
+                raise DefinitionError(
+                    f"{label} clock token must be ${{{' or '.join(sorted(CLOCK_TOKEN_NAMES))}}}"
+                )
+            return text
+        return text
     raise DefinitionError(f"{label} is not supported for type {type_name!r}")
 
 

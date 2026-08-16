@@ -137,6 +137,21 @@ describe("well_known_substitute", () => {
       SubstitutionError,
     );
   });
+
+  it("resolves clock tokens from env in create_default", () => {
+    expect(
+      substitute("${now}", "create_default", {
+        now: "2026-08-16T21:00:00Z",
+        tomorrow: "2026-08-17T21:00:00Z",
+      }),
+    ).toBe("2026-08-16T21:00:00Z");
+  });
+
+  it("does not let env bypass the context allowlist", () => {
+    expect(() =>
+      substitute("${now}", "nav_bar", { now: "2026-08-16T21:00:00Z" }),
+    ).toThrow(SubstitutionError);
+  });
 });
 
 describe("nav paths", () => {

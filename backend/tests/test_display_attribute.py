@@ -173,7 +173,7 @@ def test_generate_emits_class_display_attribute(
     # User declares display_attribute explicitly.
     assert '"user"' in field_meta
     user_idx = field_meta.index('"user": {')
-    user_slice = field_meta[user_idx : user_idx + 800]
+    user_slice = field_meta[user_idx : user_idx + 2500]
     assert 'display_attribute: "display_name"' in user_slice
     # Incident has no compact_text display_name attribute → null.
     incident_idx = field_meta.index('"incident": {')

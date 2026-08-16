@@ -14,6 +14,7 @@ import {
   redirect_unauthorized,
 } from "../auth/gate.server";
 import { get_access_token } from "../auth/session.server";
+import { commit_active_editor_field } from "../detail/commit_active_editor_field";
 import {
   merge_create_body,
   new_save_enabled,
@@ -31,7 +32,6 @@ import {
   undo_last_chunk,
   type EditorSnapshot,
 } from "../detail/detail_editor";
-import { commit_active_editor_field } from "../detail/commit_active_editor_field";
 import { DetailForm } from "../detail/detail_form";
 import { partition_detail_layout } from "../detail/default_layout";
 import { use_record_editor_undo } from "../detail/use_record_editor_undo";
@@ -49,6 +49,7 @@ import {
 } from "../records/zod_http_status";
 import { can_create_class } from "../shell/nav_filter";
 import { ShellContextBar } from "../shell/shell_context_bar";
+import { clock_env } from "../shell/well_known_substitute";
 import type { AuthenticatedOutletContext } from "./authenticated";
 import type { Route } from "./+types/destination_new";
 
@@ -102,7 +103,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     }
 
     const layout = partition_detail_layout(field_meta);
-    const seed_record = record_from_create_defaults(field_meta);
+    const seed_record = record_from_create_defaults(field_meta, clock_env());
 
     return data({
       class_name,
@@ -183,7 +184,7 @@ export async function action({
     );
   }
 
-  const merged = merge_create_body(field_meta, body_unknown);
+  const merged = merge_create_body(field_meta, body_unknown, clock_env());
   const schema = create_schema_for_class(class_name);
   if (schema != null) {
     const known = create_schema_keys(schema);

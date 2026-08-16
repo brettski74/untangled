@@ -5,7 +5,7 @@ FastAPI backend for Milestone 1. Extend this package in place rather than adding
 ## Layout
 
 - `src/untangled/` — application package
-- `src/untangled/auth/` — password hashing, JWT/refresh tokens, HTTP auth routes
+- `src/untangled/auth/` — password hashing, JWT verify, Bearer dependencies
 - `src/untangled/seed/` — intentional local user seed CLI
 - `src/untangled/mapping/` — class-definition load + Pydantic/Zod codegen pipeline
 - `src/untangled/schema/` — Schema IR, diff-based migrate, version history
@@ -61,4 +61,4 @@ Or from this directory after `make install`:
 .venv/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Smoke test: `GET http://localhost:8000/health` (docs at `/docs`; Authorize by pasting the `__untangled_access` JWT as Bearer, then Try-it-out on legacy unversioned `/auth/me`)
+Smoke test: `GET http://localhost:8000/health` (docs at `/docs`; Authorize by pasting the `__untangled_access` JWT as Bearer)

@@ -23,6 +23,7 @@ import { fake_access_token, install_test_jwt_keys } from "./test_tokens";
 describe("auth gate + session", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
     install_test_jwt_keys();
     reset_access_verifier_for_tests();
@@ -33,13 +34,16 @@ describe("auth gate + session", () => {
     reset_access_verifier_for_tests();
   });
 
-  it("assert_web_auth_config requires public key and UNTANGLED_API_BASE_URL", () => {
+  it("assert_web_auth_config requires public key, API base, and auth base", () => {
     expect(() => assert_web_auth_config()).not.toThrow();
     delete process.env.UNTANGLED_JWT_PUBLIC_KEY;
     expect(() => assert_web_auth_config()).toThrow(/UNTANGLED_JWT_PUBLIC_KEY/);
     install_test_jwt_keys();
     delete process.env.UNTANGLED_API_BASE_URL;
     expect(() => assert_web_auth_config()).toThrow(/UNTANGLED_API_BASE_URL/);
+    process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    delete process.env.UNTANGLED_AUTH_BASE_URL;
+    expect(() => assert_web_auth_config()).toThrow(/UNTANGLED_AUTH_BASE_URL/);
   });
 
   it("cookie_secure_from_env defaults to secure and rejects typos", () => {
@@ -104,10 +108,10 @@ describe("auth gate + session", () => {
       .mockResolvedValueOnce(new Response(null, { status: 403 }));
     vi.stubGlobal("fetch", fetch_mock);
 
-    await expect(api_fetch_with_token("t", "/auth/me")).rejects.toBeInstanceOf(
+    await expect(api_fetch_with_token("t", "/api/v2/incident/x")).rejects.toBeInstanceOf(
       ApiUnauthorizedError,
     );
-    await expect(api_fetch_with_token("t", "/auth/me")).rejects.toBeInstanceOf(
+    await expect(api_fetch_with_token("t", "/api/v2/incident/x")).rejects.toBeInstanceOf(
       ApiForbiddenError,
     );
     expect(session_action_for_status(401)).toBe("clear_session");

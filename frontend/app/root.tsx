@@ -9,6 +9,7 @@ import {
 
 // Root HTML shell. Authenticated chrome is under routes/authenticated (+ app/shell/).
 import { assert_web_auth_config } from "./auth/config.server";
+import { ensure_system_config_subscriber } from "./auth/system_config_cache.server";
 import {
   route_error_copy,
   unexpected_error_copy,
@@ -19,6 +20,7 @@ import "./app.css";
 export async function loader(_: Route.LoaderArgs) {
   // Every SSR request validates required auth env early (including healthchecks on `/`).
   assert_web_auth_config();
+  await ensure_system_config_subscriber();
   return null;
 }
 

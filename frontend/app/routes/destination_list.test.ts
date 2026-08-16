@@ -26,6 +26,7 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
 describe("destination_list loader", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
     install_test_jwt_keys();
     reset_access_verifier_for_tests();
@@ -147,6 +148,7 @@ describe("destination_list loader", () => {
 describe("destination_list action", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
     install_test_jwt_keys();
     reset_access_verifier_for_tests();

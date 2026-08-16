@@ -76,6 +76,16 @@ attributes:
     create_default: 1.1
     min_value: 1
     max_value: 10
+  password_expiry_days:
+    type: integer
+    required: true
+    create_default: 90
+    min_value: 3
+  password_grace_days:
+    type: integer
+    required: true
+    create_default: 14
+    min_value: 3
   login_process_time_minimum:
     type: integer
     required: true

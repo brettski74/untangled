@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { reset_access_verifier_for_tests } from "./session.server";
+import { invalidate_system_config_cache } from "./system_config_cache.server";
 import { fake_access_token, install_test_jwt_keys } from "./test_tokens";
 
 const fetch_me = vi.fn();
-const change_password = vi.fn();
 const fetch_record = vi.fn();
 
 vi.mock("./api.server", async () => {
@@ -14,7 +14,6 @@ vi.mock("./api.server", async () => {
   return {
     ...actual,
     fetch_me: (...args: unknown[]) => fetch_me(...args),
-    change_password: (...args: unknown[]) => change_password(...args),
   };
 });
 
@@ -47,6 +46,8 @@ const POLICY_RECORD = {
   password_acceptable_crack_time_days: 1000,
   password_guess_per_second: 10000,
   password_estimate_drift_factor: "1.1",
+  password_expiry_days: 90,
+  password_grace_days: 14,
   login_process_time_minimum: 300,
   login_process_time_maximum: 500,
   login_hash_concurrency_limit: 4,
@@ -63,14 +64,15 @@ const POLICY_RECORD = {
   audit_bulk_read_max_searches: 100,
 };
 
-describe("change-password route (#173)", () => {
+describe("change-password route (#173/#215)", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
     process.env.UNTANGLED_COOKIE_SECURE = "false";
     install_test_jwt_keys();
     reset_access_verifier_for_tests();
+    invalidate_system_config_cache();
     fetch_me.mockReset();
-    change_password.mockReset();
     fetch_record.mockReset();
     fetch_me.mockResolvedValue({
       username: "ada",
@@ -81,7 +83,7 @@ describe("change-password route (#173)", () => {
     fetch_record.mockResolvedValue(POLICY_RECORD);
   });
 
-  it("loader returns password policy from system_config", async () => {
+  it("loader returns password policy from cached system_config", async () => {
     const { loader } = await import("../routes/change_password");
     const cookie = await session_cookie();
     const response = await loader({
@@ -122,54 +124,5 @@ describe("change-password route (#173)", () => {
         context: {},
       } as never),
     ).rejects.toMatchObject({ status: 503 });
-  });
-
-  it("action returns success and generic failure without inventing reasons", async () => {
-    const { action } = await import("../routes/change_password");
-    const cookie = await session_cookie();
-
-    change_password.mockResolvedValueOnce({
-      ok: true,
-      detail: "Password change complete.",
-    });
-    const ok = await action({
-      request: new Request("http://web.test/change-password", {
-        method: "POST",
-        headers: { Cookie: cookie },
-        body: new URLSearchParams({
-          current_password: "old",
-          new_password: "new-password-ok",
-          verify_new_password: "new-password-ok",
-        }),
-      }),
-      params: {},
-      context: {},
-    } as never);
-    expect(ok.data).toEqual({
-      ok: true,
-      detail: "Password change complete.",
-    });
-
-    change_password.mockResolvedValueOnce({
-      ok: false,
-      detail: "Password change failed.",
-    });
-    const failed = await action({
-      request: new Request("http://web.test/change-password", {
-        method: "POST",
-        headers: { Cookie: cookie },
-        body: new URLSearchParams({
-          current_password: "wrong",
-          new_password: "new-password-ok",
-          verify_new_password: "new-password-ok",
-        }),
-      }),
-      params: {},
-      context: {},
-    } as never);
-    expect(failed.data).toEqual({
-      ok: false,
-      detail: "Password change failed.",
-    });
   });
 });

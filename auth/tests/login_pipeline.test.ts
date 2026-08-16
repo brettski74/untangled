@@ -88,13 +88,38 @@ describe("login pipeline", () => {
       },
     });
     const result = await run_login_pipeline(ctx(), deps);
-    assert.deepEqual(result, { kind: "success", user_id: TEST_USER_ID });
+    assert.deepEqual(result, {
+      kind: "success",
+      user_id: TEST_USER_ID,
+      password_change_required: false,
+    });
     assert.deepEqual(slept, []);
     assert.equal((await users.load_by_username("admin"))?.failed_login_count, 0);
     assert.equal(events[0]?.event_type, "auth.login");
     assert.equal(events[0]?.outcome, "success");
     assert.equal(events[0]?.reason, "login_ok");
     assert.equal(events[0]?.data.username_key, "admin");
+  });
+
+  it("grace-window expiry succeeds with password_change_required", async () => {
+    const { deps } = await pipeline_deps({
+      expiry: { classify: () => "must_change" },
+    });
+    const result = await run_login_pipeline(ctx(), deps);
+    assert.deepEqual(result, {
+      kind: "success",
+      user_id: TEST_USER_ID,
+      password_change_required: true,
+    });
+  });
+
+  it("past-grace expiry is denied", async () => {
+    const { deps, events } = await pipeline_deps({
+      expiry: { classify: () => "failure" },
+    });
+    const result = await run_login_pipeline(ctx(), deps);
+    assert.equal(result.kind, "denied");
+    assert.equal(events[0]?.reason, "password_age_locked");
   });
 
   it("invalid username runs rate-limit then skip without verify", async () => {

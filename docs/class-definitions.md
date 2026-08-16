@@ -207,8 +207,10 @@ models only (not on the full/read model). Omit either key independently; reject
 
 ### Well-known substitution (`${…}`)
 
-YAML string values that opt into substitution may contain `${snake_name}` tokens
-resolved from a single catalog (`untangled.mapping.well_known`).
+YAML string values that opt into substitution may contain `${snake_name}` tokens.
+Static UUID literals resolve from the well-known catalog
+(`untangled.mapping.well_known`). Clock tokens are an evaluation-environment
+overlay (`clock_env`), not catalog entries.
 
 - **Names** are snake_case. Registered now:
   - `${system_config_id}` (stable singleton UUID
@@ -216,6 +218,10 @@ resolved from a single catalog (`untangled.mapping.well_known`).
   - `${system_user_id}` (platform attribution principal UUID
     `01900000-0000-7000-8000-000000000006`; not available in substitution
     contexts yet)
+  - Clock tokens `${now}` and `${tomorrow}` are **not** catalog constants.
+    Callers pass them via an evaluation-environment overlay (`clock_env`).
+    `${tomorrow}` is `${now}` plus 86400 seconds. Both are whole-second UTC
+    ISO-8601 with a `Z` suffix — ordinary datetime strings, not SQL `now()`.
 - **Resolution is per context**, not per variable. Each context declares which
   names are available and when evaluation runs.
   - `check_constraint`: available `${system_config_id}`; evaluate at definition
@@ -224,8 +230,14 @@ resolved from a single catalog (`untangled.mapping.well_known`).
     is loaded (`load_default_nav`). Generated `WELL_KNOWN` /
     `SUBSTITUTION_CONTEXTS` in `frontend/app/generated/well_known.ts` are the
     allowlist source; the FE apply helper fails closed like Python.
+  - `create_default`: available `${now}` / `${tomorrow}`; evaluate at migrate
+    start (one clock for the whole run, including required-column backfill)
+    and once per SSR create. `${now}` on create/backfill is an intentional
+    force-change for `user.password_expires_at`.
+  - `data_load`: available `${now}` / `${tomorrow}` (seed/data-load evaluation).
 - **Fail closed:** unknown name, unknown context, or a name not available in that
-  context is an error. Tokens are never left unsubstituted.
+  context is an error. Tokens are never left unsubstituted. `env` cannot
+  introduce names outside the context allowlist.
 - Generated constants and substitution catalog (`make models`):
   `untangled.generated.well_known` and `frontend/app/generated/well_known.ts`
   (constants plus `WELL_KNOWN` / `SUBSTITUTION_CONTEXTS` on the TS side).

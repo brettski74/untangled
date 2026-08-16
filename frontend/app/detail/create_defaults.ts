@@ -4,6 +4,7 @@
  */
 import type { ClassFieldMeta } from "../generated/field_meta";
 import { attributes_in_declaration_order } from "../list/columns";
+import { substitute } from "../shell/well_known_substitute";
 import { DETAIL_AUDIT_FIELDS } from "./default_layout";
 
 const SYSTEM_STRIP = new Set<string>([
@@ -11,12 +12,23 @@ const SYSTEM_STRIP = new Set<string>([
   ...DETAIL_AUDIT_FIELDS.map((f) => f.name_snake),
 ]);
 
+function resolve_create_default(
+  value: unknown,
+  env?: Record<string, string>,
+): unknown {
+  if (typeof value !== "string" || !value.includes("${") || env == null) {
+    return value;
+  }
+  return substitute(value, "create_default", env);
+}
+
 /**
  * Synthetic display/seed record from attribute create_default metadata.
  * Friendly-id, id, and audit slots stay empty/null until after create.
  */
 export function record_from_create_defaults(
   meta: ClassFieldMeta,
+  env?: Record<string, string>,
 ): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const attr of attributes_in_declaration_order(meta.attributes)) {
@@ -25,7 +37,10 @@ export function record_from_create_defaults(
       continue;
     }
     if (attr.create_default !== undefined) {
-      record[attr.name_snake] = attr.create_default;
+      record[attr.name_snake] = resolve_create_default(
+        attr.create_default,
+        env,
+      );
     } else {
       record[attr.name_snake] = null;
     }
@@ -47,6 +62,7 @@ export function record_from_create_defaults(
 export function merge_create_body(
   meta: ClassFieldMeta,
   client_body: Record<string, unknown>,
+  env?: Record<string, string>,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   const friendly = meta.friendly_id_attr;
@@ -63,7 +79,7 @@ export function merge_create_body(
     const is_fk = attr.references != null;
     if (is_fk) {
       if (attr.create_default !== undefined) {
-        body[name] = attr.create_default;
+        body[name] = resolve_create_default(attr.create_default, env);
       }
       continue;
     }
@@ -71,7 +87,7 @@ export function merge_create_body(
     if (Object.prototype.hasOwnProperty.call(client_body, name)) {
       body[name] = client_body[name];
     } else if (attr.create_default !== undefined) {
-      body[name] = attr.create_default;
+      body[name] = resolve_create_default(attr.create_default, env);
     }
   }
 

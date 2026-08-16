@@ -21,6 +21,8 @@ SYSTEM_CONFIG_DEFAULTS: dict[str, int | Decimal] = {
     "password_acceptable_crack_time_days": 1000,
     "password_guess_per_second": 10000,
     "password_estimate_drift_factor": Decimal("1.1"),
+    "password_expiry_days": 90,
+    "password_grace_days": 14,
     "login_process_time_minimum": 300,
     "login_process_time_maximum": 500,
     "login_hash_concurrency_limit": 4,

@@ -448,6 +448,7 @@ jobs:
             printf 'UNTANGLED_ACCESS_TOKEN_TTL_SECONDS=%s\n' "${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}"
             printf 'UNTANGLED_REFRESH_TOKEN_TTL_SECONDS=%s\n' "${UNTANGLED_REFRESH_TOKEN_TTL_SECONDS:-604800}"
             printf 'UNTANGLED_API_BASE_URL=%s\n' "http://api:8000"
+            printf 'UNTANGLED_AUTH_BASE_URL=%s\n' "http://auth:3000"
             printf 'UNTANGLED_PUBLIC_ORIGIN=%s\n' "${UNTANGLED_PUBLIC_ORIGIN}"
             printf 'UNTANGLED_WEB_HOST_PORT=%s\n' "3000"
             printf 'UNTANGLED_AUTH_HOST_PORT=%s\n' "3001"
