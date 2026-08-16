@@ -32,9 +32,9 @@ Usage: ./deploy.sh --api-image <ref> --web-image <ref> --auth-image <ref>
 Requires compose.yaml and .env in the current directory (CI writes .env from
 Environment secrets; values must not be logged).
 
-Steps: pull → up --no-build → health → safe migrate → regenerate seed
-credentials → seed. Never downs volumes or passes --allow-destructive.
-Seed password values are never printed.
+Steps: pull → prepare audit volume → up --no-build → health → safe migrate →
+regenerate seed credentials → seed. Never downs volumes or passes
+--allow-destructive. Seed password values are never printed.
 EOF
 }
 
@@ -98,8 +98,10 @@ resolve_compose() {
 }
 
 compose() {
-  # Fail closed: never inherit a developer COMPOSE_PROFILES=local-edge into Rocky.
-  COMPOSE_PROFILES= UNTANGLED_API_IMAGE="$API_IMAGE" UNTANGLED_WEB_IMAGE="$WEB_IMAGE" \
+  # Fail closed: never inherit a developer COMPOSE_PROFILES=local-edge or
+  # local audit bind-mount into Rocky (named volume untangled_audit).
+  COMPOSE_PROFILES= UNTANGLED_AUDIT_MOUNT= UNTANGLED_API_IMAGE="$API_IMAGE" \
+    UNTANGLED_WEB_IMAGE="$WEB_IMAGE" \
     UNTANGLED_AUTH_IMAGE="$AUTH_IMAGE" \
     "${COMPOSE_CMD[@]}" "$@"
 }
@@ -117,6 +119,11 @@ echo "deploy.sh: compose=${COMPOSE_CMD[*]}"
 
 echo "step: pull images"
 compose pull api web auth || die "[pull] image pull failed"
+
+echo "step: prepare audit volume (named volume dir writable by uid 1000)"
+compose run --rm --no-deps --user 0 --entrypoint sh auth -c \
+  'mkdir -p /var/log/untangled/audit && chown 1000:1000 /var/log/untangled/audit && chmod 0775 /var/log/untangled/audit' \
+  || die "[audit-prep] named volume directory not writable by uid 1000"
 
 echo "step: up stack (no build; keeps named volumes; no migrate/seed yet)"
 compose up -d --no-build "${COMPOSE_WAIT_FLAG[@]}" || die "[up] compose up --no-build failed"

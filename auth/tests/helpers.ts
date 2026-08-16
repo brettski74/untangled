@@ -1,6 +1,6 @@
 import { generateKeyPair } from "jose";
 
-import { memory_audit_sink, type AuditEvent } from "../src/audit.js";
+import { memory_audit_sink, type AuditEvent, type AuditSink } from "../src/audit.js";
 import type { AuthConfig } from "../src/config.js";
 import { cookie_secure_from_env } from "../src/cookie_secure.js";
 import { stub_expiry } from "../src/expiry.js";
@@ -70,6 +70,7 @@ export async function test_config(
     verify_password?: AuthConfig["verify_password"];
     dummy_hash?: string;
     audit_events?: AuditEvent[];
+    audit?: AuditSink;
     rate_limit?: AuthConfig["rate_limit"];
     expiry?: AuthConfig["expiry"];
     hash_slots?: AuthConfig["hash_slots"];
@@ -107,7 +108,7 @@ export async function test_config(
     users,
     verify_password,
     dummy_hash: overrides.dummy_hash ?? TEST_DUMMY_HASH,
-    audit: memory_audit_sink(audit_events),
+    audit: overrides.audit ?? memory_audit_sink(audit_events),
     draw_t: overrides.draw_t ?? draw_process_time_ms,
     now_ms: overrides.now_ms ?? (() => performance.now()),
     sleep: overrides.sleep ?? sleep_ms,

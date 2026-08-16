@@ -103,7 +103,7 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
 | `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` (coherence signaling; shared with future authz cache) |
-| `UNTANGLED_AUDIT_LOG_DIR` | Compose: `/var/log/untangled/audit` (named volume `untangled_audit` on `api` and `auth`). Host `make migrate` / `make seed` / `make auth-dev`: defaults to `.run/audit` when unset. |
+| `UNTANGLED_AUDIT_LOG_DIR` | Container path: `/var/log/untangled/audit`. Local `make up` bind-mounts host `.run/audit` there. Rocky `./deploy.sh` uses named volume `untangled_audit` (prep chowns the dir to uid 1000). Host `make migrate` / `make seed` / `make auth-dev`: defaults to `.run/audit` when unset. |
 | `UNTANGLED_AUDIT_ROLLOVER_BYTES` | `1048576` (1 MiB) |
 | `UNTANGLED_AUDIT_ROLLOVER_SECONDS` | `86400` (24 hours) |
 | `UV_THREADPOOL_SIZE` | Auth: at least **12** (`login_hash_concurrency_limit` YAML max 10 + 2 headroom for audit fsync / JWT crypto). Compose and `make auth-dev` default to 12; the process raises a smaller value at boot. |
@@ -111,8 +111,11 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 
 ### Access / security audit log (local)
 
-- The API and the auth service append **newline-delimited JSON** audit events under `UNTANGLED_AUDIT_LOG_DIR` (same volume; each process writes its own files, pid in the filename).
-- Compose mounts named volume `untangled_audit` there. Host CLIs (`make migrate`, `make seed`) and `make auth-dev` default to gitignored `.run/audit` so fail-closed audit does not need `/var/log/untangled`.
+- The API and the auth service append **newline-delimited JSON** audit events under `UNTANGLED_AUDIT_LOG_DIR` (same mount; each process writes its own files, pid in the filename).
+- **Local Compose (`make up`):** bind-mounts gitignored `.run/audit` to `/var/log/untangled/audit` so NDJSON is visible on the host. `make up` creates that directory as the invoking user before Compose (so Docker does not create a root-owned bind source). Direct `docker compose --profile local-edge up` without Make still defaults to the named volume.
+- **Rocky / `./deploy.sh`:** named volume `untangled_audit`. Deploy preps the volume directory (uid `1000`, mode `0775`) **before** `compose up` so auth (`USER node`) can create files. API-as-root can still write.
+- Host CLIs (`make migrate`, `make seed`) and `make auth-dev` default to `.run/audit` when `UNTANGLED_AUDIT_LOG_DIR` is unset so fail-closed audit does not need `/var/log/untangled` on the workstation.
+- `make down -v` removes named volumes (including unused `untangled_audit`); it does **not** delete bind-mount data. `make clean-run` removes `.run/`. Historical events already in an old named volume are not copied onto the bind.
 - The API process **does not prune** rolled files — retain/forward externally (SIEM/export is a later ticket).
 - With multiple API replicas, each process writes its own files under the shared mount (document forwarder topology; this MVP does not ship a distributed shipper). Auth replicas do the same.
 - Auth login events use the **original client IP** from the trusted `Forwarded` header Caddy overwrites (else the socket peer). API `ip_address` is still the **direct peer** as seen by the API (in Compose UI traffic this is often the `web` container). Full trusted-proxy / `X-Forwarded-For` policy is tracked separately (#67).

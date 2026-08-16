@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import type { AddressInfo } from "node:net";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it } from "node:test";
 
-import type { AuditEvent } from "../src/audit.js";
+import { make_file_audit_sink, type AuditEvent } from "../src/audit.js";
+import { ACCESS_COOKIE_NAME } from "../src/cookies.js";
 import { make_hash_slot_limiter } from "../src/hash_slots.js";
 import { INVALID_OR_OVERSIZE } from "../src/login_settings.js";
 import { run_login_pipeline, type LoginRequestContext } from "../src/login_pipeline.js";
@@ -403,6 +407,67 @@ describe("login http outcomes", () => {
         }
       },
     );
+  });
+
+  it("returns 500 when audit emit fails and does not set an access cookie", async () => {
+    await with_server(
+      {
+        audit: {
+          async emit() {
+            throw new Error("injected audit failure");
+          },
+        },
+      },
+      async (base_url) => {
+        const { token, cookie } = await csrf(base_url);
+        const response = await fetch(`${base_url}/api/v2/auth/login`, {
+          method: "POST",
+          headers: {
+            Origin: PUBLIC_ORIGIN,
+            Cookie: cookie,
+            "X-CSRF-Token": token,
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: "username=admin&password=admin-change-me",
+        });
+        assert.equal(response.status, 500);
+        assert.deepEqual(await response.json(), { detail: "Internal error" });
+        const set_cookies = response.headers.getSetCookie().join("\n");
+        assert.equal(set_cookies.includes(`${ACCESS_COOKIE_NAME}=`), false);
+      },
+    );
+  });
+
+  it("persists an audit event on success when the sink is writable", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "untangled-audit-http-"));
+    try {
+      const sink = make_file_audit_sink(directory, { pid: 99 });
+      await with_server({ audit: sink }, async (base_url) => {
+        const { token, cookie } = await csrf(base_url);
+        const response = await fetch(`${base_url}/api/v2/auth/login`, {
+          method: "POST",
+          headers: {
+            Origin: PUBLIC_ORIGIN,
+            Cookie: cookie,
+            "X-CSRF-Token": token,
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: "username=admin&password=admin-change-me",
+        });
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), { ok: true });
+        const names = await readdir(directory);
+        assert.equal(names.length, 1);
+        assert.match(names[0] ?? "", /^audit-\d{8}T\d{6}Z-99-1\.ndjson$/);
+        const payload = await readFile(join(directory, names[0] ?? ""), "utf8");
+        assert.equal(payload.includes("login_ok"), true);
+        assert.equal(payload.includes("admin-change-me"), false);
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("rejects malformed JSON with 400", async () => {

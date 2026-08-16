@@ -52,6 +52,14 @@ describe("login settings contract", () => {
     assert.match(user_yaml, /username ~ '\^\[a-z0-9_\]\{3,32\}\$'::text/);
   });
 
+  it("auth image stays USER node without a root entrypoint", () => {
+    const dockerfile = readFileSync(join(repo_root, "auth/Dockerfile"), "utf8");
+    assert.match(dockerfile, /^USER node$/m);
+    assert.match(dockerfile, /uid 1000/);
+    assert.doesNotMatch(dockerfile, /ENTRYPOINT/);
+    assert.doesNotMatch(dockerfile, /su-exec/);
+  });
+
   it("uses schema max 256 for oversize password, not live config", () => {
     const yaml = readFileSync(
       join(repo_root, "backend/class-definitions/system_config.yaml"),

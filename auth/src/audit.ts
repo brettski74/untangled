@@ -92,19 +92,25 @@ export function make_file_audit_sink(
   }
 
   async function write(event: AuditEvent): Promise<void> {
-    await ensure_file();
-    if (handle == null) {
-      throw new Error("audit file handle missing");
-    }
-    const line = compact_json(event) + "\n";
-    await handle.write(line, undefined, "utf8");
-    await handle.sync();
-    if (path != null) {
-      const size = (await stat(path)).size;
-      const age = Date.now() / 1000 - opened_at;
-      if (size >= rollover_bytes || age >= rollover_seconds) {
-        await close_unlocked();
+    try {
+      await ensure_file();
+      if (handle == null) {
+        throw new Error("audit file handle missing");
       }
+      const line = compact_json(event) + "\n";
+      await handle.write(line, undefined, "utf8");
+      await handle.sync();
+      if (path != null) {
+        const size = (await stat(path)).size;
+        const age = Date.now() / 1000 - opened_at;
+        if (size >= rollover_bytes || age >= rollover_seconds) {
+          await close_unlocked();
+        }
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "unknown";
+      process.stderr.write(`untangled-auth audit write failed: ${message}\n`);
+      throw error;
     }
   }
 
