@@ -123,10 +123,10 @@ endif
 	$(MAKE) up migrate seed
 	@echo "==> Reinstall complete"
 	@echo "    Proxy (browser origin, interim HTTPS): https://localhost:8443"
-	@echo "    Web: http://127.0.0.1:3000"
-	@echo "    Auth: http://127.0.0.1:3001"
-	@echo "    Host-dev / Playwright: http://127.0.0.1:5173 (Vite or http_edge)"
-	@echo "    API: http://127.0.0.1:8000"
+	@echo "    Web: http://localhost:3000"
+	@echo "    Auth: http://localhost:3001"
+	@echo "    Host-dev / Playwright: http://localhost:5173 (Vite or http_edge)"
+	@echo "    API: http://localhost:8000"
 
 reinstall-keep-data: ## Restart stack without wiping DB volume, then migrate and seed
 	$(MAKE) down
@@ -136,10 +136,10 @@ endif
 	$(MAKE) up migrate seed
 	@echo "==> Reinstall complete"
 	@echo "    Proxy (browser origin, interim HTTPS): https://localhost:8443"
-	@echo "    Web: http://127.0.0.1:3000"
-	@echo "    Auth: http://127.0.0.1:3001"
-	@echo "    Host-dev / Playwright: http://127.0.0.1:5173 (Vite or http_edge)"
-	@echo "    API: http://127.0.0.1:8000"
+	@echo "    Web: http://localhost:3000"
+	@echo "    Auth: http://localhost:3001"
+	@echo "    Host-dev / Playwright: http://localhost:5173 (Vite or http_edge)"
+	@echo "    API: http://localhost:8000"
 
 db-up: ## Start containerized PostgreSQL only (for host-run tests / persistence)
 	$(COMPOSE) up -d postgres
@@ -180,23 +180,25 @@ redis-wait: ## Wait until Redis accepts connections
 	exit 1
 
 backend-dev: backend-install local-jwt-keys ## Run the FastAPI dev server in the foreground (host hot-reload)
+	@mkdir -p $(RUN_DIR)/audit
 	UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
+		UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
 		$(BACKEND_VENV)/bin/uvicorn untangled.main:app --reload --host 127.0.0.1 --port 8000
 
 frontend-dev: frontend-install local-jwt-keys ## Run the React Router dev server in the foreground (host hot-reload)
 	cd $(FRONTEND_DIR) && \
-		UNTANGLED_API_BASE_URL=$${UNTANGLED_API_BASE_URL:-http://127.0.0.1:8000} \
+		UNTANGLED_API_BASE_URL=$${UNTANGLED_API_BASE_URL:-http://localhost:8000} \
 		UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
-		UNTANGLED_AUTH_ORIGIN=$${UNTANGLED_AUTH_ORIGIN:-http://127.0.0.1:3001} \
+		UNTANGLED_AUTH_ORIGIN=$${UNTANGLED_AUTH_ORIGIN:-http://localhost:3001} \
 		npm run dev -- --host 127.0.0.1 --port 5173
 
 auth-dev: auth-install local-jwt-keys ## Run the auth service on :3001 (host-dev / Playwright)
 	@mkdir -p $(RUN_DIR)/audit
 	cd $(AUTH_DIR) && \
-		DATABASE_URL=$${DATABASE_URL:-postgresql://untangled:untangled@127.0.0.1:5432/untangled} \
+		DATABASE_URL=$${DATABASE_URL:-postgresql://untangled:untangled@localhost:5432/untangled} \
 		UNTANGLED_REDIS_URL=$${UNTANGLED_REDIS_URL:-redis://localhost:6379/0} \
-		UNTANGLED_PUBLIC_ORIGIN=$${UNTANGLED_PUBLIC_ORIGIN:-http://127.0.0.1:5173} \
+		UNTANGLED_PUBLIC_ORIGIN=$${UNTANGLED_PUBLIC_ORIGIN:-http://localhost:5173} \
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
 		UNTANGLED_JWT_PRIVATE_KEY_PATH=$${UNTANGLED_JWT_PRIVATE_KEY_PATH:-$(CURDIR)/$(JWT_PRIVATE)} \
 		UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { redact_redis_url } from "./redact";
-import { RedisCoherenceBus, redis_url_from_env } from "./redis_bus.server";
+import {
+  DEFAULT_REDIS_URL,
+  RedisCoherenceBus,
+  redis_url_from_env,
+} from "./redis_bus.server";
 import {
   SYSTEM_CONFIG_INVALIDATE_PAYLOAD,
   SYSTEM_CONFIG_INVALIDATE_TOPIC,
@@ -34,11 +38,17 @@ describe("redis_url_from_env", () => {
     process.env.UNTANGLED_REDIS_URL = "  ";
     expect(() => redis_url_from_env()).toThrow(/empty/);
   });
+
+  it("defaults to localhost when unset", () => {
+    delete process.env.UNTANGLED_REDIS_URL;
+    expect(DEFAULT_REDIS_URL).toBe("redis://localhost:6379/0");
+    expect(redis_url_from_env()).toBe(DEFAULT_REDIS_URL);
+  });
 });
 
 describe("RedisCoherenceBus subscribe path", () => {
   it("receives a published coherence signal over Redis", async () => {
-    const url = process.env.UNTANGLED_REDIS_URL ?? "redis://127.0.0.1:6379/0";
+    const url = process.env.UNTANGLED_REDIS_URL ?? DEFAULT_REDIS_URL;
     const bus = new RedisCoherenceBus(url);
     const topic = `${SYSTEM_CONFIG_INVALIDATE_TOPIC}.ci.${Date.now()}`;
     const received: Record<string, unknown>[] = [];

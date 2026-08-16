@@ -7,7 +7,7 @@ import os
 # Matches compose/host docs. Override with UNTANGLED_REDIS_URL in any env.
 # Unset → host local-dev default only; production-capable deploys must set an
 # explicit URL (empty string fails closed — do not rely on localhost silently).
-DEFAULT_REDIS_URL = "redis://127.0.0.1:6379/0"
+DEFAULT_REDIS_URL = "redis://localhost:6379/0"
 
 
 class RedisConfigError(RuntimeError):

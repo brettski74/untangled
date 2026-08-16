@@ -20,8 +20,8 @@ jobs:
     permissions:
       contents: read
     env:
-      DATABASE_URL: postgresql://untangled:untangled@127.0.0.1:5432/untangled
-      UNTANGLED_REDIS_URL: redis://127.0.0.1:6379/0
+      DATABASE_URL: postgresql://untangled:untangled@localhost:5432/untangled
+      UNTANGLED_REDIS_URL: redis://localhost:6379/0
       # Skip Compose db-up / redis-up; services come from containers below.
       SKIP_DB_UP: "1"
       SKIP_REDIS_UP: "1"
@@ -76,15 +76,15 @@ jobs:
     permissions:
       contents: read
     env:
-      DATABASE_URL: postgresql://untangled:untangled@127.0.0.1:5432/untangled
-      UNTANGLED_REDIS_URL: redis://127.0.0.1:6379/0
-      UNTANGLED_API_BASE_URL: http://127.0.0.1:8000
-      UNTANGLED_PUBLIC_ORIGIN: http://127.0.0.1:5173
+      DATABASE_URL: postgresql://untangled:untangled@localhost:5432/untangled
+      UNTANGLED_REDIS_URL: redis://localhost:6379/0
+      UNTANGLED_API_BASE_URL: http://localhost:8000
+      UNTANGLED_PUBLIC_ORIGIN: http://localhost:5173
       UNTANGLED_COOKIE_SECURE: "false"
       UNTANGLED_JWT_PRIVATE_KEY_PATH: ${{ github.workspace }}/deploy/jwt/dev-es256-private.pem
       UNTANGLED_JWT_PUBLIC_KEY_PATH: ${{ github.workspace }}/deploy/jwt/dev-es256-public.pem
       UNTANGLED_AUDIT_LOG_DIR: /tmp/untangled-audit-e2e
-      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+      PLAYWRIGHT_BASE_URL: http://localhost:5173
       CI: "1"
     services:
       postgres:

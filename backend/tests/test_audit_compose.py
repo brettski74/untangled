@@ -5,6 +5,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
+from untangled.audit.settings import audit_log_dir
+
 
 def test_compose_ships_audit_volume_mount(repo_root: Path) -> None:
     compose = (repo_root / "compose.yaml").read_text(encoding="utf-8")
@@ -34,6 +38,25 @@ def test_local_dev_docs_cover_audit_sink(repo_root: Path) -> None:
     assert "make up" in docs
     assert "named volume" in docs.lower()
     assert "bind" in docs.lower()
+    assert "make auth-dev` / `make backend-dev`" in docs
+
+
+def test_python_audit_log_dir_default_is_container_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("UNTANGLED_AUDIT_LOG_DIR", raising=False)
+    assert audit_log_dir() == "/var/log/untangled/audit"
+
+
+def test_backend_dev_defaults_host_audit_dir(repo_root: Path) -> None:
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    start = makefile.index("\nbackend-dev:")
+    body = makefile[start : makefile.index("\nfrontend-dev:")]
+    assert "mkdir -p $(RUN_DIR)/audit" in body
+    assert (
+        "UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit}"
+        in body
+    )
 
 
 def test_make_up_bind_mounts_run_audit(repo_root: Path) -> None:

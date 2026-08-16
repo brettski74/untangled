@@ -41,7 +41,7 @@ Rocky Compose publishes auth on host port **3001** (`UNTANGLED_AUTH_HOST_PORT`) 
 
 - Browser origin: `https://localhost:8443` (`UNTANGLED_PROXY_HOST_PORT`, default 8443 → container 443). `https://127.0.0.1:8443` and `https://[::1]:8443` **308** to that origin so auth's exact-Origin check still sees one host.
 - Host `3000` (web), `3001` (auth), and `8000` (api) stay published for host-dev and `/docs`. They are **not** the browser credential origin.
-- Playwright / `make frontend-dev`: `http://127.0.0.1:5173` via Vite proxy or `node auth/scripts/http_edge.mjs`. `http_edge` keeps the public `Host` (it does not rewrite it to the upstream port) so SSR action CSRF sees the browser origin, matching Caddy `reverse_proxy` and Vite's default `changeOrigin: false`.
+- Playwright / `make frontend-dev`: `http://localhost:5173` via Vite proxy or `node auth/scripts/http_edge.mjs`. `http_edge` keeps the public `Host` (it does not rewrite it to the upstream port) so SSR action CSRF sees the browser origin, matching Caddy `reverse_proxy` and Vite's default `changeOrigin: false`.
 
 ### TLS files
 
@@ -70,7 +70,7 @@ Auth-set cookies are **host-only** (no `Domain`), `Path=/`, `SameSite=Lax`, `Sec
 
 `SameSite=Lax` is **not** enough for login CSRF (forced login does not need an existing cookie). `POST /api/v2/auth/login` requires:
 
-1. Exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` (scheme + host + port). Default local Compose `https://localhost:8443`. Host-dev Playwright `http://127.0.0.1:5173`. `127.0.0.1` is a different origin; no alias folding.
+1. Exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` (scheme + host + port). Default local Compose `https://localhost:8443`. Host-dev Playwright `http://localhost:5173`. `127.0.0.1` is a different origin; no alias folding.
 2. CSRF token from `X-CSRF-Token` or form field `csrf_token` matching the CSRF cookie (CSPRNG; double-submit). The login page fetches CSRF from the **browser**.
 
 Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits `auth.csrf_denied` (`reason` is `origin_mismatch` or `csrf_mismatch` on that one event type). The event records `csrf_header_length` and `csrf_cookie_length` (0 if missing), not raw token values. The client body stays `{ detail: "Forbidden" }` with no reason. SSR and Python API Origin/CSRF failures are [#223](https://github.com/brettski74/untangled/issues/223); they do not emit yet. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503**. Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).

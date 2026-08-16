@@ -7,7 +7,7 @@ import os
 import psycopg
 
 # Matches compose.yaml service credentials. Override with DATABASE_URL in any env.
-DEFAULT_DATABASE_URL = "postgresql://untangled:untangled@127.0.0.1:5432/untangled"
+DEFAULT_DATABASE_URL = "postgresql://untangled:untangled@localhost:5432/untangled"
 
 
 def database_url() -> str:

@@ -35,6 +35,7 @@ export async function handle_request(
   response: ServerResponse,
   config: AuthConfig,
 ): Promise<void> {
+  // Dummy base to parse a relative request.url; not a published origin.
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
   const path = url.pathname;
 

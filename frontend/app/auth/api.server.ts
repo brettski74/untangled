@@ -14,7 +14,7 @@ export function api_base_url(): string {
   const base = process.env.UNTANGLED_API_BASE_URL;
   if (base == null || base === "") {
     throw new Error(
-      "UNTANGLED_API_BASE_URL is required (e.g. http://api:8000 in Compose, http://127.0.0.1:8000 for host frontend-dev)",
+      "UNTANGLED_API_BASE_URL is required (e.g. http://api:8000 in Compose, http://localhost:8000 for host frontend-dev)",
     );
   }
   return base.replace(/\/$/, "");

@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 const auth_origin =
-  process.env.UNTANGLED_AUTH_ORIGIN ?? "http://127.0.0.1:3001";
+  process.env.UNTANGLED_AUTH_ORIGIN ?? "http://localhost:3001";
 
 export default defineConfig({
   // Keep prior scrollback (e.g. pytest/ruff from `make test`); Vite defaults to clearing.

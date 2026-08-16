@@ -20,7 +20,7 @@ Required web env (Compose sets these; `make frontend-dev` supplies local default
 
 | Variable | Role |
 | -------- | ---- |
-| `UNTANGLED_API_BASE_URL` | Server-side API base (`http://api:8000` in Compose; `http://127.0.0.1:8000` on the host) |
+| `UNTANGLED_API_BASE_URL` | Server-side API base (`http://api:8000` in Compose; `http://localhost:8000` on the host) |
 | `UNTANGLED_JWT_PUBLIC_KEY` or `UNTANGLED_JWT_PUBLIC_KEY_PATH` | ES256 public key — **required**; no in-code default |
 | `UNTANGLED_COOKIE_SECURE` | Secure cookies on by default; set `false` for plain-HTTP local |
 | `UNTANGLED_REDIS_URL` | Shared Redis for coherence signaling library / future subscribers (`redis://redis:6379/0` in Compose; host default `redis://localhost:6379/0`). No permanent web subscribe-on-boot until a product consumer exists; production hardening [#182](https://github.com/brettski74/untangled/issues/182) |
