@@ -45,6 +45,7 @@ function PasswordField({
   autoComplete,
   value,
   masked,
+  autoFocus = false,
   on_change,
   on_toggle_mask,
 }: {
@@ -54,6 +55,7 @@ function PasswordField({
   autoComplete: string;
   value: string;
   masked: boolean;
+  autoFocus?: boolean;
   on_change: (value: string) => void;
   on_toggle_mask: () => void;
 }): ReactNode {
@@ -69,6 +71,7 @@ function PasswordField({
           name={name}
           type={masked ? "password" : "text"}
           autoComplete={autoComplete}
+          autoFocus={autoFocus}
           value={value}
           onChange={(event) => on_change(event.target.value)}
           className="w-full rounded border border-slate-300 bg-white py-2 pr-10 pl-3 text-slate-900 shadow-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 focus:outline-none"
@@ -271,6 +274,7 @@ export function ChangePasswordForm({
         name="current_password"
         label="Current Password"
         autoComplete="current-password"
+        autoFocus
         value={current_password}
         masked={mask_current}
         on_change={set_current_password}

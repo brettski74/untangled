@@ -54,6 +54,13 @@ describe("ChangePasswordForm (#173)", () => {
       }),
     );
   });
+  it("focuses Current Password on launch", () => {
+    render_form();
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("Current Password"),
+    );
+  });
+
   it("masks each field independently with Eye / EyeOff", () => {
     render_form();
 
