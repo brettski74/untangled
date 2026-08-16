@@ -1,6 +1,9 @@
 # CI Playwright e2e job only. Not a customer, Rocky, or GitHub deploy topology.
 # GH Actions postgres/redis service containers stay the data plane; this overlay
 # starts api/web/auth/Caddy on the Compose network without a second postgres/redis.
+# JWT/audit bind-mounts: GH runner uid often differs from auth uid 1000; the
+# playwright smoke job (not this overlay) chowns the private PEM and audit
+# dir to 1000 so auth can read 0600 / write 0775.
 services:
   postgres:
     profiles: ["ci-unused"]

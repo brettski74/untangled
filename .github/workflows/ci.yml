@@ -132,11 +132,25 @@ jobs:
         run: make migrate seed
 
       - name: Start api, web, auth, and Caddy
+        # Auth runs as uid 1000; the Actions runner that minted the JWT PEMs
+        # and owns .run/audit is typically a different uid. Chown those paths
+        # to 1000 (chmod first, while the runner still owns them) so the
+        # private key stays 0600. Public key stays openssl 0644. Not Rocky /
+        # local-jwt-keys policy.
+        env:
+          UNTANGLED_AUDIT_MOUNT: ./.run/audit
         run: |
           set -euo pipefail
-          mkdir -p .run
-          docker compose -f compose.yaml -f compose.ci-e2e.yaml --profile local-edge \
-            up -d --build --wait --wait-timeout 180 api web auth proxy
+          mkdir -p .run/audit
+          chmod 0600 deploy/jwt/dev-es256-private.pem
+          chmod 0775 .run/audit
+          sudo chown 1000:1000 deploy/jwt/dev-es256-private.pem .run/audit
+          if ! docker compose -f compose.yaml -f compose.ci-e2e.yaml --profile local-edge \
+            up -d --build --wait --wait-timeout 180 api web auth proxy; then
+            echo "Compose up --wait failed"
+            docker compose -f compose.yaml -f compose.ci-e2e.yaml --profile local-edge logs --no-color || true
+            exit 1
+          fi
           for i in $(seq 1 90); do
             if curl -kfsS -o /dev/null https://localhost:8443/ \
               && curl -kfsS -o /dev/null https://localhost:8443/api/v2/auth/csrf; then
