@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 
+import { utc_now, utc_seconds } from "./datetime_utc.js";
 import { SYSTEM_USER_ID } from "./login_settings.js";
 
 export type LoadedUser = {
@@ -73,17 +74,16 @@ export function make_user_repository(pool: Pool): UserRepository {
     async set_failed_login_count(id, count) {
       await pool.query(
         'UPDATE "user" SET failed_login_count = $1, updated_at = $2, updated_by = $3::uuid WHERE id = $4::uuid',
-        [count, new Date(), SYSTEM_USER_ID, id],
+        [count, utc_now(), SYSTEM_USER_ID, id],
       );
     },
     async apply_password_change(args) {
-      const now = new Date();
       await pool.query(
         'UPDATE "user" SET password_hash = $1, password_expires_at = $2, failed_login_count = 0, updated_at = $3, updated_by = $4::uuid WHERE id = $5::uuid',
         [
           args.password_hash,
-          args.password_expires_at,
-          now,
+          utc_seconds(args.password_expires_at),
+          utc_now(),
           args.actor_id,
           args.id,
         ],

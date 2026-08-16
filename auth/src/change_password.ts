@@ -5,6 +5,7 @@ import {
   audit_timestamp,
   type AuditSink,
 } from "./audit.js";
+import { utc_seconds } from "./datetime_utc.js";
 import { classify_expiry } from "./expiry.js";
 import {
   PASSWORD_SCHEMA_MAX_CHARS,
@@ -92,8 +93,8 @@ export async function run_change_password(
     return { kind: "failed" };
   }
 
-  const password_expires_at = new Date(
-    now.getTime() + settings.password_expiry_days * 86_400_000,
+  const password_expires_at = utc_seconds(
+    new Date(now.getTime() + settings.password_expiry_days * 86_400_000),
   );
   const new_hash = await hash_password(new_pw);
   await users.apply_password_change({
