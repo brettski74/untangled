@@ -153,6 +153,7 @@ export function login_audit_event(args: {
 }
 
 export const AUTH_CSRF_DENIED = "auth.csrf_denied";
+export const AUTH_RATE_LIMIT_TRIP = "auth.rate_limit_trip";
 export const CSRF_DENIED_ORIGIN = "origin_mismatch";
 export const CSRF_DENIED_CSRF = "csrf_mismatch";
 
@@ -164,6 +165,28 @@ export function bound_event_text(
     return raw;
   }
   return raw.slice(0, limit);
+}
+
+export function rate_limit_trip_audit_event(args: {
+  kind: "user" | "ip";
+  context_key: string;
+  ip_address: string | undefined;
+}): AuditEvent {
+  return {
+    event_type: AUTH_RATE_LIMIT_TRIP,
+    actor_channel: "system",
+    outcome: "failure",
+    reason: "lockout_started",
+    severity: "notice",
+    correlation_id: new_correlation_id(),
+    user_id: null,
+    ip_address: args.ip_address ?? null,
+    timestamp: audit_timestamp(),
+    data: {
+      context_kind: args.kind,
+      context_key: bound_event_text(args.context_key),
+    },
+  };
 }
 
 export function csrf_denied_audit_event(args: {

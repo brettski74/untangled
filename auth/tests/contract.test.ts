@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
-import { AUTH_CSRF_DENIED } from "../src/audit.js";
+import { AUTH_CSRF_DENIED, AUTH_RATE_LIMIT_TRIP } from "../src/audit.js";
 import {
   LOGIN_HASH_CONCURRENCY_DEFAULT,
   LOGIN_HASH_CONCURRENCY_MAX,
@@ -45,6 +45,9 @@ describe("login settings contract", () => {
     assert.equal(LOGIN_HASH_CONCURRENCY_MIN, 1);
     assert.equal(LOGIN_HASH_CONCURRENCY_MAX, 10);
     assert.equal(LOGIN_MAXIMUM_FAILED_COUNT_DEFAULT, 5);
+    assert.match(yaml, /login_rate_limit_per_user_sample_period:\n(?:.|\n)*create_default: 300/);
+    assert.match(yaml, /login_rate_limit_lockout_seconds:\n(?:.|\n)*create_default: 900/);
+    assert.match(yaml, /login_rate_limit_max_kib:\n(?:.|\n)*create_default: 16384/);
     assert.match(yaml, /login_hash_concurrency_limit:\n(?:.|\n)*max_value: 10/);
     const user_yaml = readFileSync(
       join(repo_root, "backend/class-definitions/user.yaml"),
@@ -60,6 +63,8 @@ describe("login settings contract", () => {
     );
     assert.equal(AUTH_CSRF_DENIED, "auth.csrf_denied");
     assert.match(types, /AUTH_CSRF_DENIED = "auth.csrf_denied"/);
+    assert.equal(AUTH_RATE_LIMIT_TRIP, "auth.rate_limit_trip");
+    assert.match(types, /AUTH_RATE_LIMIT_TRIP = "auth.rate_limit_trip"/);
   });
 
   it("auth image stays USER node without a root entrypoint", () => {

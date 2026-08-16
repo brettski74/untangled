@@ -29,10 +29,24 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
         login_hash_concurrency_limit: number;
         login_maximum_failed_count: number;
         system_config_cache_ttl_seconds: number;
+        login_rate_limit_per_user_threshold: number;
+        login_rate_limit_per_user_sample_period: number;
+        login_rate_limit_per_ip_threshold: number;
+        login_rate_limit_per_ip_sample_period: number;
+        login_rate_limit_l1_delay: number;
+        login_rate_limit_l2_delay: number;
+        login_rate_limit_lockout_seconds: number;
+        login_rate_limit_max_kib: number;
       }>(
         `SELECT login_process_time_minimum, login_process_time_maximum,
                 login_hash_concurrency_limit, login_maximum_failed_count,
-                system_config_cache_ttl_seconds
+                system_config_cache_ttl_seconds,
+                login_rate_limit_per_user_threshold,
+                login_rate_limit_per_user_sample_period,
+                login_rate_limit_per_ip_threshold,
+                login_rate_limit_per_ip_sample_period,
+                login_rate_limit_l1_delay, login_rate_limit_l2_delay,
+                login_rate_limit_lockout_seconds, login_rate_limit_max_kib
          FROM system_config WHERE id = $1::uuid`,
         [SYSTEM_CONFIG_ID],
       );
@@ -46,6 +60,16 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
         hash_concurrency_limit: row.login_hash_concurrency_limit,
         maximum_failed_count: row.login_maximum_failed_count,
         cache_ttl_seconds: row.system_config_cache_ttl_seconds,
+        rate_limit: {
+          per_user_threshold: row.login_rate_limit_per_user_threshold,
+          per_user_sample_period_s: row.login_rate_limit_per_user_sample_period,
+          per_ip_threshold: row.login_rate_limit_per_ip_threshold,
+          per_ip_sample_period_s: row.login_rate_limit_per_ip_sample_period,
+          l1_delay_ms: row.login_rate_limit_l1_delay,
+          l2_delay_ms: row.login_rate_limit_l2_delay,
+          lockout_s: row.login_rate_limit_lockout_seconds,
+          max_kib: row.login_rate_limit_max_kib,
+        },
       });
       if (value.process_time_minimum_ms > value.process_time_maximum_ms) {
         throw new Error("login_process_time_minimum must be <= login_process_time_maximum");

@@ -47,6 +47,20 @@ const POLICY_RECORD = {
   password_acceptable_crack_time_days: 1000,
   password_guess_per_second: 10000,
   password_estimate_drift_factor: "1.1",
+  login_process_time_minimum: 300,
+  login_process_time_maximum: 500,
+  login_hash_concurrency_limit: 4,
+  login_maximum_failed_count: 5,
+  login_rate_limit_per_user_threshold: 10,
+  login_rate_limit_per_user_sample_period: 300,
+  login_rate_limit_per_ip_threshold: 10,
+  login_rate_limit_per_ip_sample_period: 300,
+  login_rate_limit_l1_delay: 500,
+  login_rate_limit_l2_delay: 2000,
+  login_rate_limit_lockout_seconds: 900,
+  login_rate_limit_max_kib: 16384,
+  audit_bulk_read_window_seconds: 600,
+  audit_bulk_read_max_searches: 100,
 };
 
 describe("change-password route (#173)", () => {

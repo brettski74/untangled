@@ -77,7 +77,7 @@ Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits
 
 ## Forwarded client identity
 
-Caddy **overwrites** inbound `Forwarded` / `X-Forwarded-*` (client-supplied values are not passed through). Auth parses Caddy's `Forwarded` `for` / `proto` / `host` (else the socket peer, with proto/host from `UNTANGLED_PUBLIC_ORIGIN`) and records them on login security events. Redis login rate-limit state machines land in a later #33 slice.
+Caddy **overwrites** inbound `Forwarded` / `X-Forwarded-*` (client-supplied values are not passed through). Auth parses Caddy's `Forwarded` `for` / `proto` / `host` (else the socket peer, with proto/host from `UNTANGLED_PUBLIC_ORIGIN`) and records them on login security events. Redis login rate-limit uses that source IP (and the folded username, or `invalid-or-oversize`) as contexts; evaluate returns a delay and does not sleep. RL keys live under `auth:rl:` on `UNTANGLED_REDIS_URL` (Compose `redis://redis:6379/0`; host-dev `redis://localhost:6379/0`). Memory budget is `login_rate_limit_max_kib` on `system_config`.
 
 Full production trusted-proxy / hop-count productization is out of scope. Spoofed forwarded headers from an untrusted client must not win — that is why the local proxy overwrites rather than appending.
 

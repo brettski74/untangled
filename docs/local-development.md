@@ -69,7 +69,7 @@ postgresql://untangled:untangled@127.0.0.1:5432/untangled
 Default Redis URL from the **host** (override with `UNTANGLED_REDIS_URL`):
 
 ```text
-redis://127.0.0.1:6379/0
+redis://localhost:6379/0
 ```
 
 Inside the **api** / **web** containers, Compose sets `DATABASE_URL` / `UNTANGLED_REDIS_URL` to use the `postgres` / `redis` service hostnames. Redis is ephemeral (no named volume); local-dev has no Redis password — acceptable for Compose, not a production hardening claim ([#182](https://github.com/brettski74/untangled/issues/182)).
@@ -88,7 +88,7 @@ API processes publish and subscribe **cache-coherence / invalidation** signals o
 | Connections | Command clients (publish / future GET/SET) are separate from dedicated subscriber connections |
 | API startup | Subscriber for system-config flush starts in process lifespan; missing/unreachable Redis fails loudly |
 | Publish on write | Fail-soft: system-config write still succeeds; publish failure is logged (Redis URLs redacted) |
-| SSR / web | TypeScript coherence `publish` / `subscribe` abstraction exists for CI/library use; **no** permanent subscribe-on-boot until a product consumer exists. Web may hold `UNTANGLED_REDIS_URL` (Compose already injects it); hardening is [#182](https://github.com/brettski74/untangled/issues/182) |
+| SSR / web | TypeScript coherence `publish` / `subscribe` abstraction exists for CI/library use; **no** permanent subscribe-on-boot until a product consumer exists. Auth holds a TTL cache of `system_config` today; subscribe-on-boot is [#224](https://github.com/brettski74/untangled/issues/224). Web may hold `UNTANGLED_REDIS_URL` (Compose already injects it); hardening is [#182](https://github.com/brettski74/untangled/issues/182) |
 | Spoof / integrity | Unauthenticated local Redis can deliver spoofed invalidates — residual until #182 |
 
 Host `make backend-dev` expects Redis reachable at the default URL (`make redis-up` if needed). The unset-env host default is a **local-dev convenience only** — production-capable deploys must set an explicit `UNTANGLED_REDIS_URL` (Compose already does); an explicitly empty value fails closed.
@@ -102,7 +102,7 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 | `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose HTTPS: `https://localhost:8443`. Host-dev/Playwright: `http://127.0.0.1:5173` |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://127.0.0.1:8000` |
-| `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host: `redis://127.0.0.1:6379/0` (coherence signaling; shared with future authz cache) |
+| `UNTANGLED_REDIS_URL` | Compose: `redis://redis:6379/0`; host-dev: `redis://localhost:6379/0` (coherence signaling + auth login RL; shared with future authz cache). Auth fails closed at boot if Redis is unreachable. |
 | `UNTANGLED_AUDIT_LOG_DIR` | Container path: `/var/log/untangled/audit`. Local `make up` bind-mounts host `.run/audit` there. Rocky `./deploy.sh` uses named volume `untangled_audit` (prep chowns the dir to uid 1000). Host `make migrate` / `make seed` / `make auth-dev`: defaults to `.run/audit` when unset. |
 | `UNTANGLED_AUDIT_ROLLOVER_BYTES` | `1048576` (1 MiB) |
 | `UNTANGLED_AUDIT_ROLLOVER_SECONDS` | `86400` (24 hours) |
@@ -121,7 +121,7 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 - Auth login events use the **original client IP** from the trusted `Forwarded` header Caddy overwrites (else the socket peer). API `ip_address` is still the **direct peer** as seen by the API (in Compose UI traffic this is often the `web` container). Full trusted-proxy / `X-Forwarded-For` policy is tracked separately (#67).
 - Bulk-read volume thresholds live on `system_config` (`audit_bulk_read_window_seconds`, `audit_bulk_read_max_searches`): crossing them emits a **signal-only** event (no throttle).
 
-`password_*` `system_config` attributes are **password policy**. `login_*` attributes are **authentication process** (padding window, per-process hash concurrency, failed-attempt lock-of-record). Do not mix those prefixes. Login padding applies to **failed** attempts only; success returns immediately. When no hash slot is free the auth process returns **503** (capacity, not an auth verdict) and does not wait. PostgreSQL `failed_login_count` / `login_maximum_failed_count` is the account lock-of-record until admin unlock (#209); Redis delay/lockout is a later slice. Residual: an attacker who knows a valid username can increment that counter until the account is locked.
+`password_*` `system_config` attributes are **password policy**. `login_*` attributes are **authentication process** (padding window, per-process hash concurrency, failed-attempt lock-of-record, Redis delay/lockout). Do not mix those prefixes. Login padding applies to **failed** attempts only; success returns immediately. When no hash slot is free the auth process returns **503** (capacity, not an auth verdict) and does not wait. PostgreSQL `failed_login_count` / `login_maximum_failed_count` is the account lock-of-record until admin unlock (#209). Redis rate-limit contexts (per folded username or `invalid-or-oversize`, and per source IP) are created only on failed login; evaluate returns a delay and does not sleep. Defaults: sample period S=300 s, lockout L=900 s, thresholds 10, L1/L2 delays 500/2000 ms. Prefix budget `login_rate_limit_max_kib` (min/default/max 8192/16384/262144 kiB): async purge of empty expired contexts above 80%; refuse new contexts if still over budget (existing lockouts are kept). Residual: an attacker who knows a valid username can still increment the PostgreSQL counter until the account is locked, and can L3-lock that username in Redis for L seconds after a Th burst. Auth cache of these knobs is TTL-only until [#224](https://github.com/brettski74/untangled/issues/224).
 
 Seed users (usernames are case-normalized to lowercase):
 
@@ -191,7 +191,7 @@ Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http
 - Unauthenticated routes redirect to `/login` (fail-closed).
 - The login page is SSR; the browser posts to `POST /api/v2/auth/login` after `GET /api/v2/auth/csrf`. Auth sets HttpOnly `__untangled_access` (ES256). The JWT is not in the JSON body.
 - SSR verifies that cookie with the public key and calls the API with Bearer. The authenticated layout loads legacy unversioned `GET /auth/me` once per navigation tree; the header user chip uses display name (hover = username).
-- Access expiry / API **401** expires the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67. Login padding, hash-capacity shedding, and PostgreSQL failed-count lock-of-record are in place (#213); Redis delay/L3 is #214.
+- Access expiry / API **401** expires the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67. Login padding, hash-capacity shedding, PostgreSQL failed-count lock-of-record, and Redis delay/L3 (#214) are in place.
 
 Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default with explicit local opt-out, cookie `Max-Age` from the access JWT TTL. The JWT is never exposed to browser JavaScript. Path and CSRF details: [edge-proxy.md](./edge-proxy.md).
 
@@ -516,7 +516,7 @@ Authenticated browser login posts to `/api/v2/auth/` on the public origin. Domai
 | `make up` / `make down` | Full Compose runtime (postgres + redis + api + web + auth + local-edge proxy); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
-| Auth (`POST /api/v2/auth/login`; legacy unversioned Python `/auth/me`, change-password, rbac-probe) | ES256 access JWT from auth; API/SSR verify public key; Python login/refresh mounts absent; login padding / hash cap / PG failed-count lock (#213) | UI refresh (#14); Redis RL (#214); expiry (#215); change-password Argon2 (#216); unlock (#209) |
+| Auth (`POST /api/v2/auth/login`; legacy unversioned Python `/auth/me`, change-password, rbac-probe) | ES256 access JWT from auth; API/SSR verify public key; Python login/refresh mounts absent; login padding / hash cap / PG failed-count lock (#213); Redis RL delay/L3/purge (#214) | UI refresh (#14); expiry (#215); change-password Argon2 (#216); unlock (#209); auth `system_config` coherence subscribe (#224) |
 | Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` on `/api/v2/auth/`; Caddy local-edge; Playwright HTTP `:5173` via Vite/`http_edge` | Auth-service refresh/me/change-password (#14 / later #33) |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |

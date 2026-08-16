@@ -8,6 +8,7 @@ import { make_hash_slot_limiter } from "../src/hash_slots.js";
 import {
   LOGIN_HASH_CONCURRENCY_DEFAULT,
   LOGIN_MAXIMUM_FAILED_COUNT_DEFAULT,
+  default_rate_limit_settings,
   type LoginProcessSettings,
 } from "../src/login_settings.js";
 import { draw_process_time_ms, sleep_ms } from "../src/padding.js";
@@ -29,6 +30,7 @@ export function test_login_settings(
     hash_concurrency_limit: LOGIN_HASH_CONCURRENCY_DEFAULT,
     maximum_failed_count: LOGIN_MAXIMUM_FAILED_COUNT_DEFAULT,
     cache_ttl_seconds: 900,
+    rate_limit: default_rate_limit_settings(),
     ...overrides,
   };
 }
