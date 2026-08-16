@@ -53,7 +53,9 @@ services:
     volumes:
       # NDJSON access/security audit logs (API does not prune; forward/retain externally).
       # Multi-replica: each process writes its own files under this mount.
-      - untangled_audit:/var/log/untangled/audit
+      # Local `make up` sets UNTANGLED_AUDIT_MOUNT=./.run/audit (bind).
+      # Rocky `./deploy.sh` leaves it empty → named volume untangled_audit.
+      - ${UNTANGLED_AUDIT_MOUNT:-untangled_audit}:/var/log/untangled/audit
       - ./deploy/jwt/dev-es256-public.pem:/jwt/public.pem:ro
     depends_on:
       postgres:
@@ -111,11 +113,16 @@ services:
       UNTANGLED_JWT_PRIVATE_KEY_PATH: /jwt/private.pem
       UNTANGLED_JWT_PUBLIC_KEY_PATH: /jwt/public.pem
       UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}
+      UNTANGLED_AUDIT_LOG_DIR: ${UNTANGLED_AUDIT_LOG_DIR:-/var/log/untangled/audit}
+      UNTANGLED_AUDIT_ROLLOVER_BYTES: ${UNTANGLED_AUDIT_ROLLOVER_BYTES:-1048576}
+      UNTANGLED_AUDIT_ROLLOVER_SECONDS: ${UNTANGLED_AUDIT_ROLLOVER_SECONDS:-86400}
+      UV_THREADPOOL_SIZE: ${UV_THREADPOOL_SIZE:-12}
       PORT: "3000"
     ports:
       # Rocky host-side edge / host-dev. Browser should still use the public origin.
       - "${UNTANGLED_AUTH_HOST_PORT:-3001}:3000"
     volumes:
+      - ${UNTANGLED_AUDIT_MOUNT:-untangled_audit}:/var/log/untangled/audit
       - ./deploy/jwt/dev-es256-private.pem:/jwt/private.pem:ro
       - ./deploy/jwt/dev-es256-public.pem:/jwt/public.pem:ro
     depends_on:

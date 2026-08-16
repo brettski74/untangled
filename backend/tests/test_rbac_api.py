@@ -83,13 +83,14 @@ def test_rbac_probe_forbidden_without_permission(
             sql.SQL(
                 "INSERT INTO {} ("
                 "id, created_at, updated_at, created_by, updated_by, "
-                "username, password_hash, display_name, is_active"
+                "username, password_hash, display_name, is_active, "
+                "failed_login_count"
                 ") VALUES ("
-                "{}, {}, {}, {}, {}, {}, {}, {}, {}"
+                "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}"
                 ")"
             ).format(
                 sql.Identifier("user"),
-                *[sql.Placeholder() for _ in range(9)],
+                *[sql.Placeholder() for _ in range(10)],
             ),
             (
                 user_id,
@@ -101,6 +102,7 @@ def test_rbac_probe_forbidden_without_permission(
                 hash_password("noroles-change-me"),
                 "No Roles",
                 True,
+                0,
             ),
         )
     db_conn.commit()

@@ -86,7 +86,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
         }),
       });
       if (response.status === 401) {
-        set_error("Invalid username or password.");
+        set_error("Access denied.");
         return;
       }
       if (response.status === 403) {

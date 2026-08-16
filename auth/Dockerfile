@@ -12,11 +12,13 @@ FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV UV_THREADPOOL_SIZE=12
 RUN apk add --no-cache python3 make g++
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && apk del python3 make g++
 COPY --from=build /app/dist ./dist
 RUN chown -R node:node /app
+# Official node image `node` user is uid 1000; deploy.sh audit volume prep uses 1000.
 USER node
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/main.js"]

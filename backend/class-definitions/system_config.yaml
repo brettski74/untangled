@@ -14,6 +14,7 @@ permissions:
 check_constraint:
   - "id = '${system_config_id}'::uuid"
   - "password_maximum_chars > password_minimum_chars"
+  - "login_process_time_minimum <= login_process_time_maximum"
 attributes:
   max_search_nesting_depth:
     type: integer
@@ -75,6 +76,27 @@ attributes:
     create_default: 1.1
     min_value: 1
     max_value: 10
+  login_process_time_minimum:
+    type: integer
+    required: true
+    create_default: 300
+    min_value: 100
+  login_process_time_maximum:
+    type: integer
+    required: true
+    create_default: 500
+    min_value: 200
+  login_hash_concurrency_limit:
+    type: integer
+    required: true
+    create_default: 4
+    min_value: 1
+    max_value: 10
+  login_maximum_failed_count:
+    type: integer
+    required: true
+    create_default: 5
+    min_value: 1
   audit_bulk_read_window_seconds:
     type: integer
     required: true

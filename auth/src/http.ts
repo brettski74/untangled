@@ -3,6 +3,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { z } from "zod";
 
+import {
+  bound_event_text,
+  csrf_denied_audit_event,
+  CSRF_DENIED_CSRF,
+  CSRF_DENIED_ORIGIN,
+} from "./audit.js";
 import type { AuthConfig } from "./config.js";
 import {
   ACCESS_COOKIE_NAME,
@@ -12,7 +18,10 @@ import {
   parse_cookie_header,
 } from "./cookies.js";
 import { random_token, tokens_equal } from "./csrf.js";
+import { request_identity } from "./forwarded.js";
 import { sign_access_token } from "./jwt.js";
+import { ACCESS_DENIED, SERVICE_UNAVAILABLE } from "./login_settings.js";
+import { run_login_pipeline } from "./login_pipeline.js";
 import { safe_next_path } from "./next_path.js";
 import { origin_is_exact_match } from "./origin.js";
 
@@ -20,7 +29,6 @@ const CSRF_PATH = "/api/v2/auth/csrf";
 const LOGIN_PATH = "/api/v2/auth/login";
 const HEALTH_PATH = "/health";
 const MAX_BODY_BYTES = 8192;
-const INVALID_CREDENTIALS = "Invalid username or password";
 
 export async function handle_request(
   request: IncomingMessage,
@@ -51,13 +59,60 @@ function handle_csrf(response: ServerResponse, config: AuthConfig): void {
   json(response, 200, { csrf_token: token });
 }
 
+async function refuse_csrf_origin(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: AuthConfig,
+  args: {
+    reason: typeof CSRF_DENIED_ORIGIN | typeof CSRF_DENIED_CSRF;
+    context_path: string;
+    username?: string;
+  },
+): Promise<void> {
+  const identity = request_identity(request, config.public_origin);
+  const cookies = parse_cookie_header(header_value(request.headers.cookie));
+  const csrf_cookie_value = cookies.get(CSRF_COOKIE_NAME) ?? "";
+  const csrf_header = header_value(request.headers["x-csrf-token"]) ?? "";
+  const origin = header_value(request.headers.origin) ?? "";
+  const user_agent = header_value(request.headers["user-agent"]) ?? "";
+  const data: Record<string, unknown> = {
+    method: request.method ?? "",
+    context_path: args.context_path,
+    protocol: identity.protocol ?? null,
+    host: identity.host ?? null,
+    origin: bound_event_text(origin),
+    user_agent: bound_event_text(user_agent),
+    csrf_header_length: csrf_header.length,
+    csrf_cookie_length: csrf_cookie_value.length,
+  };
+  if (args.username != null && args.username !== "") {
+    data.username_provided = bound_event_text(args.username);
+  }
+  try {
+    await config.audit.emit(
+      csrf_denied_audit_event({
+        reason: args.reason,
+        ip_address: identity.source_ip,
+        data,
+      }),
+    );
+  } catch {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
+  json(response, 403, { detail: "Forbidden" });
+}
+
 async function handle_login(
   request: IncomingMessage,
   response: ServerResponse,
   config: AuthConfig,
 ): Promise<void> {
   if (!origin_is_exact_match(header_value(request.headers.origin), config.public_origin)) {
-    json(response, 403, { detail: "Forbidden" });
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_ORIGIN,
+      context_path: LOGIN_PATH,
+    });
     return;
   }
 
@@ -72,27 +127,74 @@ async function handle_login(
   const cookies = parse_cookie_header(header_value(request.headers.cookie));
   const cookie_token = cookies.get(CSRF_COOKIE_NAME) ?? "";
   const parsed_body = parse_login_body(request, body);
-  const submitted = submitted_csrf_token(request, parsed_body);
+  if (!parsed_body.ok) {
+    json(response, 400, { detail: "Bad request" });
+    return;
+  }
+  const submitted = submitted_csrf_token(request, parsed_body.data);
   if (
     cookie_token === "" ||
     submitted === "" ||
     !tokens_equal(cookie_token, submitted)
   ) {
-    json(response, 403, { detail: "Forbidden" });
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_CSRF,
+      context_path: LOGIN_PATH,
+      username: parsed_body.data.username,
+    });
     return;
   }
 
-  const username = parsed_body.username ?? "";
-  const password = parsed_body.password ?? "";
-  const user = await config.authenticate(username, password);
-  if (user == null) {
-    json(response, 401, { detail: INVALID_CREDENTIALS });
+  let settings;
+  try {
+    settings = await config.get_settings();
+  } catch {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
+
+  const identity = request_identity(request, config.public_origin);
+  const result = await run_login_pipeline(
+    {
+      provided_username: parsed_body.data.username ?? "",
+      password: parsed_body.data.password ?? "",
+      source_ip: identity.source_ip,
+      protocol: identity.protocol,
+      host: identity.host,
+      context_path: LOGIN_PATH,
+      user_agent: header_value(request.headers["user-agent"]),
+    },
+    {
+      settings,
+      hash_slots: config.hash_slots,
+      rate_limit: config.rate_limit,
+      expiry: config.expiry,
+      users: config.users,
+      verify_password: config.verify_password,
+      dummy_hash: config.dummy_hash,
+      audit: config.audit,
+      draw_t: config.draw_t,
+      now_ms: config.now_ms,
+      sleep: config.sleep,
+    },
+  );
+
+  if (result.kind === "capacity") {
+    json(response, 503, { detail: SERVICE_UNAVAILABLE });
+    return;
+  }
+  if (result.kind === "internal_error") {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
+  if (result.kind === "denied") {
+    json(response, 401, { detail: ACCESS_DENIED });
     return;
   }
 
   const token = await sign_access_token(
     config.private_key,
-    user.id,
+    result.user_id,
     config.access_token_ttl_seconds,
   );
   const set_cookies = [
@@ -105,7 +207,7 @@ async function handle_login(
     "application/json",
   );
   if (!wants_json) {
-    redirect(response, safe_next_path(parsed_body.next, "/"));
+    redirect(response, safe_next_path(parsed_body.data.next, "/"));
     return;
   }
   json(response, 200, { ok: true });
@@ -120,24 +222,27 @@ const login_form_schema = z.object({
 
 type LoginBody = z.infer<typeof login_form_schema>;
 
-function parse_login_body(request: IncomingMessage, body: string): LoginBody {
+function parse_login_body(
+  request: IncomingMessage,
+  body: string,
+): { ok: true; data: LoginBody } | { ok: false } {
   const content_type = header_value(request.headers["content-type"]) ?? "";
   if (content_type.includes("application/json")) {
     try {
       const parsed: unknown = JSON.parse(body);
       const result = login_form_schema.safeParse(parsed);
-      return result.success ? result.data : {};
+      return { ok: true, data: result.success ? result.data : {} };
     } catch {
-      return {};
+      return { ok: false };
     }
   }
   if (content_type.includes("application/x-www-form-urlencoded")) {
     const result = login_form_schema.safeParse(
       Object.fromEntries(new URLSearchParams(body)),
     );
-    return result.success ? result.data : {};
+    return { ok: true, data: result.success ? result.data : {} };
   }
-  return {};
+  return { ok: true, data: {} };
 }
 
 function submitted_csrf_token(request: IncomingMessage, parsed: LoginBody): string {

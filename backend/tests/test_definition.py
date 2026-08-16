@@ -312,7 +312,7 @@ def test_class_flags_default_empty_permissions(repo_definitions: Path) -> None:
     user = load_definition(repo_definitions / "user.yaml")
     assert user.public is False
     assert user.permissions == ()
-    assert user.check_constraints == ()
+    assert user.check_constraints == ("username ~ '^[a-z0-9_]{3,32}$'::text",)
 
 
 def test_public_and_permissions_and_check_constraint(tmp_path: Path) -> None:

@@ -44,7 +44,8 @@ export COMPOSE
 export COMPOSE_WAIT_FLAG
 export COMPOSE_SUPPORTS_WAIT
 # local-edge (HTTPS proxy) is enabled only on up/down/reinstall, not db-up/redis-up.
-COMPOSE_LOCAL_EDGE := COMPOSE_PROFILES=local-edge
+# Bind-mount host-visible audit NDJSON; Rocky deploy.sh unsets this → named volume.
+COMPOSE_LOCAL_EDGE := COMPOSE_PROFILES=local-edge UNTANGLED_AUDIT_MOUNT=./$(RUN_DIR)/audit
 
 .PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait backend-dev frontend-dev auth-dev backend-install frontend-install auth-install local-certs local-jwt-keys lint test test-ci backend-lint backend-test frontend-lint frontend-test auth-lint auth-test e2e e2e-smoke models migrate seed clean clean-models clean-run
 
@@ -101,6 +102,7 @@ $(JWT_PRIVATE) $(JWT_PUBLIC) &:
 local-jwt-keys: $(JWT_PRIVATE) $(JWT_PUBLIC) ## Create local ES256 JWT PEMs when both are missing
 
 up: $(LOCAL_EDGE_CERT) $(LOCAL_EDGE_KEY) $(JWT_PRIVATE) $(JWT_PUBLIC) ## Build and start postgres + redis + api + web + auth + local-edge proxy
+	@mkdir -p $(RUN_DIR)/audit
 	$(COMPOSE_LOCAL_EDGE) $(COMPOSE) up -d --build $(COMPOSE_WAIT_FLAG)
 ifneq ($(COMPOSE_SUPPORTS_WAIT),yes)
 	@$(MAKE) db-wait
@@ -190,14 +192,17 @@ frontend-dev: frontend-install local-jwt-keys ## Run the React Router dev server
 		npm run dev -- --host 127.0.0.1 --port 5173
 
 auth-dev: auth-install local-jwt-keys ## Run the auth service on :3001 (host-dev / Playwright)
+	@mkdir -p $(RUN_DIR)/audit
 	cd $(AUTH_DIR) && \
 		DATABASE_URL=$${DATABASE_URL:-postgresql://untangled:untangled@127.0.0.1:5432/untangled} \
 		UNTANGLED_PUBLIC_ORIGIN=$${UNTANGLED_PUBLIC_ORIGIN:-http://127.0.0.1:5173} \
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
 		UNTANGLED_JWT_PRIVATE_KEY_PATH=$${UNTANGLED_JWT_PRIVATE_KEY_PATH:-$(CURDIR)/$(JWT_PRIVATE)} \
 		UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
+		UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
+		UV_THREADPOOL_SIZE=$${UV_THREADPOOL_SIZE:-12} \
 		PORT=$${PORT:-3001} \
-		npx tsx src/server.ts
+		npx tsx src/main.ts
 
 models: backend-install ## Generate Pydantic, Zod, and field-meta from YAML class definitions
 	$(BACKEND_PYTHON) -m untangled.mapping

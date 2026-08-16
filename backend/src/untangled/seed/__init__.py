@@ -5,7 +5,7 @@ from __future__ import annotations
 from psycopg import Connection, sql
 
 from untangled.auth.passwords import hash_password
-from untangled.auth.store import normalize_username
+from untangled.auth.store import validate_username
 from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.well_known import SYSTEM_USER_ID
 from untangled.seed.rbac import seed_rbac
@@ -40,15 +40,16 @@ def upsert_system_user(conn: Connection) -> None:
         return
 
     now = utc_now()
-    username = normalize_username(SYSTEM_USER_USERNAME)
+    username = validate_username(SYSTEM_USER_USERNAME)
     with conn.cursor() as cur:
         cur.execute(
             sql.SQL(
                 "INSERT INTO {} ("
                 "id, created_at, updated_at, created_by, updated_by, "
-                "username, password_hash, display_name, is_active"
+                "username, password_hash, display_name, is_active, "
+                "failed_login_count"
                 ") VALUES ("
-                "{}, {}, {}, {}, {}, {}, {}, {}, {}"
+                "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}"
                 ") ON CONFLICT (id) DO UPDATE SET "
                 "username = EXCLUDED.username, "
                 "password_hash = EXCLUDED.password_hash, "
@@ -58,7 +59,7 @@ def upsert_system_user(conn: Connection) -> None:
                 "updated_by = EXCLUDED.updated_by"
             ).format(
                 sql.Identifier("user"),
-                *[sql.Placeholder() for _ in range(9)],
+                *[sql.Placeholder() for _ in range(10)],
             ),
             (
                 SYSTEM_USER_ID,
@@ -70,6 +71,7 @@ def upsert_system_user(conn: Connection) -> None:
                 SYSTEM_USER_PASSWORD_HASH,
                 SYSTEM_USER_DISPLAY_NAME,
                 False,
+                0,
             ),
         )
 
@@ -111,16 +113,17 @@ def seed_users(conn: Connection) -> list[str]:
     touched: list[str] = []
     now = utc_now()
     for seed in SEED_USERS:
-        username = normalize_username(seed.username)
+        username = validate_username(seed.username)
         password_hash = hash_password(password_for(seed))
         with conn.cursor() as cur:
             cur.execute(
                 sql.SQL(
                     "INSERT INTO {} ("
                     "id, created_at, updated_at, created_by, updated_by, "
-                    "username, password_hash, display_name, is_active"
+                    "username, password_hash, display_name, is_active, "
+                    "failed_login_count"
                     ") VALUES ("
-                    "{}, {}, {}, {}, {}, {}, {}, {}, {}"
+                    "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}"
                     ") ON CONFLICT (id) DO UPDATE SET "
                     "username = EXCLUDED.username, "
                     "password_hash = EXCLUDED.password_hash, "
@@ -130,7 +133,7 @@ def seed_users(conn: Connection) -> list[str]:
                     "updated_by = EXCLUDED.id"
                 ).format(
                     sql.Identifier("user"),
-                    *[sql.Placeholder() for _ in range(9)],
+                    *[sql.Placeholder() for _ in range(10)],
                 ),
                 (
                     seed.id,
@@ -142,6 +145,7 @@ def seed_users(conn: Connection) -> list[str]:
                     password_hash,
                     seed.display_name,
                     True,
+                    0,
                 ),
             )
         touched.append(username)
