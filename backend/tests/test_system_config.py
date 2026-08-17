@@ -77,6 +77,10 @@ def test_system_config_definition_flags(repo_definitions: Path) -> None:
     assert by_name["password_acceptable_crack_time_days"].create_default == 1000
     assert by_name["password_guess_per_second"].create_default == 10000
     assert by_name["password_estimate_drift_factor"].create_default == "1.1"
+    assert by_name["password_expiry_days"].create_default == 90
+    assert by_name["password_expiry_days"].min_value == 3
+    assert by_name["password_grace_days"].create_default == 14
+    assert by_name["password_grace_days"].min_value == 3
     assert by_name["password_minimum_chars"].max_value == 256
     assert by_name["password_maximum_chars"].max_value == 256
     assert by_name["login_process_time_minimum"].create_default == 300
@@ -124,6 +128,8 @@ def test_migrate_bootstraps_system_config_singleton(
             password_acceptable_crack_time_days,
             password_guess_per_second,
             password_estimate_drift_factor,
+            password_expiry_days,
+            password_grace_days,
             login_process_time_minimum,
             login_process_time_maximum,
             login_hash_concurrency_limit,
@@ -156,6 +162,8 @@ def test_migrate_bootstraps_system_config_singleton(
         crack_days,
         guesses,
         drift,
+        pw_expiry,
+        pw_grace,
         login_min,
         login_max,
         hash_limit,
@@ -182,6 +190,8 @@ def test_migrate_bootstraps_system_config_singleton(
     assert crack_days == SYSTEM_CONFIG_DEFAULTS["password_acceptable_crack_time_days"]
     assert guesses == SYSTEM_CONFIG_DEFAULTS["password_guess_per_second"]
     assert drift == SYSTEM_CONFIG_DEFAULTS["password_estimate_drift_factor"]
+    assert pw_expiry == SYSTEM_CONFIG_DEFAULTS["password_expiry_days"]
+    assert pw_grace == SYSTEM_CONFIG_DEFAULTS["password_grace_days"]
     assert login_min == SYSTEM_CONFIG_DEFAULTS["login_process_time_minimum"]
     assert login_max == SYSTEM_CONFIG_DEFAULTS["login_process_time_maximum"]
     assert hash_limit == SYSTEM_CONFIG_DEFAULTS["login_hash_concurrency_limit"]
@@ -592,6 +602,8 @@ def test_clamp_uses_definition_bounds() -> None:
             "password_acceptable_crack_time_days": 1000,
             "password_guess_per_second": 10000,
             "password_estimate_drift_factor": "1.1",
+            "password_expiry_days": 90,
+            "password_grace_days": 14,
             "login_process_time_minimum": 300,
             "login_process_time_maximum": 500,
             "login_hash_concurrency_limit": 4,

@@ -72,10 +72,10 @@ function serialize_cookie(
   return parts.join("; ");
 }
 
-async function verified_access_token(
+async function verified_access_session(
   token: string,
   key: CryptoKey,
-): Promise<string | null> {
+): Promise<{ token: string; password_change_required: boolean } | null> {
   try {
     const { payload } = await jwtVerify(token, key, {
       algorithms: ["ES256"],
@@ -87,15 +87,23 @@ async function verified_access_token(
     if (typeof payload.sub !== "string" || payload.sub === "") {
       return null;
     }
-    return token;
+    return {
+      token,
+      password_change_required: payload.password_change_required === true,
+    };
   } catch {
     return null;
   }
 }
 
-export async function get_access_token(
+export type AccessSession = {
+  token: string;
+  password_change_required: boolean;
+};
+
+export async function get_access_session(
   request: Request,
-): Promise<string | null> {
+): Promise<AccessSession | null> {
   const token = parse_cookie_header(request.headers.get("Cookie")).get(
     ACCESS_COOKIE_NAME,
   );
@@ -103,7 +111,14 @@ export async function get_access_token(
     return null;
   }
   const key = await jwt_public_key();
-  return verified_access_token(token, key);
+  return verified_access_session(token, key);
+}
+
+export async function get_access_token(
+  request: Request,
+): Promise<string | null> {
+  const session = await get_access_session(request);
+  return session?.token ?? null;
 }
 
 /** Test/helper: emit the same access-cookie attributes auth sets on login. */

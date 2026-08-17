@@ -3,7 +3,7 @@ import { generateKeyPair } from "jose";
 import { memory_audit_sink, type AuditEvent, type AuditSink } from "../src/audit.js";
 import type { AuthConfig } from "../src/config.js";
 import { cookie_secure_from_env } from "../src/cookie_secure.js";
-import { stub_expiry } from "../src/expiry.js";
+import { password_expiry_evaluator } from "../src/expiry.js";
 import { make_hash_slot_limiter } from "../src/hash_slots.js";
 import {
   LOGIN_HASH_CONCURRENCY_DEFAULT,
@@ -30,6 +30,13 @@ export function test_login_settings(
     hash_concurrency_limit: LOGIN_HASH_CONCURRENCY_DEFAULT,
     maximum_failed_count: LOGIN_MAXIMUM_FAILED_COUNT_DEFAULT,
     cache_ttl_seconds: 900,
+    password_expiry_days: 90,
+    password_grace_days: 14,
+    password_minimum_chars: 12,
+    password_maximum_chars: 128,
+    password_acceptable_crack_time_days: 1000,
+    password_guess_per_second: 10000,
+    password_estimate_drift_factor: 1.1,
     rate_limit: default_rate_limit_settings(),
     ...overrides,
   };
@@ -45,12 +52,35 @@ export function memory_users(initial: LoadedUser[]): UserRepository & {
       const row = rows.get(folded);
       return row == null ? null : { ...row };
     },
+    async load_by_id(id) {
+      for (const row of rows.values()) {
+        if (row.id === id) {
+          return { ...row };
+        }
+      }
+      return null;
+    },
     async set_failed_login_count(id, count) {
       for (const [key, row] of rows) {
         if (row.id === id) {
           rows.set(key, { ...row, failed_login_count: count });
         }
       }
+    },
+    async apply_password_change(args) {
+      for (const [key, row] of rows) {
+        if (row.id === args.id) {
+          rows.set(key, {
+            ...row,
+            password_hash: args.password_hash,
+            password_expires_at: args.password_expires_at,
+            failed_login_count: 0,
+          });
+        }
+      }
+    },
+    async roles_and_permissions() {
+      return { roles: ["admin"], permissions: ["admin"] };
     },
   };
 }
@@ -59,8 +89,10 @@ export const TEST_ADMIN: LoadedUser = {
   id: TEST_USER_ID,
   username: "admin",
   password_hash: TEST_PASSWORD_HASH,
+  display_name: "Admin",
   is_active: true,
   failed_login_count: 0,
+  password_expires_at: new Date(Date.now() + 86_400_000),
 };
 
 export async function test_config(
@@ -106,7 +138,7 @@ export async function test_config(
       overrides.hash_slots ??
       make_hash_slot_limiter(() => settings.hash_concurrency_limit),
     rate_limit: overrides.rate_limit ?? stub_rate_limit(),
-    expiry: overrides.expiry ?? stub_expiry(),
+    expiry: overrides.expiry ?? password_expiry_evaluator(),
     users,
     verify_password,
     dummy_hash: overrides.dummy_hash ?? TEST_DUMMY_HASH,

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { redirect } from "react-router";
 
 import { safe_next_path } from "../auth/next_path";
-import { get_access_token } from "../auth/session.server";
+import { get_access_session } from "../auth/session.server";
 import type { Route } from "./+types/login";
 
 export function meta({}: Route.MetaArgs) {
@@ -12,9 +12,11 @@ export function meta({}: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const next = safe_next_path(url.searchParams.get("next"), "/");
-  const token = await get_access_token(request);
-  if (token != null) {
-    throw redirect(next);
+  const session = await get_access_session(request);
+  if (session != null) {
+    throw redirect(
+      session.password_change_required ? "/expired-password" : next,
+    );
   }
   return { next };
 }

@@ -24,3 +24,8 @@ export async function verify_password(
 export async function make_dummy_hash(): Promise<string> {
   return hash("untangled-dummy-not-a-user-password", ARGON2ID_PARAMS);
 }
+
+/** Argon2id hash off the event loop (native libuv threadpool). */
+export async function hash_password(password: string): Promise<string> {
+  return hash(password, ARGON2ID_PARAMS);
+}

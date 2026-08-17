@@ -39,7 +39,7 @@ def test_substitute_check_constraint_system_config_id() -> None:
 
 
 def test_substitute_undefined_name_fails_closed() -> None:
-    with pytest.raises(SubstitutionError, match="undefined substitution"):
+    with pytest.raises(SubstitutionError, match="not available in context"):
         substitute("id = '${no_such_name}'::uuid", "check_constraint")
 
 
@@ -59,7 +59,27 @@ def test_system_user_id_not_available_in_check_constraint() -> None:
 
 def test_substitute_unknown_context_fails_closed() -> None:
     with pytest.raises(SubstitutionError, match="unknown substitution context"):
-        substitute("${system_config_id}", "create_default")
+        substitute("${system_config_id}", "not_a_context")
+
+
+def test_clock_tokens_are_evaluation_env_not_catalog() -> None:
+    from datetime import datetime, timezone
+
+    from untangled.mapping.well_known import clock_env
+
+    assert "now" not in WELL_KNOWN
+    assert "tomorrow" not in WELL_KNOWN
+    env = clock_env(datetime(2026, 8, 16, 21, 0, 0, tzinfo=timezone.utc))
+    assert substitute("${now}", "create_default", env=env) == "2026-08-16T21:00:00Z"
+    assert (
+        substitute("${tomorrow}", "data_load", env=env) == "2026-08-17T21:00:00Z"
+    )
+    with pytest.raises(SubstitutionError, match="not available in context"):
+        substitute("${now}", "nav_bar", env=env)
+    with pytest.raises(SubstitutionError, match="undefined substitution"):
+        substitute("${now}", "create_default")
+    with pytest.raises(SubstitutionError, match="not available in context"):
+        substitute("${system_config_id}", "create_default", env=env)
 
 
 def test_generated_constants_match_catalog(

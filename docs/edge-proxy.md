@@ -22,10 +22,10 @@ Auth-session paths (group stays on **v2** together):
 | `POST` | `/api/v2/auth/login` | Real login; ES256 access cookie |
 | `POST` | `/api/v2/auth/logout` | Later (#14 / later #33 slices) |
 | `POST` | `/api/v2/auth/refresh` | Later (#14) |
-| `GET` | `/api/v2/auth/me` | Later; SSR still uses legacy unversioned Python `GET /auth/me` |
-| `POST` | `/api/v2/auth/change-password` | Later; SSR still uses legacy unversioned Python `POST /auth/change-password` |
+| `GET` | `/api/v2/auth/me` | SSR identity / RBAC bootstrap; Bearer or access cookie |
+| `POST` | `/api/v2/auth/change-password` | Browser posts (CSRF/Origin like login); JWT stays in the HttpOnly cookie |
 
-Python does not mount `/auth/login` or `/auth/refresh` (ordinary **404**). Remaining Python `/auth/me`, change-password, logout, and rbac-probe are **legacy unversioned** leftovers, not the standing identity contract. Login is `POST /api/v2/auth/login`.
+Python does not mount `/auth/*` (ordinary **404**), including the former leftover `me`, change-password, logout, and rbac-probe routes. Login is `POST /api/v2/auth/login`. Identity bootstrap is `GET /api/v2/auth/me` on the auth service.
 
 Approved **anonymous** auth-session bootstrap (with `/health` on the API): `GET /api/v2/auth/csrf` and `POST /api/v2/auth/login`.
 
@@ -74,6 +74,8 @@ Auth-set cookies are **host-only** (no `Domain`), `Path=/`, `SameSite=Lax`, `Sec
 2. CSRF token from `X-CSRF-Token` or form field `csrf_token` matching the CSRF cookie (CSPRNG; double-submit). The login page fetches CSRF from the **browser**.
 
 Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits `auth.csrf_denied` (`reason` is `origin_mismatch` or `csrf_mismatch` on that one event type). The event records `csrf_header_length` and `csrf_cookie_length` (0 if missing), not raw token values. The client body stays `{ detail: "Forbidden" }` with no reason. SSR and Python API Origin/CSRF failures are [#223](https://github.com/brettski74/untangled/issues/223); they do not emit yet. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503**. Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).
+
+`POST /api/v2/auth/change-password` uses the same Origin + CSRF rules. Success is `{ ok: true, detail: "Password change complete." }` (JWT is **not** in the body); auth sets a replacement `__untangled_access` cookie without `password_change_required`, keeping the previous `exp`.
 
 ## Forwarded client identity
 

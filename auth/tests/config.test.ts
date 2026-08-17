@@ -96,11 +96,31 @@ describe("jwt", () => {
     const issuer = await generateKeyPair("ES256");
     const other = await generateKeyPair("ES256");
     const user_id = "01900000-0000-7000-8000-000000000001";
-    const token = await sign_access_token(issuer.privateKey, user_id, 900);
+    const token = await sign_access_token(issuer.privateKey, user_id, {
+      ttl_seconds: 900,
+    });
     const payload = await verify_access_token(issuer.publicKey, token);
     assert.equal(payload.sub, user_id);
     assert.equal(payload.typ, "access");
+    assert.equal(payload.password_change_required, undefined);
     await assert.rejects(() => verify_access_token(other.publicKey, token));
+  });
+
+  it("omits the must-change claim unless true, and can reissue with the same exp", async () => {
+    const { privateKey, publicKey } = await generateKeyPair("ES256");
+    const user_id = "01900000-0000-7000-8000-000000000001";
+    const with_claim = await sign_access_token(privateKey, user_id, {
+      ttl_seconds: 900,
+      password_change_required: true,
+    });
+    const payload = await verify_access_token(publicKey, with_claim);
+    assert.equal(payload.password_change_required, true);
+    const reissued = await sign_access_token(privateKey, user_id, {
+      exp: payload.exp as number,
+    });
+    const again = await verify_access_token(publicKey, reissued);
+    assert.equal(again.exp, payload.exp);
+    assert.equal(again.password_change_required, undefined);
   });
 
   it("rejects HS256 and missing exp", async () => {

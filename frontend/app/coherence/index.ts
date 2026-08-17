@@ -3,7 +3,8 @@
  *
  * Redis pub/sub MVP for cross-process flush signals. This is **not** a domain
  * workflow bus, audit channel, or durable queue. Best-effort / at-most-once;
- * no replay. No permanent subscribe-on-boot until a product consumer exists.
+ * no replay. The web process subscribes on boot to flush the system_config TTL
+ * cache used by change-password / expired-password pages.
  */
 
 export {

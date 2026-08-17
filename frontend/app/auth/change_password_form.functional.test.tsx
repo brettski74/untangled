@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoutesStub } from "react-router";
 
 import { ChangePasswordForm } from "./change_password_form";
@@ -8,6 +8,7 @@ import type { PasswordPolicy } from "./password_strength";
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 const POLICY: PasswordPolicy = {
@@ -32,13 +33,34 @@ function render_form(
           action_data={action_data}
         />
       ),
-      action: async () => ({ ok: true, detail: "Password change complete." }),
     },
   ]);
   return render(<Stub initialEntries={["/change-password"]} />);
 }
 
 describe("ChangePasswordForm (#173)", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo) => {
+        const url = String(input);
+        if (url.includes("/api/v2/auth/csrf")) {
+          return Response.json({ csrf_token: "c".repeat(32) });
+        }
+        return Response.json({
+          ok: true,
+          detail: "Password change complete.",
+        });
+      }),
+    );
+  });
+  it("focuses Current Password on launch", () => {
+    render_form();
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("Current Password"),
+    );
+  });
+
   it("masks each field independently with Eye / EyeOff", () => {
     render_form();
 
@@ -66,10 +88,13 @@ describe("ChangePasswordForm (#173)", () => {
     expect(next.type).toBe("password");
   });
 
-  it("blocks submit with rich client validation errors", () => {
+  it("blocks submit with rich client validation errors", async () => {
     render_form();
-
-    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    const submit = screen.getByRole("button", { name: "Submit" });
+    await waitFor(() => {
+      expect((submit as HTMLButtonElement).disabled).toBe(false);
+    });
+    fireEvent.click(submit);
 
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("Current password is required.");

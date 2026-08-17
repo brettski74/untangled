@@ -23,7 +23,7 @@ export type LoginRequestContext = {
 };
 
 export type LoginPipelineResult =
-  | { kind: "success"; user_id: string }
+  | { kind: "success"; user_id: string; password_change_required: boolean }
   | { kind: "denied" }
   | { kind: "capacity" }
   | { kind: "internal_error" };
@@ -134,6 +134,7 @@ export async function run_login_pipeline(
     }
 
     let success = false;
+    let password_change_required = false;
     let user_id: string | null = user?.id ?? null;
 
     if (!skip_to_landing && user != null && verify_ok) {
@@ -144,13 +145,17 @@ export async function run_login_pipeline(
         auth_failed = true;
         failure_reason = "failed_count_lockout";
       } else {
-        const expiry = deps.expiry.classify(user);
+        const expiry = deps.expiry.classify(user, {
+          grace_days: deps.settings.password_grace_days,
+          now: new Date(),
+        });
         if (expiry === "failure") {
           auth_failed = true;
           failure_reason = "password_age_locked";
         } else {
           success = true;
           auth_failed = false;
+          password_change_required = expiry === "must_change";
         }
       }
     } else if (!skip_to_landing) {
@@ -185,6 +190,7 @@ export async function run_login_pipeline(
     if (user != null) {
       extra.is_active = user.is_active;
       extra.failed_login_count = user.failed_login_count;
+      extra.password_expires_at = user.password_expires_at.toISOString();
     }
 
     await emit_safe(deps.audit, {
@@ -204,7 +210,7 @@ export async function run_login_pipeline(
     if (user == null) {
       return { kind: "internal_error" };
     }
-    return { kind: "success", user_id: user.id };
+    return { kind: "success", user_id: user.id, password_change_required };
   } catch {
     if (acquired) {
       deps.hash_slots.release();

@@ -12,6 +12,11 @@ export const LOGIN_HASH_CONCURRENCY_MAX = 10;
 export const LOGIN_MAXIMUM_FAILED_COUNT_MIN = 1;
 export const LOGIN_MAXIMUM_FAILED_COUNT_DEFAULT = 5;
 
+export const PASSWORD_EXPIRY_DAYS_MIN = 3;
+export const PASSWORD_EXPIRY_DAYS_DEFAULT = 90;
+export const PASSWORD_GRACE_DAYS_MIN = 3;
+export const PASSWORD_GRACE_DAYS_DEFAULT = 14;
+
 export const LOGIN_RATE_LIMIT_THRESHOLD_MIN = 1;
 export const LOGIN_RATE_LIMIT_THRESHOLD_DEFAULT = 10;
 export const LOGIN_RATE_LIMIT_SAMPLE_PERIOD_MIN = 1;
@@ -50,6 +55,13 @@ export type LoginProcessSettings = {
   hash_concurrency_limit: number;
   maximum_failed_count: number;
   cache_ttl_seconds: number;
+  password_expiry_days: number;
+  password_grace_days: number;
+  password_minimum_chars: number;
+  password_maximum_chars: number;
+  password_acceptable_crack_time_days: number;
+  password_guess_per_second: number;
+  password_estimate_drift_factor: number;
   rate_limit: RateLimitSettings;
 };
 
@@ -104,6 +116,13 @@ export function clamp_login_process(raw: {
   hash_concurrency_limit: number;
   maximum_failed_count: number;
   cache_ttl_seconds: number;
+  password_expiry_days: number;
+  password_grace_days: number;
+  password_minimum_chars: number;
+  password_maximum_chars: number;
+  password_acceptable_crack_time_days: number;
+  password_guess_per_second: number;
+  password_estimate_drift_factor: number;
   rate_limit: RateLimitSettings;
 }): LoginProcessSettings {
   const process_time_minimum_ms = Math.max(
@@ -129,6 +148,25 @@ export function clamp_login_process(raw: {
     hash_concurrency_limit,
     maximum_failed_count,
     cache_ttl_seconds,
+    password_expiry_days: Math.max(
+      PASSWORD_EXPIRY_DAYS_MIN,
+      raw.password_expiry_days,
+    ),
+    password_grace_days: Math.max(
+      PASSWORD_GRACE_DAYS_MIN,
+      raw.password_grace_days,
+    ),
+    password_minimum_chars: Math.max(1, raw.password_minimum_chars),
+    password_maximum_chars: Math.max(1, raw.password_maximum_chars),
+    password_acceptable_crack_time_days: Math.max(
+      1,
+      raw.password_acceptable_crack_time_days,
+    ),
+    password_guess_per_second: Math.max(1, raw.password_guess_per_second),
+    password_estimate_drift_factor: Math.max(
+      1,
+      raw.password_estimate_drift_factor,
+    ),
     rate_limit: clamp_rate_limit(raw.rate_limit),
   };
 }

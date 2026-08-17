@@ -35,8 +35,11 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       UNTANGLED_API_BASE_URL: http://api:8000
+      UNTANGLED_AUTH_BASE_URL: http://auth:3000
       UNTANGLED_REDIS_URL: redis://host.docker.internal:6379/0
       UNTANGLED_COOKIE_SECURE: "true"
     depends_on: !override
       api:
+        condition: service_healthy
+      auth:
         condition: service_healthy

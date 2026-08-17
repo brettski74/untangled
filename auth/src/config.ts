@@ -3,7 +3,8 @@ import { createClient } from "redis";
 
 import { make_file_audit_sink, type AuditSink } from "./audit.js";
 import { cookie_secure_from_env } from "./cookie_secure.js";
-import { stub_expiry, type ExpiryEvaluator } from "./expiry.js";
+import { start_system_config_subscriber } from "./coherence.js";
+import { password_expiry_evaluator, type ExpiryEvaluator } from "./expiry.js";
 import { make_hash_slot_limiter, type HashSlotLimiter } from "./hash_slots.js";
 import { load_private_key, load_public_key } from "./keys.js";
 import {
@@ -148,6 +149,10 @@ export async function load_config_from_env(
       { cause: error },
     );
   }
+  await start_system_config_subscriber({
+    redis_url,
+    cache: settings_source,
+  });
   return {
     public_origin,
     cookie_secure: cookie_secure_from_env(env.UNTANGLED_COOKIE_SECURE),
@@ -164,7 +169,7 @@ export async function load_config_from_env(
       audit,
       redis_url,
     }),
-    expiry: stub_expiry(),
+    expiry: password_expiry_evaluator(),
     users: make_user_repository(pool),
     verify_password,
     dummy_hash,

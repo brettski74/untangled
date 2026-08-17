@@ -28,3 +28,7 @@ attributes:
     required: true
     create_default: 0
     min_value: 0
+  password_expires_at:
+    type: datetime
+    required: true
+    create_default: ${now}

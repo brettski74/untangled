@@ -15,7 +15,10 @@ export function install_test_jwt_keys(): void {
 }
 
 /** Signed ES256 access JWT matching the test public key. */
-export function fake_access_token(ttl_seconds = 900): string {
+export function fake_access_token(
+  ttl_seconds = 900,
+  extra: Record<string, unknown> = {},
+): string {
   if (private_key == null) {
     install_test_jwt_keys();
   }
@@ -29,6 +32,7 @@ export function fake_access_token(ttl_seconds = 900): string {
       iat: now,
       exp: now + ttl_seconds,
       typ: "access",
+      ...extra,
     }),
   ).toString("base64url");
   const data = `${header}.${payload}`;

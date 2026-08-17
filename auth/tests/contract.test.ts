@@ -54,6 +54,9 @@ describe("login settings contract", () => {
       "utf8",
     );
     assert.match(user_yaml, /username ~ '\^\[a-z0-9_\]\{3,32\}\$'::text/);
+    assert.match(user_yaml, /password_expires_at:\n(?:.|\n)*create_default: \$\{now\}/);
+    assert.match(yaml, /password_expiry_days:\n(?:.|\n)*create_default: 90/);
+    assert.match(yaml, /password_grace_days:\n(?:.|\n)*create_default: 14/);
   });
 
   it("shares auth.csrf_denied with the Python EventType catalog", () => {

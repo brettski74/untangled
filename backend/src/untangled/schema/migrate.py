@@ -8,8 +8,10 @@ from pathlib import Path
 
 from psycopg import Connection
 
+from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.definition import ClassDefinition, load_definitions
 from untangled.mapping.system_fields import AUDIT_USER_TABLE
+from untangled.mapping.well_known import clock_env, substitute_if_tokens
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import AddDefaultValue, diff_schemas
 from untangled.schema.from_yaml import desired_schema_from_classes
@@ -79,10 +81,13 @@ def migrate(
     current = introspect_schema(conn, managed, sequence_names=managed_seqs)
     # Resolve max+1 starts only for sequences that will be created.
     desired_for_plan = resolve_sequence_starts(conn, desired)
+    migrate_clock = clock_env(utc_now())
     plan = diff_schemas(
         desired_for_plan,
         current,
-        column_add_defaults=_required_create_defaults(definitions),
+        column_add_defaults=_required_create_defaults(
+            definitions, env=migrate_clock
+        ),
     )
 
     if plan.is_empty:
@@ -155,14 +160,23 @@ def migrate(
 
 def _required_create_defaults(
     definitions: list[ClassDefinition],
+    *,
+    env: dict[str, str] | None = None,
 ) -> dict[tuple[str, str], AddDefaultValue]:
-    """Map ``(table, column)`` → create-default for required attrs that declare one."""
+    """Map ``(table, column)`` → create-default for required attrs that declare one.
+
+    String defaults may contain ``${now}`` / ``${tomorrow}``; they are
+    substituted with ``env`` (one clock for the whole migrate run).
+    """
     defaults: dict[tuple[str, str], AddDefaultValue] = {}
     for defn in definitions:
         for attr in defn.attributes:
             if not attr.required or attr.create_default is None:
                 continue
-            defaults[(defn.name_snake, attr.name_snake)] = attr.create_default
+            resolved = substitute_if_tokens(
+                attr.create_default, "create_default", env=env
+            )
+            defaults[(defn.name_snake, attr.name_snake)] = resolved
     return defaults
 
 

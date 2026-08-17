@@ -17,6 +17,7 @@ describe("search_collection error detail", () => {
       );
 
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
 
     try {
       await search_collection("token", "incident", {
@@ -51,6 +52,7 @@ describe("search_collection error detail", () => {
       );
 
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
 
     try {
       await search_collection("token", "incident", {
@@ -80,6 +82,7 @@ describe("search_collection error detail", () => {
       );
     };
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
+    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
 
     try {
       await search_collection("token", "incident", {

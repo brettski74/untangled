@@ -188,6 +188,7 @@ backend-dev: backend-install local-jwt-keys ## Run the FastAPI dev server in the
 frontend-dev: frontend-install local-jwt-keys ## Run the React Router dev server in the foreground (host hot-reload)
 	cd $(FRONTEND_DIR) && \
 		UNTANGLED_API_BASE_URL=$${UNTANGLED_API_BASE_URL:-http://localhost:8000} \
+		UNTANGLED_AUTH_BASE_URL=$${UNTANGLED_AUTH_BASE_URL:-http://localhost:3001} \
 		UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
 		UNTANGLED_AUTH_ORIGIN=$${UNTANGLED_AUTH_ORIGIN:-http://localhost:3001} \

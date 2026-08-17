@@ -94,7 +94,7 @@ def test_python_login_and_refresh_are_unregistered(client: TestClient) -> None:
 
 
 def test_auth_logout_password_and_correlation(client: TestClient) -> None:
-    """Logout, password-change, and correlation-id on one client lifespan."""
+    """Python /auth session routes are gone; correlation still stamps remaining APIs."""
     recorder = _recorder()
     cid = "manual-correlation-test-001"
     recorder.events.clear()
@@ -103,43 +103,10 @@ def test_auth_logout_password_and_correlation(client: TestClient) -> None:
         json={"refresh_token": "not-a-real-token"},
         headers={"X-Correlation-Id": cid},
     )
-    assert logout.status_code == 204
-    assert logout.headers.get("X-Correlation-Id") == cid
-    logout_events = [e for e in recorder.events if e.event_type == EventType.AUTH_LOGOUT]
-    assert logout_events and all(e.correlation_id == cid for e in logout_events)
-    assert any(e.reason == "logout_idempotent" for e in logout_events)
-
-    access = _token()
-    headers = {"Authorization": f"Bearer {access}"}
-    recorder.events.clear()
-    failed = client.post(
-        "/auth/change-password",
-        headers=headers,
-        json={
-            "current_password": "wrong",
-            "new_password": _STRONG_NEW,
-            "verify_new_password": _STRONG_NEW,
-        },
-    )
-    assert failed.status_code == 422
-    ok = client.post(
-        "/auth/change-password",
-        headers=headers,
-        json={
-            "current_password": "admin-change-me",
-            "new_password": _STRONG_NEW,
-            "verify_new_password": _STRONG_NEW,
-        },
-    )
-    assert ok.status_code == 200
-    assert any(
-        e.event_type == EventType.AUTH_PASSWORD_CHANGE and e.outcome.value == "failure"
-        for e in recorder.events
-    )
-    assert any(
-        e.event_type == EventType.AUTH_PASSWORD_CHANGE and e.outcome.value == "success"
-        for e in recorder.events
-    )
+    assert logout.status_code == 404
+    health = client.get("/health", headers={"X-Correlation-Id": cid})
+    assert health.status_code == 200
+    assert health.headers.get("X-Correlation-Id") == cid
     _assert_no_secrets(recorder.events)
 
 

@@ -12,7 +12,7 @@ Untangled M1 uses **React Router v7 in framework mode** for the web application.
 
 ## Auth delivery (SSR)
 
-The login **page** is SSR (`GET /login`). The browser posts credentials to `POST /api/v2/auth/login` (same origin via Caddy, or Vite's host-dev `/api/v2/auth` proxy). Auth sets HttpOnly `__untangled_access`. SSR loaders read and verify that cookie with the ES256 public key, then call the API with Bearer. The JWT is never exposed to JavaScript and is not returned in the login JSON body. Token refresh is #14; broader auth hardening is #67 / remaining #215–#216.
+The login **page** is SSR (`GET /login`). The browser posts credentials to `POST /api/v2/auth/login` (same origin via Caddy, or Vite's host-dev `/api/v2/auth` proxy). Auth sets HttpOnly `__untangled_access`. SSR loaders read and verify that cookie with the ES256 public key, then call the API with Bearer. Identity bootstrap is `GET /api/v2/auth/me` on the auth service (`UNTANGLED_AUTH_BASE_URL`). Change-password (voluntary and expired) is a browser `POST` to `/api/v2/auth/change-password` with the same CSRF/Origin rules as login. A signed `password_change_required` claim sends every authenticated nested route to `/expired-password` (bare chrome). The JWT is never exposed to JavaScript and is not returned in JSON. Token refresh is #14; change-password abuse controls are #216.
 
 The local HTTPS reverse proxy and browser→auth CSRF/cookie contract are documented in [edge-proxy.md](./edge-proxy.md). Playwright uses Compose Caddy at `https://localhost:8443`. `make frontend-dev` uses HTTP `:5173` (Vite proxies `/api/v2/auth` to the auth service) for interactive host-dev only.
 
@@ -21,9 +21,10 @@ Required web env (Compose sets these; `make frontend-dev` supplies local default
 | Variable | Role |
 | -------- | ---- |
 | `UNTANGLED_API_BASE_URL` | Server-side API base (`http://api:8000` in Compose; `http://localhost:8000` on the host) |
+| `UNTANGLED_AUTH_BASE_URL` | Server-side auth base for `/me` (`http://auth:3000` in Compose; `http://localhost:3001` on the host) |
 | `UNTANGLED_JWT_PUBLIC_KEY` or `UNTANGLED_JWT_PUBLIC_KEY_PATH` | ES256 public key — **required**; no in-code default |
 | `UNTANGLED_COOKIE_SECURE` | Secure cookies on by default; set `false` for plain-HTTP local |
-| `UNTANGLED_REDIS_URL` | Shared Redis for coherence signaling library / future subscribers (`redis://redis:6379/0` in Compose; host default `redis://localhost:6379/0`). No permanent web subscribe-on-boot until a product consumer exists; production hardening [#182](https://github.com/brettski74/untangled/issues/182) |
+| `UNTANGLED_REDIS_URL` | Shared Redis for system_config cache invalidation (`redis://redis:6379/0` in Compose; host default `redis://localhost:6379/0`). Web subscribes on boot. Production hardening [#182](https://github.com/brettski74/untangled/issues/182) |
 
 Cookie `maxAge` on `__untangled_access` is the access JWT TTL (auth sets it). SSR logout expires the same cookie.
 

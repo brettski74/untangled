@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from psycopg import Connection, sql
 
 from untangled.auth.passwords import hash_password
 from untangled.auth.store import validate_username
 from untangled.mapping.datetime_utc import utc_now
-from untangled.mapping.well_known import SYSTEM_USER_ID
+from untangled.mapping.well_known import SECONDS_PER_DAY, SYSTEM_USER_ID
 from untangled.seed.rbac import seed_rbac
 from untangled.seed.tickets import seed_tickets
 from untangled.seed.users import SEED_USERS, password_for
@@ -47,19 +49,20 @@ def upsert_system_user(conn: Connection) -> None:
                 "INSERT INTO {} ("
                 "id, created_at, updated_at, created_by, updated_by, "
                 "username, password_hash, display_name, is_active, "
-                "failed_login_count"
+                "failed_login_count, password_expires_at"
                 ") VALUES ("
-                "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}"
+                "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}"
                 ") ON CONFLICT (id) DO UPDATE SET "
                 "username = EXCLUDED.username, "
                 "password_hash = EXCLUDED.password_hash, "
                 "display_name = EXCLUDED.display_name, "
                 "is_active = EXCLUDED.is_active, "
+                "password_expires_at = EXCLUDED.password_expires_at, "
                 "updated_at = EXCLUDED.updated_at, "
                 "updated_by = EXCLUDED.updated_by"
             ).format(
                 sql.Identifier("user"),
-                *[sql.Placeholder() for _ in range(10)],
+                *[sql.Placeholder() for _ in range(11)],
             ),
             (
                 SYSTEM_USER_ID,
@@ -72,6 +75,7 @@ def upsert_system_user(conn: Connection) -> None:
                 SYSTEM_USER_DISPLAY_NAME,
                 False,
                 0,
+                now,
             ),
         )
 
@@ -81,7 +85,6 @@ def upsert_system_user(conn: Connection) -> None:
     from untangled.audit.deps import ensure_audit_logger
     from untangled.audit.emit import emit_fail_closed, make_event
     from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
-    from untangled.mapping.well_known import SYSTEM_USER_ID as _SYS
 
     # Fail-closed: privilege mutation must not proceed without a durable audit attempt.
     ensure_audit_logger()
@@ -92,7 +95,7 @@ def upsert_system_user(conn: Connection) -> None:
             outcome=Outcome.SUCCESS,
             reason="system_user_clear_roles",
             severity=Severity.NOTICE,
-            user_id=_SYS,
+            user_id=SYSTEM_USER_ID,
             data={"user_id": str(SYSTEM_USER_ID), "action": "delete_user_roles"},
         )
     )
@@ -112,6 +115,9 @@ def seed_users(conn: Connection) -> list[str]:
     """Upsert baseline seed users. Returns usernames that were inserted or updated."""
     touched: list[str] = []
     now = utc_now()
+    # Transitional until #210 file-based seeds: ${tomorrow} so migrate ${now}
+    # backfill does not leave baseline accounts in must-change.
+    seed_expiry = now + timedelta(seconds=SECONDS_PER_DAY)
     for seed in SEED_USERS:
         username = validate_username(seed.username)
         password_hash = hash_password(password_for(seed))
@@ -121,19 +127,20 @@ def seed_users(conn: Connection) -> list[str]:
                     "INSERT INTO {} ("
                     "id, created_at, updated_at, created_by, updated_by, "
                     "username, password_hash, display_name, is_active, "
-                    "failed_login_count"
+                    "failed_login_count, password_expires_at"
                     ") VALUES ("
-                    "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}"
+                    "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}"
                     ") ON CONFLICT (id) DO UPDATE SET "
                     "username = EXCLUDED.username, "
                     "password_hash = EXCLUDED.password_hash, "
                     "display_name = EXCLUDED.display_name, "
                     "is_active = EXCLUDED.is_active, "
+                    "password_expires_at = EXCLUDED.password_expires_at, "
                     "updated_at = EXCLUDED.updated_at, "
                     "updated_by = EXCLUDED.id"
                 ).format(
                     sql.Identifier("user"),
-                    *[sql.Placeholder() for _ in range(10)],
+                    *[sql.Placeholder() for _ in range(11)],
                 ),
                 (
                     seed.id,
@@ -146,6 +153,7 @@ def seed_users(conn: Connection) -> list[str]:
                     seed.display_name,
                     True,
                     0,
+                    seed_expiry,
                 ),
             )
         touched.append(username)

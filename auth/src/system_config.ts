@@ -13,11 +13,15 @@ type CacheEntry = {
 
 export type LoginSettingsSource = {
   get: () => Promise<LoginProcessSettings>;
+  invalidate: () => void;
 };
 
 export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
   let entry: CacheEntry | null = null;
   return {
+    invalidate() {
+      entry = null;
+    },
     async get() {
       const now = Date.now();
       if (entry != null && now < entry.expires_at) {
@@ -37,6 +41,13 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
         login_rate_limit_l2_delay: number;
         login_rate_limit_lockout_seconds: number;
         login_rate_limit_max_kib: number;
+        password_expiry_days: number;
+        password_grace_days: number;
+        password_minimum_chars: number;
+        password_maximum_chars: number;
+        password_acceptable_crack_time_days: number;
+        password_guess_per_second: number;
+        password_estimate_drift_factor: string | number;
       }>(
         `SELECT login_process_time_minimum, login_process_time_maximum,
                 login_hash_concurrency_limit, login_maximum_failed_count,
@@ -46,7 +57,11 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
                 login_rate_limit_per_ip_threshold,
                 login_rate_limit_per_ip_sample_period,
                 login_rate_limit_l1_delay, login_rate_limit_l2_delay,
-                login_rate_limit_lockout_seconds, login_rate_limit_max_kib
+                login_rate_limit_lockout_seconds, login_rate_limit_max_kib,
+                password_expiry_days, password_grace_days,
+                password_minimum_chars, password_maximum_chars,
+                password_acceptable_crack_time_days,
+                password_guess_per_second, password_estimate_drift_factor
          FROM system_config WHERE id = $1::uuid`,
         [SYSTEM_CONFIG_ID],
       );
@@ -60,6 +75,14 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
         hash_concurrency_limit: row.login_hash_concurrency_limit,
         maximum_failed_count: row.login_maximum_failed_count,
         cache_ttl_seconds: row.system_config_cache_ttl_seconds,
+        password_expiry_days: row.password_expiry_days,
+        password_grace_days: row.password_grace_days,
+        password_minimum_chars: row.password_minimum_chars,
+        password_maximum_chars: row.password_maximum_chars,
+        password_acceptable_crack_time_days:
+          row.password_acceptable_crack_time_days,
+        password_guess_per_second: row.password_guess_per_second,
+        password_estimate_drift_factor: Number(row.password_estimate_drift_factor),
         rate_limit: {
           per_user_threshold: row.login_rate_limit_per_user_threshold,
           per_user_sample_period_s: row.login_rate_limit_per_user_sample_period,
@@ -87,6 +110,7 @@ export function static_login_settings(
   settings: LoginProcessSettings,
 ): LoginSettingsSource {
   return {
+    invalidate() {},
     async get() {
       return settings;
     },

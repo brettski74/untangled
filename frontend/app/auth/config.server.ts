@@ -67,6 +67,14 @@ export function assert_web_auth_config(): void {
       "UNTANGLED_API_BASE_URL is required (e.g. http://api:8000 in Compose, http://localhost:8000 for host frontend-dev)",
     );
   }
+  if (
+    process.env.UNTANGLED_AUTH_BASE_URL == null ||
+    process.env.UNTANGLED_AUTH_BASE_URL === ""
+  ) {
+    throw new Error(
+      "UNTANGLED_AUTH_BASE_URL is required (e.g. http://auth:3000 in Compose, http://localhost:3001 for host frontend-dev)",
+    );
+  }
   assert_p256_public_pem(read_jwt_public_pem());
 }
 
