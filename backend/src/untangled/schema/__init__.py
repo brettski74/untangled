@@ -8,7 +8,7 @@ from untangled.schema.from_yaml import (
     unique_index_name,
 )
 from untangled.schema.hash import schema_hash, table_hash
-from untangled.schema.introspect import introspect_schema
+from untangled.schema.introspect import introspect_schema, list_base_table_names
 from untangled.schema.ir import (
     CheckIR,
     ColumnIR,
@@ -40,6 +40,7 @@ __all__ = [
     "diff_schemas",
     "foreign_key_constraint_name",
     "introspect_schema",
+    "list_base_table_names",
     "migrate",
     "schema_hash",
     "table_canonical_bytes",

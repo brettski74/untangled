@@ -438,8 +438,11 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
 | `make clean` | Same as `clean-models` (clean source tree of codegen output) |
 
-Destructive schema plans are rejected by default. To allow them locally
-(needed once to drop the unused `refresh_token` table):
+Destructive schema plans are rejected by default. Re-run with
+`--allow-destructive` to apply drops: removed YAML classes, leftover tables such
+as unused `refresh_token`, or any other extra `public` BASE TABLE. Migrate’s
+bookkeeping tables `schema_versions` and `schema_version_class_hashes` are left
+alone.
 
 ```bash
 make migrate MIGRATE_ARGS=--allow-destructive

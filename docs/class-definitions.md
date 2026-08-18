@@ -349,6 +349,27 @@ backend/.venv/bin/python -m untangled.schema \
 `make migrate` is a thin local/dev wrapper around that command. Pass extra flags
 via `MIGRATE_ARGS`, e.g. `make migrate MIGRATE_ARGS=--allow-destructive`.
 
+### Desired vs current IR
+
+YAML class definitions are the **exclusive desired** table set
+([#7](https://github.com/brettski74/untangled/issues/7)). Current IR comes from
+PostgreSQL catalog introspection of **every `public` BASE TABLE**, not from
+Python models and not from “tables that still have YAML files.” Any existing
+database is a starting state; migrate diffs and applies the delta.
+
+A table in `public` with no class-definition file is a hitch-hiker: migrate
+**lists** it from the catalog by name and treats it as a drop unit (not a full
+column/FK snapshot). Default migrate **rejects** and lists `DROP TABLE`;
+`--allow-destructive` drops it (`CASCADE`). Removed YAML classes are the same
+case — the table remains in the catalog until a destructive migrate. Only
+YAML-named tables are fully introspected for column, constraint, and index diffs.
+
+The only exceptions are migrate’s own bookkeeping tables `schema_versions` and
+`schema_version_class_hashes`. They are created outside YAML, live in `public`,
+and must not be dropped or altered by the reconcile. That exception set is
+**frozen** (not a registry of once-seen class names). Views, functions, and extra
+standalone sequences in `public` are outside this table invariant.
+
 ### Destructive gate
 
 **Default (safe):** if the plan includes destructive operations (drop table or
@@ -363,8 +384,8 @@ plan), and create a named Postgres restore point before changing DDL.
 ### Version history and hashes
 
 Bootstrap tables `schema_versions` and `schema_version_class_hashes` are
-intentional exceptions to YAML class definitions. Each successful migrate that
-changes schema records:
+intentional exceptions to YAML class definitions (see Desired vs current IR).
+Each successful migrate that changes schema records:
 
 | Field | Role |
 | ----- | ---- |

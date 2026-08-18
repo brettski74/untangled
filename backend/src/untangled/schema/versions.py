@@ -16,6 +16,11 @@ from untangled.schema.ir import SchemaIR
 # WAL restore-point names: untangled_schema_v{monotonic_id} (≤63 chars).
 RESTORE_POINT_PREFIX = "untangled_schema_v"
 
+# Non-YAML bookkeeping in ``public``. Frozen migrate exclude (#7); not a class registry.
+BOOTSTRAP_TABLE_NAMES: frozenset[str] = frozenset(
+    {"schema_versions", "schema_version_class_hashes"}
+)
+
 SCHEMA_VERSIONS_DDL = """
 CREATE TABLE IF NOT EXISTS schema_versions (
     id bigint PRIMARY KEY,

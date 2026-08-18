@@ -15,11 +15,12 @@ from untangled.mapping.well_known import clock_env, substitute_if_tokens
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import AddDefaultValue, diff_schemas
 from untangled.schema.from_yaml import desired_schema_from_classes
-from untangled.schema.introspect import introspect_schema
-from untangled.schema.ir import SchemaIR
+from untangled.schema.introspect import introspect_schema, list_base_table_names
+from untangled.schema.ir import SchemaIR, TableIR
 from untangled.schema.plan import AddForeignKey, MigrationOp, MigrationPlan
 from untangled.schema.sequences import resolve_sequence_starts
 from untangled.schema.versions import (
+    BOOTSTRAP_TABLE_NAMES,
     create_restore_point,
     ensure_bootstrap_tables,
     next_schema_version_id,
@@ -58,6 +59,32 @@ class MigrateResult:
     restore_point_name: str | None
 
 
+def _current_schema(
+    conn: Connection,
+    desired_table_names: list[str],
+    sequence_names: list[str],
+) -> SchemaIR:
+    """Load current IR from every public BASE TABLE except bootstrap bookkeeping.
+
+    YAML-named tables are fully introspected. Other public tables are hitch-hikers
+    included by name only so ``diff_schemas`` emits ``DropTable`` (CASCADE)
+    without requiring class-vocabulary column types.
+    """
+    desired_names = set(desired_table_names)
+    public_tables = list_base_table_names(conn, exclude=BOOTSTRAP_TABLE_NAMES)
+    present_desired = [name for name in public_tables if name in desired_names]
+    hitchhikers = [name for name in public_tables if name not in desired_names]
+    current = introspect_schema(
+        conn, present_desired, sequence_names=sequence_names
+    )
+    if not hitchhikers:
+        return current
+    extra = tuple(
+        TableIR(name=name, columns=(), primary_key=()) for name in hitchhikers
+    )
+    return SchemaIR(tables=current.tables + extra, sequences=current.sequences)
+
+
 def migrate(
     conn: Connection,
     definitions_dir: Path,
@@ -67,9 +94,12 @@ def migrate(
 ) -> MigrateResult:
     """Reconcile the database to YAML class definitions via diff → plan → SQL.
 
-    Bootstrap version tables are created if missing. Destructive plans are
-    rejected unless ``allow_destructive`` is true. Changing DDL runs in one
-    transaction after a named restore point; failure rolls back schema changes.
+    Desired IR is YAML-only. Current IR is every ``public`` BASE TABLE except
+    bootstrap bookkeeping (``schema_versions``, ``schema_version_class_hashes``).
+    Extra public tables are hitch-hikers and become gated ``DropTable`` ops.
+    Destructive plans are rejected unless ``allow_destructive`` is true.
+    Changing DDL runs in one transaction after a named restore point; failure
+    rolls back schema changes.
     """
     log = progress or (lambda _msg: None)
     definitions = load_definitions(definitions_dir)
@@ -78,7 +108,7 @@ def migrate(
     managed_seqs = [s.name for s in desired.sequences]
 
     ensure_bootstrap_tables(conn)
-    current = introspect_schema(conn, managed, sequence_names=managed_seqs)
+    current = _current_schema(conn, managed, managed_seqs)
     # Resolve max+1 starts only for sequences that will be created.
     desired_for_plan = resolve_sequence_starts(conn, desired)
     migrate_clock = clock_env(utc_now())

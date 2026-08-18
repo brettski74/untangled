@@ -21,14 +21,13 @@ from untangled.seed.users import SEED_ADMIN_ID
 
 def _drop_managed(conn: Connection, repo_definitions: Path) -> None:
     from untangled.schema import desired_schema_from_definitions
+    from untangled.schema.introspect import list_base_table_names
 
     desired = desired_schema_from_definitions(repo_definitions)
-    for name in sorted(t.name for t in desired.tables):
+    for name in list_base_table_names(conn):
         conn.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(name)))
     for name in sorted(s.name for s in desired.sequences):
         conn.execute(sql.SQL("DROP SEQUENCE IF EXISTS {}").format(sql.Identifier(name)))
-    conn.execute("DROP TABLE IF EXISTS schema_version_class_hashes CASCADE")
-    conn.execute("DROP TABLE IF EXISTS schema_versions CASCADE")
     conn.commit()
 
 
