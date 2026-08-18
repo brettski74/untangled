@@ -95,3 +95,13 @@ export function expire_access_cookie(secure: boolean): string {
     max_age: 0,
   });
 }
+
+export function expire_refresh_cookie(secure: boolean): string {
+  return serialize_cookie(REFRESH_COOKIE_NAME, "", {
+    http_only: true,
+    secure,
+    same_site: "Lax",
+    path: REFRESH_COOKIE_PATH,
+    max_age: 0,
+  });
+}

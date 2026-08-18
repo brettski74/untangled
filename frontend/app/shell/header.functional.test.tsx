@@ -14,7 +14,7 @@ function render_header() {
     {
       path: "/",
       Component: () => (
-        <ShellHeader display_name="Ada Lovelace" username="ada" />
+        <ShellHeader display_name="Ada Lovelace" username="ada" csrf_token="csrf-test" />
       ),
     },
     { path: "/change-password", Component: () => null },
@@ -55,6 +55,10 @@ describe("ShellHeader identity menu (#172)", () => {
     expect(logout_form).not.toBeNull();
     expect(logout_form?.getAttribute("method")?.toLowerCase()).toBe("post");
     expect(logout_form?.getAttribute("action")).toBe("/logout");
+    const csrf = logout_form?.querySelector('input[name="csrf_token"]');
+    expect(csrf).not.toBeNull();
+    expect(csrf?.getAttribute("type")).toBe("hidden");
+    expect((csrf as HTMLInputElement).value).toBe("csrf-test");
     expect((sign_out as HTMLButtonElement).type).toBe("submit");
   });
 

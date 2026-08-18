@@ -11,6 +11,10 @@ import {
 } from "./config.server";
 
 export const ACCESS_COOKIE_NAME = "__untangled_access";
+export const CSRF_COOKIE_NAME = "__untangled_csrf";
+export const REFRESH_COOKIE_NAME = "__untangled_refresh";
+export const ACCESS_COOKIE_PATH = "/";
+export const REFRESH_COOKIE_PATH = "/api/v2/auth/refresh";
 
 let public_key: CryptoKey | null = null;
 
@@ -53,7 +57,7 @@ function serialize_cookie(
     http_only: boolean;
     secure: boolean;
     same_site: "Lax";
-    path: "/";
+    path: string;
     max_age: number;
   },
 ): string {
@@ -130,9 +134,27 @@ export async function commit_access_token(
     http_only: true,
     secure: cookie_secure_from_env(),
     same_site: "Lax",
-    path: "/",
+    path: ACCESS_COOKIE_PATH,
     max_age: access_token_remaining_seconds(access_token),
   });
+}
+
+/** Raw access JWT from the cookie; does not verify signature or expiry. */
+export function read_access_cookie(request: Request): string | null {
+  const token = parse_cookie_header(request.headers.get("Cookie")).get(
+    ACCESS_COOKIE_NAME,
+  );
+  if (token == null || token === "") {
+    return null;
+  }
+  return token;
+}
+
+export function read_csrf_cookie(request: Request): string {
+  return (
+    parse_cookie_header(request.headers.get("Cookie")).get(CSRF_COOKIE_NAME) ??
+    ""
+  );
 }
 
 export async function destroy_session(_request: Request): Promise<string> {
@@ -140,7 +162,30 @@ export async function destroy_session(_request: Request): Promise<string> {
     http_only: true,
     secure: cookie_secure_from_env(),
     same_site: "Lax",
-    path: "/",
+    path: ACCESS_COOKIE_PATH,
     max_age: 0,
   });
+}
+
+export function expire_refresh_cookie(): string {
+  return serialize_cookie(REFRESH_COOKIE_NAME, "", {
+    http_only: true,
+    secure: cookie_secure_from_env(),
+    same_site: "Lax",
+    path: REFRESH_COOKIE_PATH,
+    max_age: 0,
+  });
+}
+
+export function expire_logout_cookies(): Headers {
+  const headers = new Headers();
+  headers.append("Set-Cookie", serialize_cookie(ACCESS_COOKIE_NAME, "", {
+    http_only: true,
+    secure: cookie_secure_from_env(),
+    same_site: "Lax",
+    path: ACCESS_COOKIE_PATH,
+    max_age: 0,
+  }));
+  headers.append("Set-Cookie", expire_refresh_cookie());
+  return headers;
 }

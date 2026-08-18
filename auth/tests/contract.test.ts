@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 
 import {
   AUTH_CSRF_DENIED,
+  AUTH_LOGOUT,
   AUTH_RATE_LIMIT_TRIP,
   AUTH_REFRESH,
   AUTH_REFRESH_REUSE,
@@ -125,6 +126,8 @@ describe("login settings contract", () => {
     assert.match(types, /AUTH_REFRESH = "auth.refresh"/);
     assert.equal(AUTH_REFRESH_REUSE, "auth.refresh_reuse");
     assert.match(types, /AUTH_REFRESH_REUSE = "auth.refresh_reuse"/);
+    assert.equal(AUTH_LOGOUT, "auth.logout");
+    assert.match(types, /AUTH_LOGOUT = "auth.logout"/);
   });
 
   it("auth image stays USER node without a root entrypoint", () => {

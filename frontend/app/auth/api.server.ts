@@ -1,11 +1,12 @@
 /**
- * Server-side auth API seam: GET /api/v2/auth/me on the auth service, Bearer
- * fetch to the Python domain API. Browser login and change-password post to
- * the auth service; this module never sees passwords.
- * Refresh is deferred to #14 — this module is the single place to extend later.
+ * Server-side auth API seam: GET /api/v2/auth/me and POST /api/v2/auth/logout
+ * on the auth service, Bearer fetch to the Python domain API. Browser login
+ * and change-password post to the auth service; this module never sees
+ * passwords. Refresh is deferred to later #14 children.
  */
 import { ApiForbiddenError, ApiUnauthorizedError } from "./errors";
 import { user_profile_schema, type UserProfile } from "./schemas";
+import { CSRF_COOKIE_NAME } from "./session.server";
 
 export function api_base_url(): string {
   const base = process.env.UNTANGLED_API_BASE_URL;
@@ -46,6 +47,55 @@ export async function fetch_me(access_token: string): Promise<UserProfile> {
   }
   const body: unknown = await response.json();
   return user_profile_schema.parse(body);
+}
+
+export type LogoutAuthResult =
+  | { kind: "ok" }
+  | { kind: "forbidden" }
+  | { kind: "unauthorized" }
+  | { kind: "unavailable" };
+
+/**
+ * Server-to-auth logout. Copies browser Origin + CSRF; sends the access JWT as
+ * Bearer. Never forwards `__untangled_refresh`.
+ */
+export async function fetch_logout(args: {
+  access_token: string | null;
+  origin: string | null;
+  csrf_cookie: string;
+  csrf_token: string;
+}): Promise<LogoutAuthResult> {
+  const headers = new Headers({ Accept: "application/json" });
+  if (args.origin != null && args.origin !== "") {
+    headers.set("Origin", args.origin);
+  }
+  if (args.csrf_token !== "") {
+    headers.set("X-CSRF-Token", args.csrf_token);
+  }
+  if (args.csrf_cookie !== "") {
+    headers.set("Cookie", `${CSRF_COOKIE_NAME}=${args.csrf_cookie}`);
+  }
+  if (args.access_token != null && args.access_token !== "") {
+    headers.set("Authorization", `Bearer ${args.access_token}`);
+  }
+  try {
+    const response = await fetch(`${auth_base_url()}/api/v2/auth/logout`, {
+      method: "POST",
+      headers,
+    });
+    if (response.status === 200) {
+      return { kind: "ok" };
+    }
+    if (response.status === 403) {
+      return { kind: "forbidden" };
+    }
+    if (response.status === 401) {
+      return { kind: "unauthorized" };
+    }
+    return { kind: "unavailable" };
+  } catch {
+    return { kind: "unavailable" };
+  }
 }
 
 /**

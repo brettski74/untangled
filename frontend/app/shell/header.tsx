@@ -11,9 +11,14 @@ import {
 export type ShellHeaderProps = {
   display_name: string;
   username: string;
+  csrf_token: string;
 };
 
-export function ShellHeader({ display_name, username }: ShellHeaderProps) {
+export function ShellHeader({
+  display_name,
+  username,
+  csrf_token,
+}: ShellHeaderProps) {
   const [search_open, set_search_open] = useState(false);
   const [identity_open, set_identity_open] = useState(false);
   const search_input_id = useId();
@@ -90,6 +95,7 @@ export function ShellHeader({ display_name, username }: ShellHeaderProps) {
               </li>
               <li role="none">
                 <Form method="post" action="/logout">
+                  <input type="hidden" name="csrf_token" value={csrf_token} />
                   <button
                     type="submit"
                     role="menuitem"

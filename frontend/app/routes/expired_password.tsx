@@ -8,7 +8,7 @@ import {
   redirect_unauthorized,
 } from "../auth/gate.server";
 import { parse_password_policy } from "../auth/password_policy";
-import { get_access_session } from "../auth/session.server";
+import { get_access_session, read_csrf_cookie } from "../auth/session.server";
 import { get_cached_system_config } from "../auth/system_config_cache.server";
 import type { Route } from "./+types/expired_password";
 
@@ -43,6 +43,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         username: me.username,
         display_name: me.display_name,
         policy,
+        csrf_token: read_csrf_cookie(request),
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );
@@ -63,7 +64,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function ExpiredPasswordPage({
   loaderData,
 }: Route.ComponentProps) {
-  const { username, display_name, policy } = loaderData;
+  const { username, display_name, policy, csrf_token } = loaderData;
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-10">
@@ -81,6 +82,7 @@ export default function ExpiredPasswordPage({
           after_success="home"
         />
         <Form method="post" action="/logout" className="mt-6 text-center">
+          <input type="hidden" name="csrf_token" value={csrf_token} />
           <button
             type="submit"
             className="text-sm text-slate-600 underline hover:text-slate-900"

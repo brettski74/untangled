@@ -4,7 +4,7 @@ import { public_route_ids } from "../routes";
 import { loader as login_loader } from "../routes/login";
 import { loader as authenticated_loader } from "../routes/authenticated";
 import { loader as home_loader } from "../routes/home";
-import { action as logout_action } from "../routes/logout";
+import { action as logout_action, loader as logout_loader } from "../routes/logout";
 import { reset_access_verifier_for_tests } from "./session.server";
 import { fake_access_token, install_test_jwt_keys } from "./test_tokens";
 
@@ -253,27 +253,61 @@ describe("route wiring", () => {
     ).rejects.toMatchObject({ status: 302 });
   });
 
-  it("logout action clears the session cookie", async () => {
+  it("logout GET is 405 with no session work", async () => {
+    const fetch_mock = vi.fn();
+    vi.stubGlobal("fetch", fetch_mock);
+    const response = await logout_loader({
+      request: new Request("http://web.test/logout"),
+      params: {},
+      context: {},
+    } as never);
+    expect(response.status).toBe(405);
+    expect(fetch_mock).not.toHaveBeenCalled();
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("logout action expires both cookies after auth success", async () => {
     const { commit_access_token } = await import("./session.server");
+    const token = fake_access_token();
     const set_cookie = await commit_access_token(
       new Request("http://web.test/"),
-      fake_access_token(),
+      token,
     );
+    const fetch_mock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetch_mock);
     const response = await logout_action({
       request: new Request("http://web.test/logout", {
         method: "POST",
-        headers: { Cookie: set_cookie.split(";")[0] ?? set_cookie },
+        headers: {
+          Cookie: `${set_cookie.split(";")[0]}; __untangled_csrf=csrf-test`,
+          Origin: "http://web.test",
+        },
+        body: new URLSearchParams({ csrf_token: "csrf-test" }),
       }),
       params: {},
       context: {},
     } as never);
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/login");
-    expect(response.headers.get("Set-Cookie") ?? "").toMatch(
-      /__untangled_access/,
+    const cookies = response.headers.getSetCookie();
+    expect(cookies.some((line) => /__untangled_access/.test(line) && /Max-Age=0/i.test(line))).toBe(
+      true,
     );
-    expect(response.headers.get("Set-Cookie") ?? "").toMatch(
-      /Max-Age=0|max-age=0|Expires=/i,
-    );
+    expect(
+      cookies.some(
+        (line) =>
+          /__untangled_refresh/.test(line) &&
+          /Max-Age=0/i.test(line) &&
+          /Path=\/api\/v2\/auth\/refresh/.test(line),
+      ),
+    ).toBe(true);
+    expect(fetch_mock).toHaveBeenCalledTimes(1);
+    const init = fetch_mock.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(init.headers);
+    expect(headers.get("Authorization")).toBe(`Bearer ${token}`);
+    expect(headers.get("Origin")).toBe("http://web.test");
+    expect(headers.get("X-CSRF-Token")).toBe("csrf-test");
+    expect(headers.get("Cookie")).toBe("__untangled_csrf=csrf-test");
+    expect(headers.get("Cookie") ?? "").not.toMatch(/__untangled_refresh/);
   });
 });

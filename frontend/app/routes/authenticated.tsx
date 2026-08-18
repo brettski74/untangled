@@ -8,7 +8,7 @@ import {
   redirect_unauthenticated,
   redirect_unauthorized,
 } from "../auth/gate.server";
-import { get_access_session } from "../auth/session.server";
+import { get_access_session, read_csrf_cookie } from "../auth/session.server";
 import { load_default_nav } from "../shell/nav_config.server";
 import { filter_nav_by_permissions } from "../shell/nav_filter";
 import type { NavBarView } from "../shell/nav_schema";
@@ -37,7 +37,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     );
 
     return data(
-      { me, nav },
+      { me, nav, csrf_token: read_csrf_cookie(request) },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
@@ -57,13 +57,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function AuthenticatedLayout({
   loaderData,
 }: Route.ComponentProps) {
-  const { me, nav } = loaderData;
+  const { me, nav, csrf_token } = loaderData;
   const outlet_context: AuthenticatedOutletContext = { me, nav };
 
   return (
     <ShellLayout
       display_name={me.display_name}
       username={me.username}
+      csrf_token={csrf_token}
       nav={nav}
     >
       <Outlet context={outlet_context} />

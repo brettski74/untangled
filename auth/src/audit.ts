@@ -154,6 +154,7 @@ export function login_audit_event(args: {
 
 export const AUTH_REFRESH = "auth.refresh";
 export const AUTH_REFRESH_REUSE = "auth.refresh_reuse";
+export const AUTH_LOGOUT = "auth.logout";
 export const AUTH_CSRF_DENIED = "auth.csrf_denied";
 export const AUTH_RATE_LIMIT_TRIP = "auth.rate_limit_trip";
 export const CSRF_DENIED_ORIGIN = "origin_mismatch";
@@ -223,6 +224,25 @@ export function refresh_reuse_audit_event(args: {
     outcome: "failure",
     reason: "replay",
     severity: "warning",
+    correlation_id: new_correlation_id(),
+    user_id: args.user_id,
+    ip_address: args.ip_address ?? null,
+    timestamp: audit_timestamp(),
+    data: args.data,
+  };
+}
+
+export function logout_audit_event(args: {
+  user_id: string | null;
+  ip_address: string | undefined;
+  data: Record<string, unknown>;
+}): AuditEvent {
+  return {
+    event_type: AUTH_LOGOUT,
+    actor_channel: "human",
+    outcome: "success",
+    reason: "logout_ok",
+    severity: "info",
     correlation_id: new_correlation_id(),
     user_id: args.user_id,
     ip_address: args.ip_address ?? null,
