@@ -36,3 +36,17 @@ export function login_session_times(args: {
     refresh_max_age: remaining,
   };
 }
+
+export function rotate_session_times(args: {
+  now: Date;
+  session_expires_at: Date;
+  refresh_ttl_seconds: number;
+}): { refresh_expires_at: Date; max_age: number } {
+  const issued = Math.floor(args.now.getTime() / 1000);
+  const session_exp = Math.floor(args.session_expires_at.getTime() / 1000);
+  const refresh_exp = Math.min(issued + args.refresh_ttl_seconds, session_exp);
+  return {
+    refresh_expires_at: new Date(refresh_exp * 1000),
+    max_age: Math.max(1, refresh_exp - issued),
+  };
+}

@@ -290,6 +290,12 @@ describe("login session failure paths", () => {
         async create() {
           throw new Error("injected session insert failure");
         },
+        async attempt_rotate() {
+          throw new Error("unused");
+        },
+        async invalidate() {
+          throw new Error("unused");
+        },
       },
     });
     const server = create_server(config);

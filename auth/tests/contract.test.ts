@@ -4,7 +4,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
-import { AUTH_CSRF_DENIED, AUTH_RATE_LIMIT_TRIP } from "../src/audit.js";
+import {
+  AUTH_CSRF_DENIED,
+  AUTH_RATE_LIMIT_TRIP,
+  AUTH_REFRESH,
+  AUTH_REFRESH_REUSE,
+} from "../src/audit.js";
 import {
   LOGIN_HASH_CONCURRENCY_DEFAULT,
   LOGIN_HASH_CONCURRENCY_MAX,
@@ -116,6 +121,10 @@ describe("login settings contract", () => {
     assert.match(types, /AUTH_CSRF_DENIED = "auth.csrf_denied"/);
     assert.equal(AUTH_RATE_LIMIT_TRIP, "auth.rate_limit_trip");
     assert.match(types, /AUTH_RATE_LIMIT_TRIP = "auth.rate_limit_trip"/);
+    assert.equal(AUTH_REFRESH, "auth.refresh");
+    assert.match(types, /AUTH_REFRESH = "auth.refresh"/);
+    assert.equal(AUTH_REFRESH_REUSE, "auth.refresh_reuse");
+    assert.match(types, /AUTH_REFRESH_REUSE = "auth.refresh_reuse"/);
   });
 
   it("auth image stays USER node without a root entrypoint", () => {

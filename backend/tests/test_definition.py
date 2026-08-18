@@ -76,7 +76,7 @@ def test_session_classes_are_internal(repo_definitions: Path) -> None:
         attr.name_snake: attr for attr in by_class["used_refresh_token"].attributes
     }
     assert used_attrs["user_id"].references == "user"
-    assert used_attrs["session_id"].references is None
+    assert used_attrs["session_id"].references == "user_session"
     assert used_attrs["refresh_hmac"].unique is True
 
 

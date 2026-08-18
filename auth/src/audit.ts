@@ -152,6 +152,8 @@ export function login_audit_event(args: {
   };
 }
 
+export const AUTH_REFRESH = "auth.refresh";
+export const AUTH_REFRESH_REUSE = "auth.refresh_reuse";
 export const AUTH_CSRF_DENIED = "auth.csrf_denied";
 export const AUTH_RATE_LIMIT_TRIP = "auth.rate_limit_trip";
 export const CSRF_DENIED_ORIGIN = "origin_mismatch";
@@ -186,6 +188,46 @@ export function rate_limit_trip_audit_event(args: {
       context_kind: args.kind,
       context_key: bound_event_text(args.context_key),
     },
+  };
+}
+
+export function refresh_audit_event(args: {
+  success: boolean;
+  reason: string;
+  user_id: string | null;
+  ip_address: string | undefined;
+  data: Record<string, unknown>;
+}): AuditEvent {
+  return {
+    event_type: AUTH_REFRESH,
+    actor_channel: "human",
+    outcome: args.success ? "success" : "failure",
+    reason: args.reason,
+    severity: args.success ? "info" : "notice",
+    correlation_id: new_correlation_id(),
+    user_id: args.user_id,
+    ip_address: args.ip_address ?? null,
+    timestamp: audit_timestamp(),
+    data: args.data,
+  };
+}
+
+export function refresh_reuse_audit_event(args: {
+  user_id: string | null;
+  ip_address: string | undefined;
+  data: Record<string, unknown>;
+}): AuditEvent {
+  return {
+    event_type: AUTH_REFRESH_REUSE,
+    actor_channel: "human",
+    outcome: "failure",
+    reason: "replay",
+    severity: "warning",
+    correlation_id: new_correlation_id(),
+    user_id: args.user_id,
+    ip_address: args.ip_address ?? null,
+    timestamp: audit_timestamp(),
+    data: args.data,
   };
 }
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { login_session_times } from "../src/session_issue.js";
+import { login_session_times, rotate_session_times } from "../src/session_issue.js";
 
 describe("login session times", () => {
   const now = new Date("2026-01-01T00:00:00.000Z");
@@ -45,5 +45,29 @@ describe("login session times", () => {
     assert.equal(times.refresh_max_age, 300);
     assert.equal(times.access_max_age, 300);
     assert.equal(times.refresh_expires_at.getTime(), times.session_expires_at.getTime());
+  });
+});
+
+describe("rotate session times", () => {
+  it("caps a new idle window by the existing session hard cap", () => {
+    const now = new Date("2026-01-29T00:00:00.000Z");
+    const times = rotate_session_times({
+      now,
+      session_expires_at: new Date("2026-01-31T00:00:00.000Z"),
+      refresh_ttl_seconds: 604800,
+    });
+    assert.equal(times.max_age, 172800);
+    assert.equal(times.refresh_expires_at.toISOString(), "2026-01-31T00:00:00.000Z");
+  });
+
+  it("uses the idle TTL when the hard cap is further out", () => {
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    const times = rotate_session_times({
+      now,
+      session_expires_at: new Date("2026-01-31T00:00:00.000Z"),
+      refresh_ttl_seconds: 3600,
+    });
+    assert.equal(times.max_age, 3600);
+    assert.equal(times.refresh_expires_at.toISOString(), "2026-01-01T01:00:00.000Z");
   });
 });

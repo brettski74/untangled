@@ -54,6 +54,10 @@ describe("session knobs on auth cache load", () => {
     assert.equal(settings.session_access_ttl_seconds, 900);
     assert.equal(settings.session_refresh_ttl_seconds, 604800);
     assert.equal(settings.session_total_ttl_seconds, 2592000);
+    assert.equal(settings.session_refresh_reuse_grace_seconds, 15);
+    assert.equal(settings.session_refresh_reuse_window_seconds, 86400);
+    assert.equal(settings.session_refresh_process_time_minimum, 300);
+    assert.equal(settings.session_refresh_process_time_maximum, 500);
   });
 
   it("does not clamp session issuance TTLs", async () => {
