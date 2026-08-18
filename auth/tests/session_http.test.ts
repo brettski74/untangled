@@ -172,6 +172,7 @@ describe("auth me + change-password", () => {
       algorithms: ["ES256"],
     });
     assert.equal(jwt_payload.sub, TEST_USER_ID);
+    assert.equal(typeof jwt_payload.sid, "string");
     assert.equal(jwt_payload.password_change_required, undefined);
   });
 });

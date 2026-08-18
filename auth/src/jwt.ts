@@ -2,10 +2,12 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
 export const ACCESS_TOKEN_TYP = "access";
 export const PASSWORD_CHANGE_REQUIRED_CLAIM = "password_change_required";
+export const SESSION_ID_CLAIM = "sid";
 
 export type SignAccessTokenArgs = {
   ttl_seconds?: number;
   exp?: number;
+  sid?: string;
   password_change_required?: boolean;
   now?: Date;
 };
@@ -25,6 +27,9 @@ export async function sign_access_token(
     exp = issued + ttl;
   }
   const claims: Record<string, unknown> = { typ: ACCESS_TOKEN_TYP };
+  if (args.sid != null && args.sid !== "") {
+    claims[SESSION_ID_CLAIM] = args.sid;
+  }
   if (args.password_change_required === true) {
     claims[PASSWORD_CHANGE_REQUIRED_CLAIM] = true;
   }
@@ -55,6 +60,11 @@ export async function verify_access_token(
 
 export function password_change_required(payload: JWTPayload): boolean {
   return payload[PASSWORD_CHANGE_REQUIRED_CLAIM] === true;
+}
+
+export function session_id_claim(payload: JWTPayload): string | undefined {
+  const sid = payload[SESSION_ID_CLAIM];
+  return typeof sid === "string" && sid !== "" ? sid : undefined;
 }
 
 export function access_max_age_seconds(token_payload: JWTPayload): number {

@@ -8,16 +8,18 @@ import { password_expiry_evaluator, type ExpiryEvaluator } from "./expiry.js";
 import { make_hash_slot_limiter, type HashSlotLimiter } from "./hash_slots.js";
 import { load_private_key, load_public_key } from "./keys.js";
 import { load_refresh_hmac_secret } from "./refresh_hmac.js";
-import {
-  LOGIN_HASH_CONCURRENCY_DEFAULT,
-  type LoginProcessSettings,
-} from "./login_settings.js";
+import { LOGIN_HASH_CONCURRENCY_DEFAULT } from "./login_settings.js";
 import { draw_process_time_ms, sleep_ms } from "./padding.js";
 import { make_dummy_hash, verify_password } from "./passwords.js";
 import type { RateLimitEvaluator } from "./rate_limit.js";
 import { make_redis_rate_limit } from "./rate_limit_redis.js";
 import { redact_redis_url, redis_url_from_env } from "./redis_url.js";
-import { make_login_settings_cache, type LoginSettingsSource } from "./system_config.js";
+import { make_session_repository, type SessionRepository } from "./sessions.js";
+import {
+  make_login_settings_cache,
+  type AuthRuntimeSettings,
+  type LoginSettingsSource,
+} from "./system_config.js";
 import { make_user_repository, type UserRepository } from "./users.js";
 
 export type AuthConfig = {
@@ -26,12 +28,12 @@ export type AuthConfig = {
   private_key: CryptoKey;
   public_key: CryptoKey;
   refresh_hmac_secret: Buffer;
-  access_token_ttl_seconds: number;
-  get_settings: () => Promise<LoginProcessSettings>;
+  get_settings: () => Promise<AuthRuntimeSettings>;
   hash_slots: HashSlotLimiter;
   rate_limit: RateLimitEvaluator;
   expiry: ExpiryEvaluator;
   users: UserRepository;
+  sessions: SessionRepository;
   verify_password: (hash: string, password: string) => Promise<boolean>;
   dummy_hash: string;
   audit: AuditSink;
@@ -58,21 +60,6 @@ function require_exact_origin(raw: string, label: string): string {
     );
   }
   return public_origin;
-}
-
-function access_token_ttl_seconds(
-  raw: string | undefined = process.env.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS,
-): number {
-  if (raw == null || raw.trim() === "") {
-    return 15 * 60;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw new Error(
-      `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS must be a positive integer; got ${JSON.stringify(raw)}`,
-    );
-  }
-  return value;
 }
 
 function require_database_url(env: NodeJS.ProcessEnv): string {
@@ -126,7 +113,7 @@ export async function load_config_from_env(
   });
   const settings_source: LoginSettingsSource = make_login_settings_cache(pool);
   const live_hash_limit = { value: LOGIN_HASH_CONCURRENCY_DEFAULT };
-  const get_settings = async (): Promise<LoginProcessSettings> => {
+  const get_settings = async (): Promise<AuthRuntimeSettings> => {
     const settings = await settings_source.get();
     live_hash_limit.value = settings.hash_concurrency_limit;
     return settings;
@@ -162,9 +149,6 @@ export async function load_config_from_env(
     private_key,
     public_key,
     refresh_hmac_secret,
-    access_token_ttl_seconds: access_token_ttl_seconds(
-      env.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS,
-    ),
     get_settings,
     hash_slots: make_hash_slot_limiter(() => live_hash_limit.value),
     rate_limit: make_redis_rate_limit({
@@ -175,6 +159,7 @@ export async function load_config_from_env(
     }),
     expiry: password_expiry_evaluator(),
     users: make_user_repository(pool),
+    sessions: make_session_repository(pool),
     verify_password,
     dummy_hash,
     audit,

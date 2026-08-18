@@ -35,3 +35,17 @@ export const SESSION_REFRESH_PROCESS_TIME_MINIMUM_MAX = 500;
 export const SESSION_REFRESH_PROCESS_TIME_MAXIMUM_MIN = 200;
 export const SESSION_REFRESH_PROCESS_TIME_MAXIMUM_DEFAULT = 500;
 export const SESSION_REFRESH_PROCESS_TIME_MAXIMUM_MAX = 1000;
+
+export type SessionIssueSettings = {
+  session_access_ttl_seconds: number;
+  session_refresh_ttl_seconds: number;
+  session_total_ttl_seconds: number;
+};
+
+export function default_session_issue_settings(): SessionIssueSettings {
+  return {
+    session_access_ttl_seconds: SESSION_ACCESS_TTL_DEFAULT,
+    session_refresh_ttl_seconds: SESSION_REFRESH_TTL_DEFAULT,
+    session_total_ttl_seconds: SESSION_TOTAL_TTL_DEFAULT,
+  };
+}

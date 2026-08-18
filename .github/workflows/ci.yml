@@ -401,8 +401,6 @@ jobs:
           UNTANGLED_REFRESH_HMAC_SECRET: ${{ secrets.UNTANGLED_REFRESH_HMAC_SECRET }}
           UNTANGLED_PUBLIC_ORIGIN: ${{ secrets.UNTANGLED_PUBLIC_ORIGIN }}
           UNTANGLED_COOKIE_SECURE: ${{ secrets.UNTANGLED_COOKIE_SECURE }}
-          UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${{ secrets.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS }}
-          UNTANGLED_REFRESH_TOKEN_TTL_SECONDS: ${{ secrets.UNTANGLED_REFRESH_TOKEN_TTL_SECONDS }}
         run: |
           # Do not echo secret values. Fail closed when required secrets are missing.
           if [ -z "${POSTGRES_PASSWORD}" ]; then
@@ -452,8 +450,6 @@ jobs:
             printf 'DATABASE_URL=%s\n' "${DATABASE_URL}"
             printf 'UNTANGLED_REDIS_URL=%s\n' "${UNTANGLED_REDIS_URL:-redis://redis:6379/0}"
             printf 'UNTANGLED_COOKIE_SECURE=%s\n' "${UNTANGLED_COOKIE_SECURE:-true}"
-            printf 'UNTANGLED_ACCESS_TOKEN_TTL_SECONDS=%s\n' "${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}"
-            printf 'UNTANGLED_REFRESH_TOKEN_TTL_SECONDS=%s\n' "${UNTANGLED_REFRESH_TOKEN_TTL_SECONDS:-604800}"
             printf 'UNTANGLED_API_BASE_URL=%s\n' "http://api:8000"
             printf 'UNTANGLED_AUTH_BASE_URL=%s\n' "http://auth:3000"
             printf 'UNTANGLED_PUBLIC_ORIGIN=%s\n' "${UNTANGLED_PUBLIC_ORIGIN}"

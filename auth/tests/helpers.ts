@@ -9,11 +9,12 @@ import {
   LOGIN_HASH_CONCURRENCY_DEFAULT,
   LOGIN_MAXIMUM_FAILED_COUNT_DEFAULT,
   default_rate_limit_settings,
-  type LoginProcessSettings,
 } from "../src/login_settings.js";
 import { draw_process_time_ms, sleep_ms } from "../src/padding.js";
 import { stub_rate_limit } from "../src/rate_limit.js";
-import { static_login_settings } from "../src/system_config.js";
+import { default_session_issue_settings } from "../src/session_settings.js";
+import { memory_sessions, type SessionRepository } from "../src/sessions.js";
+import { static_login_settings, type AuthRuntimeSettings } from "../src/system_config.js";
 import type { LoadedUser, UserRepository } from "../src/users.js";
 
 export const PUBLIC_ORIGIN = "https://localhost:8443";
@@ -22,8 +23,8 @@ export const TEST_PASSWORD_HASH = "test-hash";
 export const TEST_DUMMY_HASH = "dummy-hash";
 
 export function test_login_settings(
-  overrides: Partial<LoginProcessSettings> = {},
-): LoginProcessSettings {
+  overrides: Partial<AuthRuntimeSettings> = {},
+): AuthRuntimeSettings {
   return {
     process_time_minimum_ms: 0,
     process_time_maximum_ms: 0,
@@ -38,6 +39,7 @@ export function test_login_settings(
     password_guess_per_second: 10000,
     password_estimate_drift_factor: 1.1,
     rate_limit: default_rate_limit_settings(),
+    ...default_session_issue_settings(),
     ...overrides,
   };
 }
@@ -99,8 +101,9 @@ export async function test_config(
   overrides: {
     cookie_secure?: boolean;
     public_origin?: string;
-    settings?: LoginProcessSettings;
+    settings?: AuthRuntimeSettings;
     users?: UserRepository;
+    sessions?: SessionRepository;
     verify_password?: AuthConfig["verify_password"];
     dummy_hash?: string;
     audit_events?: AuditEvent[];
@@ -119,6 +122,7 @@ export async function test_config(
   const users =
     overrides.users ??
     memory_users([TEST_ADMIN]);
+  const sessions = overrides.sessions ?? memory_sessions();
   const verify_password: AuthConfig["verify_password"] =
     overrides.verify_password ??
     (async (password_hash, password) => {
@@ -132,8 +136,7 @@ export async function test_config(
     cookie_secure: overrides.cookie_secure ?? true,
     private_key: privateKey,
     public_key: publicKey,
-    refresh_hmac_secret: Buffer.alloc(32),
-    access_token_ttl_seconds: 900,
+    refresh_hmac_secret: Buffer.alloc(32, 9),
     get_settings: static_login_settings(settings).get,
     hash_slots:
       overrides.hash_slots ??
@@ -141,6 +144,7 @@ export async function test_config(
     rate_limit: overrides.rate_limit ?? stub_rate_limit(),
     expiry: overrides.expiry ?? password_expiry_evaluator(),
     users,
+    sessions,
     verify_password,
     dummy_hash: overrides.dummy_hash ?? TEST_DUMMY_HASH,
     audit: overrides.audit ?? memory_audit_sink(audit_events),
@@ -150,4 +154,4 @@ export async function test_config(
   };
 }
 
-export { cookie_secure_from_env };
+export { cookie_secure_from_env, memory_sessions };
