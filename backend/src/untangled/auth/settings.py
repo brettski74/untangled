@@ -10,13 +10,6 @@ from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 
-def _int_env(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None or raw.strip() == "":
-        return default
-    return int(raw)
-
-
 def _normalize_pem(raw: str) -> str:
     pem = raw.strip()
     if "\\n" in pem and "\n" not in pem:
@@ -64,8 +57,3 @@ def jwt_public_key() -> EllipticCurvePublicKey:
 def reset_jwt_public_key_for_tests() -> None:
     """Drop the cached public key so test env changes take effect."""
     jwt_public_key.cache_clear()
-
-
-def access_token_ttl_seconds() -> int:
-    """Access token lifetime in seconds (default 15 minutes)."""
-    return _int_env("UNTANGLED_ACCESS_TOKEN_TTL_SECONDS", 15 * 60)

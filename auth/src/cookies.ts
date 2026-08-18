@@ -1,11 +1,14 @@
 export const CSRF_COOKIE_NAME = "__untangled_csrf";
 export const ACCESS_COOKIE_NAME = "__untangled_access";
+export const REFRESH_COOKIE_NAME = "__untangled_refresh";
+export const ACCESS_COOKIE_PATH = "/";
+export const REFRESH_COOKIE_PATH = "/api/v2/auth/refresh";
 
 export type CookieAttrs = {
   http_only: boolean;
   secure: boolean;
   same_site: "Lax";
-  path: "/";
+  path: string;
   max_age?: number;
 };
 
@@ -51,7 +54,7 @@ export function csrf_cookie(value: string, secure: boolean): string {
     http_only: false,
     secure,
     same_site: "Lax",
-    path: "/",
+    path: ACCESS_COOKIE_PATH,
   });
 }
 
@@ -64,7 +67,21 @@ export function access_cookie(
     http_only: true,
     secure,
     same_site: "Lax",
-    path: "/",
+    path: ACCESS_COOKIE_PATH,
+    max_age,
+  });
+}
+
+export function refresh_cookie(
+  value: string,
+  secure: boolean,
+  max_age: number,
+): string {
+  return serialize_cookie(REFRESH_COOKIE_NAME, value, {
+    http_only: true,
+    secure,
+    same_site: "Lax",
+    path: REFRESH_COOKIE_PATH,
     max_age,
   });
 }
@@ -74,7 +91,7 @@ export function expire_access_cookie(secure: boolean): string {
     http_only: true,
     secure,
     same_site: "Lax",
-    path: "/",
+    path: ACCESS_COOKIE_PATH,
     max_age: 0,
   });
 }

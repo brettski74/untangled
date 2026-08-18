@@ -97,9 +97,7 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 | Setting | Default (Compose / docs) |
 | ------- | ------------------------ |
 | `UNTANGLED_JWT_PRIVATE_KEY_PATH` / `UNTANGLED_JWT_PUBLIC_KEY_PATH` | Gitignored `deploy/jwt/dev-es256-*.pem` (`make local-jwt-keys`). Auth gets both; API and web get the public key only. |
-| `UNTANGLED_REFRESH_HMAC_SECRET_PATH` | Gitignored `deploy/jwt/refresh_secret.b64` (`make local-refresh-hmac` / `make up`). Auth-only; API, web, and Caddy must not receive this file. Base64 of ≥32 CSPRNG bytes. Missing, empty, invalid base64, or too-short decoded material → auth does not start. Auth never generates this file. Operators / Rocky CI provision it for non-Make deploys (`UNTANGLED_REFRESH_HMAC_SECRET` GitHub Environment secret is written to the file; it is not a container env). `session_*` `system_config` attributes are persisted on the singleton and unused for issuance until later session children. |
-| `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
-| `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days; unused until #14) |
+| `UNTANGLED_REFRESH_HMAC_SECRET_PATH` | Gitignored `deploy/jwt/refresh_secret.b64` (`make local-refresh-hmac` / `make up`). Auth-only; API, web, and Caddy must not receive this file. Base64 of ≥32 CSPRNG bytes. Missing, empty, invalid base64, or too-short decoded material → auth does not start. Auth never generates this file. Operators / Rocky CI provision it for non-Make deploys (`UNTANGLED_REFRESH_HMAC_SECRET` GitHub Environment secret is written to the file; it is not a container env). Login issuance TTLs come from `session_access_ttl_seconds`, `session_refresh_ttl_seconds`, and `session_total_ttl_seconds` on the `system_config` singleton (not env vars). |
 | `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose / Playwright: `https://localhost:8443`. Host-dev Vite: `http://localhost:5173` |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://localhost:8000` |
@@ -195,7 +193,7 @@ Local-dev convention: after `make up` + `make migrate` + `make seed`, open `http
 - SSR verifies that cookie with the public key and calls the API with Bearer. The authenticated layout loads `GET /api/v2/auth/me` on the auth service once per navigation tree; the header user chip uses display name (hover = username). A signed `password_change_required` claim redirects every nested route to `/expired-password` (bare form, no shell).
 - Access expiry / API **401** expires the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67. Login padding, hash-capacity shedding, PostgreSQL failed-count lock-of-record, and Redis delay/L3 (#214) are in place. Password expiry / grace / must-change is #215; change-password abuse controls are #216.
 
-Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default with explicit local opt-out, cookie `Max-Age` from the access JWT TTL. The JWT is never exposed to browser JavaScript. Path and CSRF details: [edge-proxy.md](./edge-proxy.md).
+Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default with explicit local opt-out. Access cookie `Path=/`; refresh cookie `Path=/api/v2/auth/refresh` only (not sent to SSR or the API). Access JWT `exp` uses `session_access_ttl_seconds`; access cookie `Max-Age` follows remaining idle/hard-cap on a normal login and JWT lifetime on must-change. The JWT is never exposed to browser JavaScript. Path and CSRF details: [edge-proxy.md](./edge-proxy.md).
 
 ### `/docs` Authorize loop
 

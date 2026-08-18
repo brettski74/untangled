@@ -16,15 +16,20 @@ import {
   access_cookie,
   csrf_cookie,
   parse_cookie_header,
+  refresh_cookie,
 } from "./cookies.js";
 import { random_token, tokens_equal } from "./csrf.js";
 import { request_identity } from "./forwarded.js";
 import {
+  session_id_claim,
   sign_access_token,
   verify_access_token,
 } from "./jwt.js";
+import { hmac_refresh_token, mint_refresh_token } from "./refresh_hmac.js";
 import { ACCESS_DENIED, SERVICE_UNAVAILABLE } from "./login_settings.js";
 import { run_login_pipeline } from "./login_pipeline.js";
+import { login_session_times } from "./session_issue.js";
+import { new_uuid7 } from "./uuidv7.js";
 import { safe_next_path } from "./next_path.js";
 import { origin_is_exact_match } from "./origin.js";
 import {
@@ -213,14 +218,52 @@ async function handle_login(
     return;
   }
 
-  const token = await sign_access_token(config.private_key, result.user_id, {
-    ttl_seconds: config.access_token_ttl_seconds,
-    password_change_required: result.password_change_required,
+  const now = new Date();
+  const times = login_session_times({
+    now,
+    access_ttl_seconds: settings.session_access_ttl_seconds,
+    refresh_ttl_seconds: settings.session_refresh_ttl_seconds,
+    total_ttl_seconds: settings.session_total_ttl_seconds,
+    must_change: result.password_change_required,
   });
+  const sid = new_uuid7(now.getTime());
+  const user_agent = header_value(request.headers["user-agent"]);
+  let refresh_token: string | null = null;
+  let refresh_hmac: string | null = null;
+  if (times.refresh_max_age != null) {
+    refresh_token = mint_refresh_token();
+    refresh_hmac = hmac_refresh_token(config.refresh_hmac_secret, refresh_token);
+  }
+  let token: string;
+  try {
+    await config.sessions.create({
+      id: sid,
+      user_id: result.user_id,
+      refresh_hmac,
+      session_expires_at: times.session_expires_at,
+      refresh_expires_at: times.refresh_expires_at,
+      ip_address: identity.source_ip ?? null,
+      user_agent: user_agent == null || user_agent === "" ? null : user_agent,
+    });
+    token = await sign_access_token(config.private_key, result.user_id, {
+      ttl_seconds: times.jwt_ttl_seconds,
+      now,
+      sid,
+      password_change_required: result.password_change_required,
+    });
+  } catch {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
   const set_cookies = [
     csrf_cookie(cookie_token, config.cookie_secure),
-    access_cookie(token, config.cookie_secure, config.access_token_ttl_seconds),
+    access_cookie(token, config.cookie_secure, times.access_max_age),
   ];
+  if (refresh_token != null && times.refresh_max_age != null) {
+    set_cookies.push(
+      refresh_cookie(refresh_token, config.cookie_secure, times.refresh_max_age),
+    );
+  }
   response.setHeader("Set-Cookie", set_cookies);
 
   const wants_json = (header_value(request.headers.accept) ?? "").includes(
@@ -404,6 +447,7 @@ async function handle_change_password(
   const exp = remaining_access_exp(payload);
   const token = await sign_access_token(config.private_key, user.id, {
     exp,
+    sid: session_id_claim(payload),
   });
   response.setHeader(
     "Set-Cookie",

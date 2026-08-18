@@ -63,12 +63,13 @@ The refresh HMAC secret is gitignored `deploy/jwt/refresh_secret.b64` (`make loc
 
 ## Cookies and CSRF
 
-Auth-set cookies are **host-only** (no `Domain`), `Path=/`, `SameSite=Lax`, `Secure` on the HTTPS origin.
+Auth-set cookies are **host-only** (no `Domain`), `SameSite=Lax`, `Secure` on the HTTPS origin. `__untangled_access` is `Path=/`. `__untangled_refresh` is `Path=/api/v2/auth/refresh` only (browser transmits it solely on that path; SSR and API do not receive it).
 
 | Cookie | Role |
 | ------ | ---- |
 | `__untangled_csrf` | Double-submit CSRF; **not** HttpOnly |
 | `__untangled_access` | Access JWT; **HttpOnly**. SSR verifies with the public key and uses the JWT as Bearer to the API. |
+| `__untangled_refresh` | Opaque refresh token; **HttpOnly**. Set on normal login. Must-change login does not set it. Refresh protocol is a later #14 child. |
 
 `SameSite=Lax` is **not** enough for login CSRF (forced login does not need an existing cookie). `POST /api/v2/auth/login` requires:
 

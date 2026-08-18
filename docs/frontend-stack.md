@@ -26,7 +26,7 @@ Required web env (Compose sets these; `make frontend-dev` supplies local default
 | `UNTANGLED_COOKIE_SECURE` | Secure cookies on by default; set `false` for plain-HTTP local |
 | `UNTANGLED_REDIS_URL` | Shared Redis for system_config cache invalidation (`redis://redis:6379/0` in Compose; host default `redis://localhost:6379/0`). Web subscribes on boot. Production hardening [#182](https://github.com/brettski74/untangled/issues/182) |
 
-Cookie `maxAge` on `__untangled_access` is the access JWT TTL (auth sets it). SSR logout expires the same cookie.
+Cookie `maxAge` on `__untangled_access` is set by auth (JWT lifetime for must-change; remaining idle/hard-cap for a normal session). SSR logout expires the access cookie.
 
 ## Key paths
 

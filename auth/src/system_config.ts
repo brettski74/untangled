@@ -12,17 +12,33 @@ import {
   SESSION_REFRESH_PROCESS_TIME_MINIMUM_MIN,
   SESSION_REFRESH_REUSE_GRACE_MAX,
   SESSION_REFRESH_REUSE_GRACE_MIN,
+  type SessionIssueSettings,
 } from "./session_settings.js";
 
+export type AuthRuntimeSettings = LoginProcessSettings & SessionIssueSettings;
+
 type CacheEntry = {
-  value: LoginProcessSettings;
+  value: AuthRuntimeSettings;
   expires_at: number;
 };
 
 export type LoginSettingsSource = {
-  get: () => Promise<LoginProcessSettings>;
+  get: () => Promise<AuthRuntimeSettings>;
   invalidate: () => void;
 };
+
+function require_positive_int(value: unknown, name: string): number {
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error(`${name} is unusable; auth abort`);
+  }
+  return n;
+}
 
 export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
   let entry: CacheEntry | null = null;
@@ -60,6 +76,9 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
         session_refresh_reuse_window_seconds: number;
         session_refresh_process_time_minimum: number;
         session_refresh_process_time_maximum: number;
+        session_access_ttl_seconds: unknown;
+        session_refresh_ttl_seconds: unknown;
+        session_total_ttl_seconds: unknown;
       }>(
         `SELECT login_process_time_minimum, login_process_time_maximum,
                 login_hash_concurrency_limit, login_maximum_failed_count,
@@ -77,7 +96,10 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
                 session_refresh_reuse_grace_seconds,
                 session_refresh_reuse_window_seconds,
                 session_refresh_process_time_minimum,
-                session_refresh_process_time_maximum
+                session_refresh_process_time_maximum,
+                session_access_ttl_seconds,
+                session_refresh_ttl_seconds,
+                session_total_ttl_seconds
          FROM system_config WHERE id = $1::uuid`,
         [SYSTEM_CONFIG_ID],
       );
@@ -123,7 +145,19 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
           "session_refresh_reuse_window_seconds must be > session_refresh_reuse_grace_seconds; auth abort",
         );
       }
-      const value = clamp_login_process({
+      const session_access_ttl_seconds = require_positive_int(
+        row.session_access_ttl_seconds,
+        "session_access_ttl_seconds",
+      );
+      const session_refresh_ttl_seconds = require_positive_int(
+        row.session_refresh_ttl_seconds,
+        "session_refresh_ttl_seconds",
+      );
+      const session_total_ttl_seconds = require_positive_int(
+        row.session_total_ttl_seconds,
+        "session_total_ttl_seconds",
+      );
+      const login = clamp_login_process({
         process_time_minimum_ms: row.login_process_time_minimum,
         process_time_maximum_ms: row.login_process_time_maximum,
         hash_concurrency_limit: row.login_hash_concurrency_limit,
@@ -148,9 +182,15 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
           max_kib: row.login_rate_limit_max_kib,
         },
       });
-      if (value.process_time_minimum_ms > value.process_time_maximum_ms) {
+      if (login.process_time_minimum_ms > login.process_time_maximum_ms) {
         throw new Error("login_process_time_minimum must be <= login_process_time_maximum");
       }
+      const value: AuthRuntimeSettings = {
+        ...login,
+        session_access_ttl_seconds,
+        session_refresh_ttl_seconds,
+        session_total_ttl_seconds,
+      };
       entry = {
         value,
         expires_at: now + value.cache_ttl_seconds * 1000,
@@ -161,7 +201,7 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
 }
 
 export function static_login_settings(
-  settings: LoginProcessSettings,
+  settings: AuthRuntimeSettings,
 ): LoginSettingsSource {
   return {
     invalidate() {},

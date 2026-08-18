@@ -98,10 +98,12 @@ describe("jwt", () => {
     const user_id = "01900000-0000-7000-8000-000000000001";
     const token = await sign_access_token(issuer.privateKey, user_id, {
       ttl_seconds: 900,
+      sid: "01900000-0000-7000-8000-0000000000aa",
     });
     const payload = await verify_access_token(issuer.publicKey, token);
     assert.equal(payload.sub, user_id);
     assert.equal(payload.typ, "access");
+    assert.equal(payload.sid, "01900000-0000-7000-8000-0000000000aa");
     assert.equal(payload.password_change_required, undefined);
     await assert.rejects(() => verify_access_token(other.publicKey, token));
   });
@@ -117,9 +119,11 @@ describe("jwt", () => {
     assert.equal(payload.password_change_required, true);
     const reissued = await sign_access_token(privateKey, user_id, {
       exp: payload.exp as number,
+      sid: "01900000-0000-7000-8000-0000000000aa",
     });
     const again = await verify_access_token(publicKey, reissued);
     assert.equal(again.exp, payload.exp);
+    assert.equal(again.sid, "01900000-0000-7000-8000-0000000000aa");
     assert.equal(again.password_change_required, undefined);
   });
 

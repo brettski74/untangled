@@ -14,6 +14,7 @@ import {
 import {
   ACCESS_COOKIE_NAME,
   CSRF_COOKIE_NAME,
+  REFRESH_COOKIE_NAME,
   parse_cookie_header,
 } from "../src/cookies.js";
 import { USERNAME_EVENT_BOUND } from "../src/login_settings.js";
@@ -117,6 +118,7 @@ describe("auth csrf + login", () => {
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { detail: "Forbidden" });
     assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), REFRESH_COOKIE_NAME), undefined);
     const event = last_event();
     assert.equal(event.event_type, AUTH_CSRF_DENIED);
     assert.equal(event.reason, CSRF_DENIED_ORIGIN);
@@ -147,6 +149,7 @@ describe("auth csrf + login", () => {
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { detail: "Forbidden" });
     assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), REFRESH_COOKIE_NAME), undefined);
     const event = last_event();
     assert.equal(event.event_type, AUTH_CSRF_DENIED);
     assert.equal(event.reason, CSRF_DENIED_ORIGIN);
@@ -190,6 +193,7 @@ describe("auth csrf + login", () => {
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { detail: "Forbidden" });
     assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), REFRESH_COOKIE_NAME), undefined);
     const event = last_event();
     assert.equal(event.event_type, AUTH_CSRF_DENIED);
     assert.equal(event.reason, CSRF_DENIED_CSRF);
@@ -217,6 +221,7 @@ describe("auth csrf + login", () => {
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { detail: "Forbidden" });
     assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), REFRESH_COOKIE_NAME), undefined);
     const event = last_event();
     assert.equal(event.event_type, AUTH_CSRF_DENIED);
     assert.equal(event.reason, CSRF_DENIED_CSRF);
@@ -244,6 +249,7 @@ describe("auth csrf + login", () => {
     const body: unknown = await response.json();
     assert.deepEqual(body, { detail: "Access denied" });
     assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME), undefined);
+    assert.equal(cookie_from_set_cookie(response.headers.getSetCookie(), REFRESH_COOKIE_NAME), undefined);
   });
 
   it("accepts matching Origin and header csrf and sets an ES256 access cookie", async () => {
@@ -274,6 +280,7 @@ describe("auth csrf + login", () => {
     const { payload } = await jwtVerify(value, public_key, { algorithms: ["ES256"] });
     assert.equal(payload.sub, TEST_USER_ID);
     assert.equal(payload.typ, "access");
+    assert.equal(typeof payload.sid, "string");
     assert.equal(payload.password_change_required, undefined);
     assert.equal(typeof payload.iat, "number");
     assert.equal(typeof payload.exp, "number");
@@ -373,6 +380,10 @@ describe("auth csrf denied audit fail-closed", () => {
       assert.deepEqual(await response.json(), { detail: "Internal error" });
       assert.equal(
         cookie_from_set_cookie(response.headers.getSetCookie(), ACCESS_COOKIE_NAME),
+        undefined,
+      );
+      assert.equal(
+        cookie_from_set_cookie(response.headers.getSetCookie(), REFRESH_COOKIE_NAME),
         undefined,
       );
     } finally {

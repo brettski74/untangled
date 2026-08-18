@@ -1,6 +1,16 @@
+import { createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 export const MIN_REFRESH_HMAC_SECRET_BYTES = 32;
+export const REFRESH_TOKEN_BYTES = 32;
+
+export function mint_refresh_token(): string {
+  return randomBytes(REFRESH_TOKEN_BYTES).toString("base64url");
+}
+
+export function hmac_refresh_token(secret: Buffer, token: string): string {
+  return createHmac("sha256", secret).update(token, "utf8").digest("hex");
+}
 
 const BASE64_BODY = /^[A-Za-z0-9+/]+={0,2}$/;
 

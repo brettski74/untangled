@@ -38,6 +38,9 @@ function config_row(
     session_refresh_reuse_window_seconds: 86400,
     session_refresh_process_time_minimum: 300,
     session_refresh_process_time_maximum: 500,
+    session_access_ttl_seconds: 900,
+    session_refresh_ttl_seconds: 604800,
+    session_total_ttl_seconds: 2592000,
     ...overrides,
   };
 }
@@ -48,6 +51,32 @@ describe("session knobs on auth cache load", () => {
     const settings = await cache.get();
     assert.equal(settings.process_time_minimum_ms, 300);
     assert.equal(settings.process_time_maximum_ms, 500);
+    assert.equal(settings.session_access_ttl_seconds, 900);
+    assert.equal(settings.session_refresh_ttl_seconds, 604800);
+    assert.equal(settings.session_total_ttl_seconds, 2592000);
+  });
+
+  it("does not clamp session issuance TTLs", async () => {
+    const cache = make_login_settings_cache(
+      stub_pool(
+        config_row({
+          session_access_ttl_seconds: 61,
+          session_refresh_ttl_seconds: 301,
+          session_total_ttl_seconds: 400,
+        }),
+      ),
+    );
+    const settings = await cache.get();
+    assert.equal(settings.session_access_ttl_seconds, 61);
+    assert.equal(settings.session_refresh_ttl_seconds, 301);
+    assert.equal(settings.session_total_ttl_seconds, 400);
+  });
+
+  it("aborts when a session issuance TTL is unusable", async () => {
+    const cache = make_login_settings_cache(
+      stub_pool(config_row({ session_access_ttl_seconds: 0 })),
+    );
+    await assert.rejects(cache.get(), /session_access_ttl_seconds is unusable/);
   });
 
   it("aborts when grace is out of range", async () => {
