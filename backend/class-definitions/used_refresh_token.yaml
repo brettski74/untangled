@@ -2,11 +2,10 @@
 name: used_refresh_token
 display_name: Used Refresh Token
 description: >
-  HMAC-SHA-256 of a consumed refresh token, retained for replay detection.
-  session_id is the originating user_session id without a foreign key so
-  session delete can leave these rows in place for the reuse window.
-  Never stores the raw refresh token. No product nav, permissions, or public
-  record mount.
+  HMAC-SHA-256 of a consumed refresh token, retained for replay detection
+  while the session is alive. session_id references user_session; session
+  tear-down deletes these rows before the session row. Never stores the raw
+  refresh token. No product nav, permissions, or public record mount.
 attributes:
   refresh_hmac:
     type: compact_text
@@ -19,6 +18,7 @@ attributes:
   session_id:
     type: uuid
     required: true
+    references: user_session
   used_at:
     type: datetime
     required: true

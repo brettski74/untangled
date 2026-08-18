@@ -13,6 +13,7 @@ import type { AuthConfig } from "./config.js";
 import {
   ACCESS_COOKIE_NAME,
   CSRF_COOKIE_NAME,
+  REFRESH_COOKIE_NAME,
   access_cookie,
   csrf_cookie,
   parse_cookie_header,
@@ -26,6 +27,7 @@ import {
   verify_access_token,
 } from "./jwt.js";
 import { hmac_refresh_token, mint_refresh_token } from "./refresh_hmac.js";
+import { REFRESH_RETRY, run_refresh_pipeline } from "./refresh_pipeline.js";
 import { ACCESS_DENIED, SERVICE_UNAVAILABLE } from "./login_settings.js";
 import { run_login_pipeline } from "./login_pipeline.js";
 import { login_session_times } from "./session_issue.js";
@@ -42,6 +44,7 @@ import {
 
 const CSRF_PATH = "/api/v2/auth/csrf";
 const LOGIN_PATH = "/api/v2/auth/login";
+const REFRESH_PATH = "/api/v2/auth/refresh";
 const ME_PATH = "/api/v2/auth/me";
 const CHANGE_PASSWORD_PATH = "/api/v2/auth/change-password";
 const HEALTH_PATH = "/health";
@@ -66,6 +69,14 @@ export async function handle_request(
   }
   if (request.method === "POST" && path === LOGIN_PATH) {
     await handle_login(request, response, config);
+    return;
+  }
+  if (path === REFRESH_PATH && request.method !== "POST") {
+    json(response, 405, { detail: "Method not allowed" });
+    return;
+  }
+  if (request.method === "POST" && path === REFRESH_PATH) {
+    await handle_refresh(request, response, config);
     return;
   }
   if (request.method === "GET" && path === ME_PATH) {
@@ -274,6 +285,139 @@ async function handle_login(
     return;
   }
   json(response, 200, { ok: true });
+}
+
+const refresh_body_schema = z.object({
+  csrf_token: z.string().min(1).optional(),
+  refresh_token: z.string().optional(),
+});
+
+async function handle_refresh(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: AuthConfig,
+): Promise<void> {
+  let body: string;
+  try {
+    body = await read_body(request);
+  } catch {
+    json(response, 413, { detail: "Payload too large" });
+    return;
+  }
+
+  if (!origin_is_exact_match(header_value(request.headers.origin), config.public_origin)) {
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_ORIGIN,
+      context_path: REFRESH_PATH,
+    });
+    return;
+  }
+
+  const parsed_body = parse_refresh_body(request, body);
+  if (!parsed_body.ok) {
+    json(response, 400, { detail: "Bad request" });
+    return;
+  }
+  const cookies = parse_cookie_header(header_value(request.headers.cookie));
+  const csrf_cookie_value = cookies.get(CSRF_COOKIE_NAME) ?? "";
+  const submitted = submitted_csrf_token(request, parsed_body.data);
+  if (
+    csrf_cookie_value === "" ||
+    submitted === "" ||
+    !tokens_equal(csrf_cookie_value, submitted)
+  ) {
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_CSRF,
+      context_path: REFRESH_PATH,
+    });
+    return;
+  }
+
+  let settings;
+  try {
+    settings = await config.get_settings();
+  } catch {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
+
+  const identity = request_identity(request, config.public_origin);
+  const access_token = cookies.get(ACCESS_COOKIE_NAME) ?? "";
+  const refresh_token = cookies.get(REFRESH_COOKIE_NAME) ?? "";
+  const result = await run_refresh_pipeline(
+    {
+      access_token: access_token === "" ? null : access_token,
+      refresh_token: refresh_token === "" ? null : refresh_token,
+      source_ip: identity.source_ip,
+      protocol: identity.protocol,
+      host: identity.host,
+      context_path: REFRESH_PATH,
+      user_agent: header_value(request.headers["user-agent"]),
+    },
+    {
+      settings,
+      public_key: config.public_key,
+      private_key: config.private_key,
+      refresh_hmac_secret: config.refresh_hmac_secret,
+      sessions: config.sessions,
+      audit: config.audit,
+      draw_t: config.draw_t,
+      now_ms: config.now_ms,
+      sleep: config.sleep,
+    },
+  );
+
+  if (result.kind === "internal_error") {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
+  if (result.kind === "unavailable") {
+    json(response, 503, { detail: SERVICE_UNAVAILABLE });
+    return;
+  }
+  if (result.kind === "soft") {
+    json(response, 401, { detail: ACCESS_DENIED, retry: REFRESH_RETRY });
+    return;
+  }
+  if (result.kind === "hard") {
+    json(response, 401, { detail: ACCESS_DENIED });
+    return;
+  }
+
+  const set_cookies = [
+    csrf_cookie(csrf_cookie_value, config.cookie_secure),
+    refresh_cookie(result.refresh_token, config.cookie_secure, result.refresh_max_age),
+  ];
+  if (result.access_token != null) {
+    set_cookies.push(
+      access_cookie(result.access_token, config.cookie_secure, result.access_max_age),
+    );
+  }
+  response.setHeader("Set-Cookie", set_cookies);
+  json(response, 200, { ok: true });
+}
+
+function parse_refresh_body(
+  request: IncomingMessage,
+  body: string,
+): { ok: true; data: { csrf_token?: string } } | { ok: false } {
+  const content_type = header_value(request.headers["content-type"]) ?? "";
+  if (content_type.includes("application/json")) {
+    try {
+      const parsed: unknown = JSON.parse(body);
+      const result = refresh_body_schema.safeParse(parsed);
+      return { ok: true, data: result.success ? result.data : {} };
+    } catch {
+      return { ok: false };
+    }
+  }
+  if (content_type.includes("application/x-www-form-urlencoded")) {
+    const result = refresh_body_schema.safeParse(
+      Object.fromEntries(new URLSearchParams(body)),
+    );
+    return { ok: true, data: result.success ? result.data : {} };
+  }
+  return { ok: true, data: {} };
 }
 
 function access_token_from_request(request: IncomingMessage): string | null {
@@ -495,7 +639,10 @@ function parse_login_body(
   return { ok: true, data: {} };
 }
 
-function submitted_csrf_token(request: IncomingMessage, parsed: LoginBody): string {
+function submitted_csrf_token(
+  request: IncomingMessage,
+  parsed: { csrf_token?: string },
+): string {
   const header_token = header_value(request.headers["x-csrf-token"]);
   if (header_token != null && header_token !== "") {
     return header_token;
@@ -545,6 +692,7 @@ async function read_body(request: IncomingMessage): Promise<string> {
 export const AUTH_SESSION_PATHS = {
   csrf: CSRF_PATH,
   login: LOGIN_PATH,
+  refresh: REFRESH_PATH,
   me: ME_PATH,
   change_password: CHANGE_PASSWORD_PATH,
   access_cookie: ACCESS_COOKIE_NAME,

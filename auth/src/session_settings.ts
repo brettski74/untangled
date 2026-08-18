@@ -40,6 +40,10 @@ export type SessionIssueSettings = {
   session_access_ttl_seconds: number;
   session_refresh_ttl_seconds: number;
   session_total_ttl_seconds: number;
+  session_refresh_reuse_grace_seconds: number;
+  session_refresh_reuse_window_seconds: number;
+  session_refresh_process_time_minimum: number;
+  session_refresh_process_time_maximum: number;
 };
 
 export function default_session_issue_settings(): SessionIssueSettings {
@@ -47,5 +51,9 @@ export function default_session_issue_settings(): SessionIssueSettings {
     session_access_ttl_seconds: SESSION_ACCESS_TTL_DEFAULT,
     session_refresh_ttl_seconds: SESSION_REFRESH_TTL_DEFAULT,
     session_total_ttl_seconds: SESSION_TOTAL_TTL_DEFAULT,
+    session_refresh_reuse_grace_seconds: SESSION_REFRESH_REUSE_GRACE_DEFAULT,
+    session_refresh_reuse_window_seconds: SESSION_REFRESH_REUSE_WINDOW_DEFAULT,
+    session_refresh_process_time_minimum: SESSION_REFRESH_PROCESS_TIME_MINIMUM_DEFAULT,
+    session_refresh_process_time_maximum: SESSION_REFRESH_PROCESS_TIME_MAXIMUM_DEFAULT,
   };
 }

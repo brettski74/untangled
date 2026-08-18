@@ -155,6 +155,20 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
         referenced_columns=("id",),
     ) in role_permission.foreign_keys
 
+    used = by_table["used_refresh_token"]
+    assert ForeignKeyIR(
+        name="used_refresh_token_session_id_fkey",
+        columns=("session_id",),
+        referenced_table="user_session",
+        referenced_columns=("id",),
+    ) in used.foreign_keys
+    assert ForeignKeyIR(
+        name="used_refresh_token_user_id_fkey",
+        columns=("user_id",),
+        referenced_table="user",
+        referenced_columns=("id",),
+    ) in used.foreign_keys
+
     system_config = by_table["system_config"]
     assert len(system_config.checks) == 5
     assert "01900000-0000-7000-8000-000000000050" in system_config.checks[0].expression

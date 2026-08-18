@@ -190,6 +190,10 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
         session_access_ttl_seconds,
         session_refresh_ttl_seconds,
         session_total_ttl_seconds,
+        session_refresh_reuse_grace_seconds: grace,
+        session_refresh_reuse_window_seconds: window_seconds,
+        session_refresh_process_time_minimum: process_min,
+        session_refresh_process_time_maximum: process_max,
       };
       entry = {
         value,
