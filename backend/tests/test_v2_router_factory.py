@@ -93,6 +93,8 @@ def test_v2_mounts_include_declared_product_classes_only() -> None:
     assert "/api/v2/user_role" not in prefixes
     assert "/api/v2/role_permission" not in prefixes
     assert "/api/v2/refresh_token" not in prefixes
+    assert "/api/v2/user_session" not in prefixes
+    assert "/api/v2/used_refresh_token" not in prefixes
     assert not any(p.endswith("s") and p.rsplit("/", 1)[-1] in {
         "incidents",
         "change-requests",

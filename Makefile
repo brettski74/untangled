@@ -12,6 +12,7 @@ LOCAL_EDGE_CERT := deploy/caddy/certs/dev.crt
 LOCAL_EDGE_KEY := deploy/caddy/certs/dev.key
 JWT_PRIVATE := deploy/jwt/dev-es256-private.pem
 JWT_PUBLIC := deploy/jwt/dev-es256-public.pem
+REFRESH_HMAC_SECRET := deploy/jwt/refresh_secret.b64
 
 # Compose engine: unset COMPOSE → auto-detect (prefer Podman); env/CLI override wins.
 # Empty COMPOSE is an error. Export so nested $(MAKE) keeps the same engine/wait flags.
@@ -47,7 +48,7 @@ export COMPOSE_SUPPORTS_WAIT
 # Bind-mount host-visible audit NDJSON; Rocky deploy.sh unsets this → named volume.
 COMPOSE_LOCAL_EDGE := COMPOSE_PROFILES=local-edge UNTANGLED_AUDIT_MOUNT=./$(RUN_DIR)/audit
 
-.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait backend-dev frontend-dev auth-dev backend-install frontend-install auth-install local-certs local-jwt-keys lint test test-ci backend-lint backend-test frontend-lint frontend-test auth-lint auth-test e2e e2e-smoke models migrate seed clean clean-models clean-run
+.PHONY: help install up down reinstall reinstall-keep-data db-up db-down db-wait redis-up redis-down redis-wait backend-dev frontend-dev auth-dev backend-install frontend-install auth-install local-certs local-jwt-keys local-refresh-hmac lint test test-ci backend-lint backend-test frontend-lint frontend-test auth-lint auth-test e2e e2e-smoke models migrate seed clean clean-models clean-run
 
 help: ## List available targets
 	@echo "Untangled developer commands (run from repository root):"
@@ -101,7 +102,15 @@ $(JWT_PRIVATE) $(JWT_PUBLIC) &:
 
 local-jwt-keys: $(JWT_PRIVATE) $(JWT_PUBLIC) ## Create local ES256 JWT PEMs when both are missing
 
-up: $(LOCAL_EDGE_CERT) $(LOCAL_EDGE_KEY) $(JWT_PRIVATE) $(JWT_PUBLIC) ## Build and start postgres + redis + api + web + auth + local-edge proxy
+$(REFRESH_HMAC_SECRET):
+	@mkdir -p deploy/jwt; \
+	tmp="$@.tmp"; \
+	openssl rand -base64 32 > "$$tmp" && chmod 600 "$$tmp" && mv "$$tmp" "$@"; \
+	echo "generated $@"
+
+local-refresh-hmac: $(REFRESH_HMAC_SECRET) ## Create local refresh HMAC secret when missing
+
+up: $(LOCAL_EDGE_CERT) $(LOCAL_EDGE_KEY) $(JWT_PRIVATE) $(JWT_PUBLIC) $(REFRESH_HMAC_SECRET) ## Build and start postgres + redis + api + web + auth + local-edge proxy
 	@mkdir -p $(RUN_DIR)/audit
 	$(COMPOSE_LOCAL_EDGE) $(COMPOSE) up -d --build $(COMPOSE_WAIT_FLAG)
 ifneq ($(COMPOSE_SUPPORTS_WAIT),yes)
@@ -194,7 +203,7 @@ frontend-dev: frontend-install local-jwt-keys ## Run the React Router dev server
 		UNTANGLED_AUTH_ORIGIN=$${UNTANGLED_AUTH_ORIGIN:-http://localhost:3001} \
 		npm run dev -- --host 127.0.0.1 --port 5173
 
-auth-dev: auth-install local-jwt-keys ## Run the auth service on :3001 (host-dev)
+auth-dev: auth-install local-jwt-keys local-refresh-hmac ## Run the auth service on :3001 (host-dev)
 	@mkdir -p $(RUN_DIR)/audit
 	cd $(AUTH_DIR) && \
 		DATABASE_URL=$${DATABASE_URL:-postgresql://untangled:untangled@localhost:5432/untangled} \
@@ -203,6 +212,7 @@ auth-dev: auth-install local-jwt-keys ## Run the auth service on :3001 (host-dev
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
 		UNTANGLED_JWT_PRIVATE_KEY_PATH=$${UNTANGLED_JWT_PRIVATE_KEY_PATH:-$(CURDIR)/$(JWT_PRIVATE)} \
 		UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
+		UNTANGLED_REFRESH_HMAC_SECRET_PATH=$${UNTANGLED_REFRESH_HMAC_SECRET_PATH:-$(CURDIR)/$(REFRESH_HMAC_SECRET)} \
 		UNTANGLED_AUDIT_LOG_DIR=$${UNTANGLED_AUDIT_LOG_DIR:-$(CURDIR)/$(RUN_DIR)/audit} \
 		UV_THREADPOOL_SIZE=$${UV_THREADPOOL_SIZE:-12} \
 		PORT=$${PORT:-3001} \

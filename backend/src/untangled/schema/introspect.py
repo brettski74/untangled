@@ -20,6 +20,31 @@ from untangled.schema.ir import (
 from untangled.schema.types import ir_type_from_postgres
 
 
+def list_base_table_names(
+    conn: Connection,
+    *,
+    schema_name: str = "public",
+    exclude: Iterable[str] = (),
+) -> tuple[str, ...]:
+    """Return BASE TABLE names in ``schema_name``, omitting ``exclude``.
+
+    Sorted by name so migrate plans stay deterministic. ``migrate()`` uses this
+    for current IR (every ``public`` table except bootstrap bookkeeping).
+    """
+    skipped = frozenset(exclude)
+    rows = conn.execute(
+        """
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = %s
+          AND table_type = 'BASE TABLE'
+        ORDER BY table_name
+        """,
+        (schema_name,),
+    ).fetchall()
+    return tuple(name for (name,) in rows if name not in skipped)
+
+
 def introspect_schema(
     conn: Connection,
     table_names: Sequence[str],
@@ -29,10 +54,13 @@ def introspect_schema(
 ) -> SchemaIR:
     """Introspect ``table_names`` (and optional sequences) into a Schema IR snapshot.
 
-    Only the listed tables are included (managed classes). Missing tables are
-    omitted so callers can treat absence as empty current state for that name.
-    When ``sequence_names`` is provided, only those sequences are considered;
+    Only the listed tables are included. Missing tables are omitted so callers
+    can treat absence as empty current state for that name. When
+    ``sequence_names`` is provided, only those sequences are considered;
     missing names are omitted.
+
+    ``migrate()`` must list every ``public`` BASE TABLE except bootstrap
+    bookkeeping — not only tables that still have YAML class files.
     """
     names = tuple(dict.fromkeys(table_names))  # stable unique order
     tables: list[TableIR] = []

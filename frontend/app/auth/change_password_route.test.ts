@@ -62,6 +62,15 @@ const POLICY_RECORD = {
   login_rate_limit_max_kib: 16384,
   audit_bulk_read_window_seconds: 600,
   audit_bulk_read_max_searches: 100,
+  session_access_ttl_seconds: 900,
+  session_refresh_ttl_seconds: 604800,
+  session_total_ttl_seconds: 2592000,
+  session_refresh_reuse_grace_seconds: 15,
+  session_refresh_reuse_window_seconds: 86400,
+  session_max_refresh_retries: 5,
+  session_refresh_cleanup_seconds: 14400,
+  session_refresh_process_time_minimum: 300,
+  session_refresh_process_time_maximum: 500,
 };
 
 describe("change-password route (#173/#215)", () => {

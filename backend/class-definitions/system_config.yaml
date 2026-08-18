@@ -15,6 +15,8 @@ check_constraint:
   - "id = '${system_config_id}'::uuid"
   - "password_maximum_chars > password_minimum_chars"
   - "login_process_time_minimum <= login_process_time_maximum"
+  - "session_refresh_reuse_window_seconds > session_refresh_reuse_grace_seconds"
+  - "session_refresh_process_time_minimum <= session_refresh_process_time_maximum"
 attributes:
   max_search_nesting_depth:
     type: integer
@@ -160,3 +162,57 @@ attributes:
     create_default: 100
     min_value: 1
     max_value: 100000
+  session_access_ttl_seconds:
+    type: integer
+    required: true
+    create_default: 900
+    min_value: 60
+    max_value: 86400
+  session_refresh_ttl_seconds:
+    type: integer
+    required: true
+    create_default: 604800
+    min_value: 300
+    max_value: 7776000
+  session_total_ttl_seconds:
+    type: integer
+    required: true
+    create_default: 2592000
+    min_value: 300
+    max_value: 15552000
+  session_refresh_reuse_grace_seconds:
+    type: integer
+    required: true
+    create_default: 15
+    min_value: 5
+    max_value: 60
+  session_refresh_reuse_window_seconds:
+    type: integer
+    required: true
+    create_default: 86400
+    min_value: 3600
+    max_value: 604800
+  session_max_refresh_retries:
+    type: integer
+    required: true
+    create_default: 5
+    min_value: 1
+    max_value: 10
+  session_refresh_cleanup_seconds:
+    type: integer
+    required: true
+    create_default: 14400
+    min_value: 3600
+    max_value: 259200
+  session_refresh_process_time_minimum:
+    type: integer
+    required: true
+    create_default: 300
+    min_value: 100
+    max_value: 500
+  session_refresh_process_time_maximum:
+    type: integer
+    required: true
+    create_default: 500
+    min_value: 200
+    max_value: 1000

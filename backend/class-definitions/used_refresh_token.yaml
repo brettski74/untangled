@@ -1,0 +1,27 @@
+# Internal consumed-refresh HMAC store for reuse detection (not a product UI class).
+name: used_refresh_token
+display_name: Used Refresh Token
+description: >
+  HMAC-SHA-256 of a consumed refresh token, retained for replay detection.
+  session_id is the originating user_session id without a foreign key so
+  session delete can leave these rows in place for the reuse window.
+  Never stores the raw refresh token. No product nav, permissions, or public
+  record mount.
+attributes:
+  refresh_hmac:
+    type: compact_text
+    required: true
+    unique: true
+  user_id:
+    type: uuid
+    required: true
+    references: user
+  session_id:
+    type: uuid
+    required: true
+  used_at:
+    type: datetime
+    required: true
+  expires_at:
+    type: datetime
+    required: true

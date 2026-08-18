@@ -59,6 +59,8 @@ The OpenSSL pair will warn in browsers until you trust it. `curl -k` is fine for
 
 ES256 PEMs are gitignored `deploy/jwt/dev-es256-private.pem` and `dev-es256-public.pem`. Same both-missing / both-present / fail-if-one rule as the TLS files (`make local-jwt-keys` / `make up`). Auth mounts the private key; API and web mount the public key only.
 
+The refresh HMAC secret is gitignored `deploy/jwt/refresh_secret.b64` (`make local-refresh-hmac` / `make up`). Auth mounts that file only. API, web, and Caddy must not. Missing or empty → auth does not start; the auth process does not generate a secret. Non-Make deploys (including `./deploy.sh`) must provision the file. `session_*` attributes on `system_config` are stored now and do not drive token issuance yet.
+
 ## Cookies and CSRF
 
 Auth-set cookies are **host-only** (no `Domain`), `Path=/`, `SameSite=Lax`, `Secure` on the HTTPS origin.

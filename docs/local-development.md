@@ -97,6 +97,7 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 | Setting | Default (Compose / docs) |
 | ------- | ------------------------ |
 | `UNTANGLED_JWT_PRIVATE_KEY_PATH` / `UNTANGLED_JWT_PUBLIC_KEY_PATH` | Gitignored `deploy/jwt/dev-es256-*.pem` (`make local-jwt-keys`). Auth gets both; API and web get the public key only. |
+| `UNTANGLED_REFRESH_HMAC_SECRET_PATH` | Gitignored `deploy/jwt/refresh_secret.b64` (`make local-refresh-hmac` / `make up`). Auth-only; API, web, and Caddy must not receive this file. Base64 of ≥32 CSPRNG bytes. Missing, empty, invalid base64, or too-short decoded material → auth does not start. Auth never generates this file. Operators / Rocky CI provision it for non-Make deploys (`UNTANGLED_REFRESH_HMAC_SECRET` GitHub Environment secret is written to the file; it is not a container env). `session_*` `system_config` attributes are persisted on the singleton and unused for issuance until later session children. |
 | `UNTANGLED_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes) |
 | `UNTANGLED_REFRESH_TOKEN_TTL_SECONDS` | `604800` (7 days; unused until #14) |
 | `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose / Playwright: `https://localhost:8443`. Host-dev Vite: `http://localhost:5173` |
@@ -437,7 +438,11 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make clean-models` | Remove generated Pydantic/Zod artefacts |
 | `make clean` | Same as `clean-models` (clean source tree of codegen output) |
 
-Destructive schema plans are rejected by default. To allow them locally:
+Destructive schema plans are rejected by default. Re-run with
+`--allow-destructive` to apply drops: removed YAML classes, leftover tables such
+as unused `refresh_token`, or any other extra `public` BASE TABLE. Migrate’s
+bookkeeping tables `schema_versions` and `schema_version_class_hashes` are left
+alone.
 
 ```bash
 make migrate MIGRATE_ARGS=--allow-destructive

@@ -47,7 +47,8 @@ def test_migrate_creates_demo_tables(db_conn, demo_schema, demo_definition) -> N
         "demo_item",
         "demo_link",
         "user",
-        "refresh_token",
+        "user_session",
+        "used_refresh_token",
     }
     row = db_conn.execute(
         """

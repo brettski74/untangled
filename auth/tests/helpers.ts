@@ -132,6 +132,7 @@ export async function test_config(
     cookie_secure: overrides.cookie_secure ?? true,
     private_key: privateKey,
     public_key: publicKey,
+    refresh_hmac_secret: Buffer.alloc(32),
     access_token_ttl_seconds: 900,
     get_settings: static_login_settings(settings).get,
     hash_slots:

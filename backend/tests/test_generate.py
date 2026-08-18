@@ -62,12 +62,13 @@ def test_generate_demo_pydantic_accepts_and_rejects(
         "demo_link",
         "incident",
         "permission",
-        "refresh_token",
         "role",
         "role_permission",
         "system_config",
+        "used_refresh_token",
         "user",
         "user_role",
+        "user_session",
     }
     assert (pydantic_out / "demo_item.py").is_file()
     assert (pydantic_out / "demo_link.py").is_file()

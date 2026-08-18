@@ -10,10 +10,11 @@ import {
   DemoLinkCreateSchema,
   IncidentCreateSchema,
   PermissionCreateSchema,
-  RefreshTokenCreateSchema,
   RolePermissionCreateSchema,
   RoleCreateSchema,
+  UsedRefreshTokenCreateSchema,
   UserRoleCreateSchema,
+  UserSessionCreateSchema,
   UserCreateSchema,
 } from "../generated";
 
@@ -25,10 +26,11 @@ const CREATE_SCHEMAS: Readonly<Record<string, CreateZodSchema>> = {
   demo_link: DemoLinkCreateSchema,
   incident: IncidentCreateSchema,
   permission: PermissionCreateSchema,
-  refresh_token: RefreshTokenCreateSchema,
   role_permission: RolePermissionCreateSchema,
   role: RoleCreateSchema,
+  used_refresh_token: UsedRefreshTokenCreateSchema,
   user_role: UserRoleCreateSchema,
+  user_session: UserSessionCreateSchema,
   user: UserCreateSchema,
 };
 

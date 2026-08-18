@@ -1,4 +1,4 @@
-"""Unit tests for Argon2id password hashing and JWT/refresh helpers."""
+"""Unit tests for Argon2id password hashing and JWT verify."""
 
 from __future__ import annotations
 
@@ -20,8 +20,6 @@ from untangled.auth.passwords import hash_password, verify_password
 from untangled.auth.settings import jwt_public_key, reset_jwt_public_key_for_tests
 from untangled.auth.tokens import (
     decode_access_token,
-    hash_refresh_token,
-    new_refresh_token,
 )
 
 
@@ -99,14 +97,6 @@ def test_access_token_rejects_hs256() -> None:
     )
     with pytest.raises(jwt.InvalidAlgorithmError):
         decode_access_token(token)
-
-
-def test_refresh_token_hash_is_stable_and_not_plaintext() -> None:
-    token = new_refresh_token()
-    digest = hash_refresh_token(token)
-    assert digest == hash_refresh_token(token)
-    assert digest != token
-    assert len(digest) == 64
 
 
 def test_jwt_public_key_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -23,12 +23,13 @@ def test_load_demo_item(repo_definitions: Path) -> None:
         "demo_link",
         "incident",
         "permission",
-        "refresh_token",
         "role",
         "role_permission",
         "system_config",
+        "used_refresh_token",
         "user",
         "user_role",
+        "user_session",
     }
     demo = by_class["demo_item"]
     assert demo.name_snake == "demo_item"
@@ -58,6 +59,25 @@ def test_load_demo_item(repo_definitions: Path) -> None:
     ur_attrs = {attr.name_snake: attr for attr in user_role.attributes}
     assert ur_attrs["user_id"].references == "user"
     assert ur_attrs["role_id"].references == "role"
+
+
+def test_session_classes_are_internal(repo_definitions: Path) -> None:
+    definitions = load_definitions(repo_definitions)
+    by_class = {d.name_snake: d for d in definitions}
+    for name in ("user_session", "used_refresh_token"):
+        defn = by_class[name]
+        assert defn.public is False
+        assert defn.permissions == ()
+    session_attrs = {attr.name_snake: attr for attr in by_class["user_session"].attributes}
+    assert session_attrs["user_id"].references == "user"
+    assert session_attrs["refresh_hmac"].required is False
+    assert session_attrs["refresh_hmac"].unique is True
+    used_attrs = {
+        attr.name_snake: attr for attr in by_class["used_refresh_token"].attributes
+    }
+    assert used_attrs["user_id"].references == "user"
+    assert used_attrs["session_id"].references is None
+    assert used_attrs["refresh_hmac"].unique is True
 
 
 def test_load_demo_link_fk(repo_definitions: Path) -> None:

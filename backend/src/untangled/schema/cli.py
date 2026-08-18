@@ -40,7 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Apply plans that include destructive operations "
-            "(drop table/column, type changes, etc.). Default: reject."
+            "(drop extra public BASE TABLEs, drop column, type changes, etc.). "
+            "Default: reject."
         ),
     )
     return parser

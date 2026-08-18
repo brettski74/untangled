@@ -24,12 +24,13 @@ _MANAGED = {
     "demo_link",
     "incident",
     "permission",
-    "refresh_token",
     "role",
     "role_permission",
     "system_config",
+    "used_refresh_token",
     "user",
     "user_role",
+    "user_session",
 }
 
 
@@ -155,13 +156,19 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
     ) in role_permission.foreign_keys
 
     system_config = by_table["system_config"]
-    assert len(system_config.checks) == 3
+    assert len(system_config.checks) == 5
     assert "01900000-0000-7000-8000-000000000050" in system_config.checks[0].expression
     assert system_config.checks[1].expression == (
         "password_maximum_chars > password_minimum_chars"
     )
     assert system_config.checks[2].expression == (
         "login_process_time_minimum <= login_process_time_maximum"
+    )
+    assert system_config.checks[3].expression == (
+        "session_refresh_reuse_window_seconds > session_refresh_reuse_grace_seconds"
+    )
+    assert system_config.checks[4].expression == (
+        "session_refresh_process_time_minimum <= session_refresh_process_time_maximum"
     )
 
 

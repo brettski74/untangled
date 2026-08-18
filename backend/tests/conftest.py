@@ -114,7 +114,8 @@ def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefini
         "change_request",
         "incident",
         "system_config",
-        "refresh_token",
+        "user_session",
+        "used_refresh_token",
         "role",
         "permission",
         "user",
@@ -127,7 +128,7 @@ def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefini
             sql.SQL("DROP SEQUENCE IF EXISTS {}").format(sql.Identifier(seq))
         )
     db_conn.commit()
-    # allow_destructive so shared test DB can reconcile leftovers to YAML intent.
+    # allow_destructive so shared test DB can drop hitch-hiker public tables.
     result = migrate(db_conn, repo_definitions, allow_destructive=True)
     ensure_stub_actor_user(db_conn)
     return list(result.definitions)

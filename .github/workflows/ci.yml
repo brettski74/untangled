@@ -123,7 +123,7 @@ jobs:
             auth/package-lock.json
 
       - name: Install backend and frontend
-        run: make install models local-jwt-keys local-certs
+        run: make install models local-jwt-keys local-certs local-refresh-hmac
 
       - name: Install Playwright Chromium
         run: cd frontend && npx playwright install chromium --with-deps
@@ -133,18 +133,18 @@ jobs:
 
       - name: Start api, web, auth, and Caddy
         # Auth runs as uid 1000; the Actions runner that minted the JWT PEMs
-        # and owns .run/audit is typically a different uid. Chown those paths
-        # to 1000 (chmod first, while the runner still owns them) so the
-        # private key stays 0600. Public key stays openssl 0644. Not Rocky /
-        # local-jwt-keys policy.
+        # / HMAC secret and owns .run/audit is typically a different uid. Chown
+        # those paths to 1000 (chmod first, while the runner still owns them) so
+        # the private key and HMAC file stay 0600. Public key stays openssl 0644.
+        # Not Rocky / local-jwt-keys policy.
         env:
           UNTANGLED_AUDIT_MOUNT: ./.run/audit
         run: |
           set -euo pipefail
           mkdir -p .run/audit
-          chmod 0600 deploy/jwt/dev-es256-private.pem
+          chmod 0600 deploy/jwt/dev-es256-private.pem deploy/jwt/refresh_secret.b64
           chmod 0775 .run/audit
-          sudo chown 1000:1000 deploy/jwt/dev-es256-private.pem .run/audit
+          sudo chown 1000:1000 deploy/jwt/dev-es256-private.pem deploy/jwt/refresh_secret.b64 .run/audit
           if ! docker compose -f compose.yaml -f compose.ci-e2e.yaml --profile local-edge \
             up -d --build --wait --wait-timeout 180 api web auth proxy; then
             echo "Compose up --wait failed"
@@ -398,6 +398,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           UNTANGLED_JWT_PRIVATE_KEY: ${{ secrets.UNTANGLED_JWT_PRIVATE_KEY }}
           UNTANGLED_JWT_PUBLIC_KEY: ${{ secrets.UNTANGLED_JWT_PUBLIC_KEY }}
+          UNTANGLED_REFRESH_HMAC_SECRET: ${{ secrets.UNTANGLED_REFRESH_HMAC_SECRET }}
           UNTANGLED_PUBLIC_ORIGIN: ${{ secrets.UNTANGLED_PUBLIC_ORIGIN }}
           UNTANGLED_COOKIE_SECURE: ${{ secrets.UNTANGLED_COOKIE_SECURE }}
           UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${{ secrets.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS }}
@@ -414,6 +415,10 @@ jobs:
           fi
           if [ -z "${UNTANGLED_JWT_PUBLIC_KEY}" ]; then
             echo "UNTANGLED_JWT_PUBLIC_KEY is not set on Environment rocky9" >&2
+            exit 1
+          fi
+          if [ -z "${UNTANGLED_REFRESH_HMAC_SECRET}" ]; then
+            echo "UNTANGLED_REFRESH_HMAC_SECRET is not set on Environment rocky9" >&2
             exit 1
           fi
           if [ -z "${UNTANGLED_PUBLIC_ORIGIN}" ]; then
@@ -438,6 +443,8 @@ jobs:
           }
           write_pem "${UNTANGLED_JWT_PRIVATE_KEY}" "${RUNNER_TEMP}/jwt-private.pem"
           write_pem "${UNTANGLED_JWT_PUBLIC_KEY}" "${RUNNER_TEMP}/jwt-public.pem"
+          printf '%s\n' "${UNTANGLED_REFRESH_HMAC_SECRET}" > "${RUNNER_TEMP}/refresh_secret.b64"
+          chmod 600 "${RUNNER_TEMP}/refresh_secret.b64"
           {
             printf 'POSTGRES_USER=%s\n' "${pg_user}"
             printf 'POSTGRES_PASSWORD=%s\n' "${POSTGRES_PASSWORD}"
@@ -453,7 +460,7 @@ jobs:
             printf 'UNTANGLED_WEB_HOST_PORT=%s\n' "3000"
             printf 'UNTANGLED_AUTH_HOST_PORT=%s\n' "3001"
           } > "${RUNNER_TEMP}/untangled-rocky.env"
-          echo "Wrote runtime env file and JWT PEMs for remote sync (values not logged)"
+          echo "Wrote runtime env file, JWT PEMs, and refresh HMAC secret for remote sync (values not logged)"
 
       - name: Sync contract files and deploy over SSH
         env:
@@ -499,8 +506,11 @@ jobs:
           scp "${ssh_base[@]}" -P "${DEPLOY_PORT}" \
             "${RUNNER_TEMP}/jwt-public.pem" \
             "${remote}:untangled/deploy/jwt/dev-es256-public.pem"
+          scp "${ssh_base[@]}" -P "${DEPLOY_PORT}" \
+            "${RUNNER_TEMP}/refresh_secret.b64" \
+            "${remote}:untangled/deploy/jwt/refresh_secret.b64"
           ssh "${ssh_base[@]}" -p "${DEPLOY_PORT}" "${remote}" \
-            "chmod 600 ~/untangled/deploy/jwt/dev-es256-private.pem ~/untangled/deploy/jwt/dev-es256-public.pem"
+            "chmod 600 ~/untangled/deploy/jwt/dev-es256-private.pem ~/untangled/deploy/jwt/dev-es256-public.pem ~/untangled/deploy/jwt/refresh_secret.b64"
           # Single host script: pull/up/health/safe-migrate/regen seed-credentials/seed.
           # Seed password values stay on the host file only; never echoed by deploy.sh or CI.
           echo "Running ./deploy.sh on host (seed credential values not logged)"

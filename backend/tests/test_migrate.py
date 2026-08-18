@@ -17,9 +17,11 @@ from untangled.schema import (
 )
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import diff_schemas
+from untangled.schema.introspect import list_base_table_names
 from untangled.schema.ir import CheckIR, ColumnIR, SchemaIR, TableIR
 from untangled.schema.plan import AddCheck, AddColumn, CreateTable, DropColumnDefault
 from untangled.schema.versions import (
+    BOOTSTRAP_TABLE_NAMES,
     class_hashes_for_version,
     current_version_row,
     ensure_bootstrap_tables,
@@ -28,13 +30,10 @@ from untangled.schema.versions import (
 
 def _drop_managed(conn: Connection, repo_definitions: Path) -> None:
     desired = desired_schema_from_definitions(repo_definitions)
-    # CASCADE handles FK order among managed tables.
-    for name in sorted(t.name for t in desired.tables):
+    for name in list_base_table_names(conn):
         conn.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(name)))
     for name in sorted(s.name for s in desired.sequences):
         conn.execute(sql.SQL("DROP SEQUENCE IF EXISTS {}").format(sql.Identifier(name)))
-    conn.execute("DROP TABLE IF EXISTS schema_version_class_hashes CASCADE")
-    conn.execute("DROP TABLE IF EXISTS schema_versions CASCADE")
     conn.commit()
 
 
@@ -74,7 +73,8 @@ def test_migrate_empty_to_desired_and_noop(
     assert class_rows["demo_item"] == table_hash(by_table["demo_item"])
     assert class_rows["demo_link"] == table_hash(by_table["demo_link"])
     assert class_rows["user"] == table_hash(by_table["user"])
-    assert class_rows["refresh_token"] == table_hash(by_table["refresh_token"])
+    assert class_rows["user_session"] == table_hash(by_table["user_session"])
+    assert class_rows["used_refresh_token"] == table_hash(by_table["used_refresh_token"])
 
     messages.clear()
     second = migrate(db_conn, repo_definitions, progress=messages.append)
@@ -382,3 +382,69 @@ def test_check_constraint_ddl_introspect_round_trip(db_conn: Connection) -> None
     )
     db_conn.execute("DROP TABLE IF EXISTS check_rt CASCADE")
     db_conn.commit()
+
+
+_HITCHHIKER = "migrate_hitchhiker_scratch"
+
+
+def _table_exists(conn: Connection, name: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def test_migrate_drops_public_hitchhiker_table(
+    db_conn: Connection,
+    repo_definitions: Path,
+) -> None:
+    from untangled.persistence.ids import new_uuid7
+
+    migrate(db_conn, repo_definitions, allow_destructive=True)
+    db_conn.execute(
+        sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(_HITCHHIKER))
+    )
+    db_conn.execute(
+        sql.SQL(
+            "CREATE TABLE {} (id uuid PRIMARY KEY, note text NOT NULL)"
+        ).format(sql.Identifier(_HITCHHIKER))
+    )
+    row_id = new_uuid7()
+    db_conn.execute(
+        sql.SQL("INSERT INTO {} (id, note) VALUES (%s, %s)").format(
+            sql.Identifier(_HITCHHIKER)
+        ),
+        (row_id, "stowaway"),
+    )
+    db_conn.commit()
+
+    with pytest.raises(DestructivePlanError) as excinfo:
+        migrate(db_conn, repo_definitions, allow_destructive=False)
+    refused = str(excinfo.value)
+    assert f"DROP TABLE {_HITCHHIKER}" in refused
+    assert "DROP TABLE schema_versions" not in refused
+    assert "DROP TABLE schema_version_class_hashes" not in refused
+    assert _table_exists(db_conn, _HITCHHIKER)
+    note = db_conn.execute(
+        sql.SQL("SELECT note FROM {} WHERE id = %s").format(
+            sql.Identifier(_HITCHHIKER)
+        ),
+        (row_id,),
+    ).fetchone()
+    assert note is not None and note[0] == "stowaway"
+
+    allowed = migrate(db_conn, repo_definitions, allow_destructive=True)
+    assert allowed.applied
+    assert not _table_exists(db_conn, _HITCHHIKER)
+    for name in BOOTSTRAP_TABLE_NAMES:
+        assert _table_exists(db_conn, name)
+
+    messages: list[str] = []
+    again = migrate(db_conn, repo_definitions, progress=messages.append)
+    assert not again.applied
+    assert any("no-op" in m for m in messages)
+    assert not _table_exists(db_conn, _HITCHHIKER)
