@@ -65,6 +65,8 @@ def test_system_config_definition_flags(repo_definitions: Path) -> None:
         f"id = '{SYSTEM_CONFIG_ID}'::uuid",
         "password_maximum_chars > password_minimum_chars",
         "login_process_time_minimum <= login_process_time_maximum",
+        "session_refresh_reuse_window_seconds > session_refresh_reuse_grace_seconds",
+        "session_refresh_process_time_minimum <= session_refresh_process_time_maximum",
     )
     by_name = {a.name_snake: a for a in defn.attributes}
     assert by_name["max_search_nesting_depth"].create_default == 3
@@ -104,6 +106,33 @@ def test_system_config_definition_flags(repo_definitions: Path) -> None:
     assert by_name["login_rate_limit_max_kib"].create_default == 16384
     assert by_name["login_rate_limit_max_kib"].min_value == 8192
     assert by_name["login_rate_limit_max_kib"].max_value == 262144
+    assert by_name["session_access_ttl_seconds"].create_default == 900
+    assert by_name["session_access_ttl_seconds"].min_value == 60
+    assert by_name["session_access_ttl_seconds"].max_value == 86400
+    assert by_name["session_refresh_ttl_seconds"].create_default == 604800
+    assert by_name["session_refresh_ttl_seconds"].min_value == 300
+    assert by_name["session_refresh_ttl_seconds"].max_value == 7776000
+    assert by_name["session_total_ttl_seconds"].create_default == 2592000
+    assert by_name["session_total_ttl_seconds"].min_value == 300
+    assert by_name["session_total_ttl_seconds"].max_value == 15552000
+    assert by_name["session_refresh_reuse_grace_seconds"].create_default == 15
+    assert by_name["session_refresh_reuse_grace_seconds"].min_value == 5
+    assert by_name["session_refresh_reuse_grace_seconds"].max_value == 60
+    assert by_name["session_refresh_reuse_window_seconds"].create_default == 86400
+    assert by_name["session_refresh_reuse_window_seconds"].min_value == 3600
+    assert by_name["session_refresh_reuse_window_seconds"].max_value == 604800
+    assert by_name["session_max_refresh_retries"].create_default == 5
+    assert by_name["session_max_refresh_retries"].min_value == 1
+    assert by_name["session_max_refresh_retries"].max_value == 10
+    assert by_name["session_refresh_cleanup_seconds"].create_default == 14400
+    assert by_name["session_refresh_cleanup_seconds"].min_value == 3600
+    assert by_name["session_refresh_cleanup_seconds"].max_value == 259200
+    assert by_name["session_refresh_process_time_minimum"].create_default == 300
+    assert by_name["session_refresh_process_time_minimum"].min_value == 100
+    assert by_name["session_refresh_process_time_minimum"].max_value == 500
+    assert by_name["session_refresh_process_time_maximum"].create_default == 500
+    assert by_name["session_refresh_process_time_maximum"].min_value == 200
+    assert by_name["session_refresh_process_time_maximum"].max_value == 1000
 
 
 def test_migrate_bootstraps_system_config_singleton(
@@ -141,7 +170,16 @@ def test_migrate_bootstraps_system_config_singleton(
             login_rate_limit_l1_delay,
             login_rate_limit_l2_delay,
             login_rate_limit_lockout_seconds,
-            login_rate_limit_max_kib
+            login_rate_limit_max_kib,
+            session_access_ttl_seconds,
+            session_refresh_ttl_seconds,
+            session_total_ttl_seconds,
+            session_refresh_reuse_grace_seconds,
+            session_refresh_reuse_window_seconds,
+            session_max_refresh_retries,
+            session_refresh_cleanup_seconds,
+            session_refresh_process_time_minimum,
+            session_refresh_process_time_maximum
         FROM system_config
         WHERE id = %s
         """,
@@ -176,6 +214,15 @@ def test_migrate_bootstraps_system_config_singleton(
         rl_d2,
         rl_l,
         rl_max_kib,
+        session_access,
+        session_refresh,
+        session_total,
+        session_grace,
+        session_window,
+        session_retries,
+        session_cleanup,
+        session_proc_min,
+        session_proc_max,
     ) = row
     assert row_id == SYSTEM_CONFIG_ID
     assert created_by == SYSTEM_USER_ID
@@ -204,6 +251,15 @@ def test_migrate_bootstraps_system_config_singleton(
     assert rl_d2 == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_l2_delay"]
     assert rl_l == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_lockout_seconds"]
     assert rl_max_kib == SYSTEM_CONFIG_DEFAULTS["login_rate_limit_max_kib"]
+    assert session_access == SYSTEM_CONFIG_DEFAULTS["session_access_ttl_seconds"]
+    assert session_refresh == SYSTEM_CONFIG_DEFAULTS["session_refresh_ttl_seconds"]
+    assert session_total == SYSTEM_CONFIG_DEFAULTS["session_total_ttl_seconds"]
+    assert session_grace == SYSTEM_CONFIG_DEFAULTS["session_refresh_reuse_grace_seconds"]
+    assert session_window == SYSTEM_CONFIG_DEFAULTS["session_refresh_reuse_window_seconds"]
+    assert session_retries == SYSTEM_CONFIG_DEFAULTS["session_max_refresh_retries"]
+    assert session_cleanup == SYSTEM_CONFIG_DEFAULTS["session_refresh_cleanup_seconds"]
+    assert session_proc_min == SYSTEM_CONFIG_DEFAULTS["session_refresh_process_time_minimum"]
+    assert session_proc_max == SYSTEM_CONFIG_DEFAULTS["session_refresh_process_time_maximum"]
 
     check = db_conn.execute(
         """
@@ -288,10 +344,18 @@ def test_check_constraint_rejects_extra_system_config_id(
                 login_rate_limit_per_ip_sample_period,
                 login_rate_limit_l1_delay, login_rate_limit_l2_delay,
                 login_rate_limit_lockout_seconds, login_rate_limit_max_kib,
-                audit_bulk_read_window_seconds, audit_bulk_read_max_searches
+                audit_bulk_read_window_seconds, audit_bulk_read_max_searches,
+                session_access_ttl_seconds, session_refresh_ttl_seconds,
+                session_total_ttl_seconds,
+                session_refresh_reuse_grace_seconds,
+                session_refresh_reuse_window_seconds,
+                session_max_refresh_retries, session_refresh_cleanup_seconds,
+                session_refresh_process_time_minimum,
+                session_refresh_process_time_maximum
             ) VALUES (
                 %s, %s, %s, %s, %s, 3, 20, 50, 3, 900, 12, 128, 1000, 10000, 1.1,
-                300, 500, 4, 5, 10, 300, 10, 300, 500, 2000, 900, 16384, 600, 100
+                300, 500, 4, 5, 10, 300, 10, 300, 500, 2000, 900, 16384, 600, 100,
+                900, 604800, 2592000, 15, 86400, 5, 14400, 300, 500
             )
             """,
             (other_id, now, now, SYSTEM_USER_ID, SYSTEM_USER_ID),
@@ -328,6 +392,44 @@ def test_check_constraint_rejects_login_process_min_greater_than_max(
             """
             UPDATE system_config
             SET login_process_time_minimum = 500, login_process_time_maximum = 200
+            WHERE id = %s
+            """,
+            (SYSTEM_CONFIG_ID,),
+        )
+        db_conn.commit()
+    db_conn.rollback()
+
+
+def test_check_constraint_rejects_session_reuse_window_not_greater_than_grace(
+    demo_schema,
+    db_conn: Connection,
+) -> None:
+    assert demo_schema
+    with pytest.raises(Exception):
+        db_conn.execute(
+            """
+            UPDATE system_config
+            SET session_refresh_reuse_window_seconds = 15,
+                session_refresh_reuse_grace_seconds = 15
+            WHERE id = %s
+            """,
+            (SYSTEM_CONFIG_ID,),
+        )
+        db_conn.commit()
+    db_conn.rollback()
+
+
+def test_check_constraint_rejects_session_process_min_greater_than_max(
+    demo_schema,
+    db_conn: Connection,
+) -> None:
+    assert demo_schema
+    with pytest.raises(Exception):
+        db_conn.execute(
+            """
+            UPDATE system_config
+            SET session_refresh_process_time_minimum = 400,
+                session_refresh_process_time_maximum = 200
             WHERE id = %s
             """,
             (SYSTEM_CONFIG_ID,),
@@ -618,6 +720,15 @@ def test_clamp_uses_definition_bounds() -> None:
             "login_rate_limit_max_kib": 16384,
             "audit_bulk_read_window_seconds": 600,
             "audit_bulk_read_max_searches": 100,
+            "session_access_ttl_seconds": 900,
+            "session_refresh_ttl_seconds": 604800,
+            "session_total_ttl_seconds": 2592000,
+            "session_refresh_reuse_grace_seconds": 15,
+            "session_refresh_reuse_window_seconds": 86400,
+            "session_max_refresh_retries": 5,
+            "session_refresh_cleanup_seconds": 14400,
+            "session_refresh_process_time_minimum": 300,
+            "session_refresh_process_time_maximum": 500,
         }
     )
     clamped = clamp_system_config(raw, defn)

@@ -10,11 +10,12 @@ import {
   DemoLinkUpdateSchema,
   IncidentUpdateSchema,
   PermissionUpdateSchema,
-  RefreshTokenUpdateSchema,
   RolePermissionUpdateSchema,
   RoleUpdateSchema,
   SystemConfigUpdateSchema,
+  UsedRefreshTokenUpdateSchema,
   UserRoleUpdateSchema,
+  UserSessionUpdateSchema,
   UserUpdateSchema,
 } from "../generated";
 
@@ -26,11 +27,12 @@ const UPDATE_SCHEMAS: Readonly<Record<string, UpdateZodSchema>> = {
   demo_link: DemoLinkUpdateSchema,
   incident: IncidentUpdateSchema,
   permission: PermissionUpdateSchema,
-  refresh_token: RefreshTokenUpdateSchema,
   role_permission: RolePermissionUpdateSchema,
   role: RoleUpdateSchema,
   system_config: SystemConfigUpdateSchema,
+  used_refresh_token: UsedRefreshTokenUpdateSchema,
   user_role: UserRoleUpdateSchema,
+  user_session: UserSessionUpdateSchema,
   user: UserUpdateSchema,
 };
 

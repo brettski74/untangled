@@ -1,0 +1,28 @@
+# Internal server-side session (not a product UI class).
+name: user_session
+display_name: User Session
+description: >
+  Auth-owned session row for a signed-in user. refresh_hmac is HMAC-SHA-256 of
+  the current refresh token; null means must-change (no refresh issued yet).
+  No product nav, permissions, or public record mount.
+attributes:
+  user_id:
+    type: uuid
+    required: true
+    references: user
+  refresh_hmac:
+    type: compact_text
+    required: false
+    unique: true
+  session_expires_at:
+    type: datetime
+    required: true
+  refresh_expires_at:
+    type: datetime
+    required: true
+  ip_address:
+    type: compact_text
+    required: false
+  user_agent:
+    type: compact_text
+    required: false

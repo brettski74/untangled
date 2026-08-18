@@ -117,6 +117,7 @@ services:
       UNTANGLED_COOKIE_SECURE: ${UNTANGLED_COOKIE_SECURE:-true}
       UNTANGLED_JWT_PRIVATE_KEY_PATH: /jwt/private.pem
       UNTANGLED_JWT_PUBLIC_KEY_PATH: /jwt/public.pem
+      UNTANGLED_REFRESH_HMAC_SECRET_PATH: /jwt/refresh_secret.b64
       UNTANGLED_ACCESS_TOKEN_TTL_SECONDS: ${UNTANGLED_ACCESS_TOKEN_TTL_SECONDS:-900}
       UNTANGLED_AUDIT_LOG_DIR: ${UNTANGLED_AUDIT_LOG_DIR:-/var/log/untangled/audit}
       UNTANGLED_AUDIT_ROLLOVER_BYTES: ${UNTANGLED_AUDIT_ROLLOVER_BYTES:-1048576}
@@ -130,6 +131,7 @@ services:
       - ${UNTANGLED_AUDIT_MOUNT:-untangled_audit}:/var/log/untangled/audit
       - ./deploy/jwt/dev-es256-private.pem:/jwt/private.pem:ro
       - ./deploy/jwt/dev-es256-public.pem:/jwt/public.pem:ro
+      - ./deploy/jwt/refresh_secret.b64:/jwt/refresh_secret.b64:ro
     depends_on:
       postgres:
         condition: service_healthy

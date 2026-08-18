@@ -74,7 +74,8 @@ def test_migrate_empty_to_desired_and_noop(
     assert class_rows["demo_item"] == table_hash(by_table["demo_item"])
     assert class_rows["demo_link"] == table_hash(by_table["demo_link"])
     assert class_rows["user"] == table_hash(by_table["user"])
-    assert class_rows["refresh_token"] == table_hash(by_table["refresh_token"])
+    assert class_rows["user_session"] == table_hash(by_table["user_session"])
+    assert class_rows["used_refresh_token"] == table_hash(by_table["used_refresh_token"])
 
     messages.clear()
     second = migrate(db_conn, repo_definitions, progress=messages.append)

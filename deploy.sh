@@ -77,6 +77,7 @@ done
 [[ -f .env ]] || die ".env missing (CI or operator must provision it; see .env.example)"
 [[ -f deploy/jwt/dev-es256-private.pem ]] || die "deploy/jwt/dev-es256-private.pem missing"
 [[ -f deploy/jwt/dev-es256-public.pem ]] || die "deploy/jwt/dev-es256-public.pem missing"
+[[ -f deploy/jwt/refresh_secret.b64 ]] || die "deploy/jwt/refresh_secret.b64 missing"
 
 resolve_compose() {
   if [[ -n "${COMPOSE:-}" ]]; then

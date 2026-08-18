@@ -7,6 +7,7 @@ import { start_system_config_subscriber } from "./coherence.js";
 import { password_expiry_evaluator, type ExpiryEvaluator } from "./expiry.js";
 import { make_hash_slot_limiter, type HashSlotLimiter } from "./hash_slots.js";
 import { load_private_key, load_public_key } from "./keys.js";
+import { load_refresh_hmac_secret } from "./refresh_hmac.js";
 import {
   LOGIN_HASH_CONCURRENCY_DEFAULT,
   type LoginProcessSettings,
@@ -24,6 +25,7 @@ export type AuthConfig = {
   cookie_secure: boolean;
   private_key: CryptoKey;
   public_key: CryptoKey;
+  refresh_hmac_secret: Buffer;
   access_token_ttl_seconds: number;
   get_settings: () => Promise<LoginProcessSettings>;
   hash_slots: HashSlotLimiter;
@@ -112,6 +114,7 @@ export async function load_config_from_env(
     env.UNTANGLED_PUBLIC_ORIGIN ?? "",
     "UNTANGLED_PUBLIC_ORIGIN",
   );
+  const refresh_hmac_secret = load_refresh_hmac_secret(env);
   const [private_key, public_key, dummy_hash] = await Promise.all([
     load_private_key(env),
     load_public_key(env),
@@ -158,6 +161,7 @@ export async function load_config_from_env(
     cookie_secure: cookie_secure_from_env(env.UNTANGLED_COOKIE_SECURE),
     private_key,
     public_key,
+    refresh_hmac_secret,
     access_token_ttl_seconds: access_token_ttl_seconds(
       env.UNTANGLED_ACCESS_TOKEN_TTL_SECONDS,
     ),

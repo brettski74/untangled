@@ -5,6 +5,14 @@ import {
   clamp_login_process,
   type LoginProcessSettings,
 } from "./login_settings.js";
+import {
+  SESSION_REFRESH_PROCESS_TIME_MAXIMUM_MAX,
+  SESSION_REFRESH_PROCESS_TIME_MAXIMUM_MIN,
+  SESSION_REFRESH_PROCESS_TIME_MINIMUM_MAX,
+  SESSION_REFRESH_PROCESS_TIME_MINIMUM_MIN,
+  SESSION_REFRESH_REUSE_GRACE_MAX,
+  SESSION_REFRESH_REUSE_GRACE_MIN,
+} from "./session_settings.js";
 
 type CacheEntry = {
   value: LoginProcessSettings;
@@ -48,6 +56,10 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
         password_acceptable_crack_time_days: number;
         password_guess_per_second: number;
         password_estimate_drift_factor: string | number;
+        session_refresh_reuse_grace_seconds: number;
+        session_refresh_reuse_window_seconds: number;
+        session_refresh_process_time_minimum: number;
+        session_refresh_process_time_maximum: number;
       }>(
         `SELECT login_process_time_minimum, login_process_time_maximum,
                 login_hash_concurrency_limit, login_maximum_failed_count,
@@ -61,13 +73,55 @@ export function make_login_settings_cache(pool: Pool): LoginSettingsSource {
                 password_expiry_days, password_grace_days,
                 password_minimum_chars, password_maximum_chars,
                 password_acceptable_crack_time_days,
-                password_guess_per_second, password_estimate_drift_factor
+                password_guess_per_second, password_estimate_drift_factor,
+                session_refresh_reuse_grace_seconds,
+                session_refresh_reuse_window_seconds,
+                session_refresh_process_time_minimum,
+                session_refresh_process_time_maximum
          FROM system_config WHERE id = $1::uuid`,
         [SYSTEM_CONFIG_ID],
       );
       const row = result.rows[0];
       if (row == null) {
         throw new Error("system-config singleton could not be read");
+      }
+      const grace = row.session_refresh_reuse_grace_seconds;
+      const window_seconds = row.session_refresh_reuse_window_seconds;
+      const process_min = row.session_refresh_process_time_minimum;
+      const process_max = row.session_refresh_process_time_maximum;
+      if (
+        grace < SESSION_REFRESH_REUSE_GRACE_MIN ||
+        grace > SESSION_REFRESH_REUSE_GRACE_MAX
+      ) {
+        throw new Error(
+          `session_refresh_reuse_grace_seconds is out of range (${grace}); auth abort`,
+        );
+      }
+      if (
+        process_min < SESSION_REFRESH_PROCESS_TIME_MINIMUM_MIN ||
+        process_min > SESSION_REFRESH_PROCESS_TIME_MINIMUM_MAX
+      ) {
+        throw new Error(
+          `session_refresh_process_time_minimum is out of range (${process_min}); auth abort`,
+        );
+      }
+      if (
+        process_max < SESSION_REFRESH_PROCESS_TIME_MAXIMUM_MIN ||
+        process_max > SESSION_REFRESH_PROCESS_TIME_MAXIMUM_MAX
+      ) {
+        throw new Error(
+          `session_refresh_process_time_maximum is out of range (${process_max}); auth abort`,
+        );
+      }
+      if (process_min > process_max) {
+        throw new Error(
+          "session_refresh_process_time_minimum must be <= session_refresh_process_time_maximum; auth abort",
+        );
+      }
+      if (window_seconds <= grace) {
+        throw new Error(
+          "session_refresh_reuse_window_seconds must be > session_refresh_reuse_grace_seconds; auth abort",
+        );
       }
       const value = clamp_login_process({
         process_time_minimum_ms: row.login_process_time_minimum,

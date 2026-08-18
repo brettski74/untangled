@@ -163,6 +163,8 @@ deploy/caddy/certs/dev.crt
 deploy/caddy/certs/dev.key
 # Local ES256 JWT material (`make local-jwt-keys` / `make up`). Never commit.
 deploy/jwt/*.pem
+# Local refresh HMAC secret (`make local-refresh-hmac` / `make up`). Never commit.
+deploy/jwt/*.b64
 .venv
 env/
 venv/

@@ -69,8 +69,3 @@ def reset_jwt_public_key_for_tests() -> None:
 def access_token_ttl_seconds() -> int:
     """Access token lifetime in seconds (default 15 minutes)."""
     return _int_env("UNTANGLED_ACCESS_TOKEN_TTL_SECONDS", 15 * 60)
-
-
-def refresh_token_ttl_seconds() -> int:
-    """Refresh token lifetime in seconds (default 7 days)."""
-    return _int_env("UNTANGLED_REFRESH_TOKEN_TTL_SECONDS", 7 * 24 * 60 * 60)
