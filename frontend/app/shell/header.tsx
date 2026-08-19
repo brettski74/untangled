@@ -1,4 +1,4 @@
-import { Form, Link } from "react-router";
+import { Link } from "react-router";
 import { CircleHelp, Search, Settings } from "lucide-react";
 import {
   useEffect,
@@ -8,12 +8,19 @@ import {
   type ReactNode,
 } from "react";
 
+import { LogoutForm } from "../auth/logout_form";
+
 export type ShellHeaderProps = {
   display_name: string;
   username: string;
+  csrf_token: string;
 };
 
-export function ShellHeader({ display_name, username }: ShellHeaderProps) {
+export function ShellHeader({
+  display_name,
+  username,
+  csrf_token,
+}: ShellHeaderProps) {
   const [search_open, set_search_open] = useState(false);
   const [identity_open, set_identity_open] = useState(false);
   const search_input_id = useId();
@@ -89,15 +96,11 @@ export function ShellHeader({ display_name, username }: ShellHeaderProps) {
                 </Link>
               </li>
               <li role="none">
-                <Form method="post" action="/logout">
-                  <button
-                    type="submit"
-                    role="menuitem"
-                    className="block w-full px-3 py-1.5 text-left text-xs text-[var(--color-shell-chrome-muted)] hover:bg-white/10 hover:text-[var(--color-shell-chrome-fg)]"
-                  >
-                    Sign out
-                  </button>
-                </Form>
+                <LogoutForm
+                  csrf_token={csrf_token}
+                  button_role="menuitem"
+                  button_className="block w-full px-3 py-1.5 text-left text-xs text-[var(--color-shell-chrome-muted)] hover:bg-white/10 hover:text-[var(--color-shell-chrome-fg)]"
+                />
               </li>
             </ul>
           ) : null}

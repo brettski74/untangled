@@ -16,6 +16,8 @@ import {
   REFRESH_COOKIE_NAME,
   access_cookie,
   csrf_cookie,
+  expire_access_cookie,
+  expire_refresh_cookie,
   parse_cookie_header,
   refresh_cookie,
 } from "./cookies.js";
@@ -27,6 +29,7 @@ import {
   verify_access_token,
 } from "./jwt.js";
 import { hmac_refresh_token, mint_refresh_token } from "./refresh_hmac.js";
+import { run_logout_pipeline } from "./logout_pipeline.js";
 import { REFRESH_RETRY, run_refresh_pipeline } from "./refresh_pipeline.js";
 import { ACCESS_DENIED, SERVICE_UNAVAILABLE } from "./login_settings.js";
 import { run_login_pipeline } from "./login_pipeline.js";
@@ -45,6 +48,7 @@ import {
 const CSRF_PATH = "/api/v2/auth/csrf";
 const LOGIN_PATH = "/api/v2/auth/login";
 const REFRESH_PATH = "/api/v2/auth/refresh";
+const LOGOUT_PATH = "/api/v2/auth/logout";
 const ME_PATH = "/api/v2/auth/me";
 const CHANGE_PASSWORD_PATH = "/api/v2/auth/change-password";
 const HEALTH_PATH = "/health";
@@ -77,6 +81,14 @@ export async function handle_request(
   }
   if (request.method === "POST" && path === REFRESH_PATH) {
     await handle_refresh(request, response, config);
+    return;
+  }
+  if (path === LOGOUT_PATH && request.method !== "POST") {
+    json(response, 405, { detail: "Method not allowed" });
+    return;
+  }
+  if (request.method === "POST" && path === LOGOUT_PATH) {
+    await handle_logout(request, response, config);
     return;
   }
   if (request.method === "GET" && path === ME_PATH) {
@@ -397,6 +409,108 @@ async function handle_refresh(
   json(response, 200, { ok: true });
 }
 
+const logout_body_schema = z.object({
+  csrf_token: z.string().min(1).optional(),
+  refresh_token: z.string().optional(),
+});
+
+async function handle_logout(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: AuthConfig,
+): Promise<void> {
+  let body: string;
+  try {
+    body = await read_body(request);
+  } catch {
+    json(response, 413, { detail: "Payload too large" });
+    return;
+  }
+
+  if (!origin_is_exact_match(header_value(request.headers.origin), config.public_origin)) {
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_ORIGIN,
+      context_path: LOGOUT_PATH,
+    });
+    return;
+  }
+
+  const parsed_body = parse_logout_body(request, body);
+  if (!parsed_body.ok) {
+    json(response, 400, { detail: "Bad request" });
+    return;
+  }
+  const cookies = parse_cookie_header(header_value(request.headers.cookie));
+  const csrf_cookie_value = cookies.get(CSRF_COOKIE_NAME) ?? "";
+  const submitted = submitted_csrf_token(request, parsed_body.data);
+  if (
+    csrf_cookie_value === "" ||
+    submitted === "" ||
+    !tokens_equal(csrf_cookie_value, submitted)
+  ) {
+    await refuse_csrf_origin(request, response, config, {
+      reason: CSRF_DENIED_CSRF,
+      context_path: LOGOUT_PATH,
+    });
+    return;
+  }
+
+  const identity = request_identity(request, config.public_origin);
+  const result = await run_logout_pipeline(
+    {
+      access_token: access_token_from_request(request),
+      source_ip: identity.source_ip,
+      protocol: identity.protocol,
+      host: identity.host,
+      context_path: LOGOUT_PATH,
+      user_agent: header_value(request.headers["user-agent"]),
+    },
+    {
+      public_key: config.public_key,
+      sessions: config.sessions,
+      audit: config.audit,
+    },
+  );
+
+  if (result.kind === "internal_error") {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
+  if (result.kind === "denied") {
+    json(response, 401, { detail: ACCESS_DENIED });
+    return;
+  }
+
+  response.setHeader("Set-Cookie", [
+    expire_access_cookie(config.cookie_secure),
+    expire_refresh_cookie(config.cookie_secure),
+  ]);
+  json(response, 200, { ok: true });
+}
+
+function parse_logout_body(
+  request: IncomingMessage,
+  body: string,
+): { ok: true; data: { csrf_token?: string } } | { ok: false } {
+  const content_type = header_value(request.headers["content-type"]) ?? "";
+  if (content_type.includes("application/json")) {
+    try {
+      const parsed: unknown = JSON.parse(body);
+      const result = logout_body_schema.safeParse(parsed);
+      return { ok: true, data: result.success ? result.data : {} };
+    } catch {
+      return { ok: false };
+    }
+  }
+  if (content_type.includes("application/x-www-form-urlencoded")) {
+    const result = logout_body_schema.safeParse(
+      Object.fromEntries(new URLSearchParams(body)),
+    );
+    return { ok: true, data: result.success ? result.data : {} };
+  }
+  return { ok: true, data: {} };
+}
+
 function parse_refresh_body(
   request: IncomingMessage,
   body: string,
@@ -693,6 +807,7 @@ export const AUTH_SESSION_PATHS = {
   csrf: CSRF_PATH,
   login: LOGIN_PATH,
   refresh: REFRESH_PATH,
+  logout: LOGOUT_PATH,
   me: ME_PATH,
   change_password: CHANGE_PASSWORD_PATH,
   access_cookie: ACCESS_COOKIE_NAME,

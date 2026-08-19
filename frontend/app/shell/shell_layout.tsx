@@ -8,6 +8,7 @@ import { ShellContextBarProvider } from "./shell_context_bar";
 export type ShellLayoutProps = {
   display_name: string;
   username: string;
+  csrf_token: string;
   nav: NavBarView;
   children: ReactNode;
 };
@@ -29,6 +30,7 @@ const CONTEXT_BAR_HOST_OCCUPIED =
 export function ShellLayout({
   display_name,
   username,
+  csrf_token,
   nav,
   children,
 }: ShellLayoutProps) {
@@ -45,7 +47,11 @@ export function ShellLayout({
           Skip to main content
         </a>
 
-        <ShellHeader display_name={display_name} username={username} />
+        <ShellHeader
+          display_name={display_name}
+          username={username}
+          csrf_token={csrf_token}
+        />
 
         <div className="flex min-h-0 flex-1">
           <ShellNavRail nav={nav} />

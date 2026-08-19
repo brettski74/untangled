@@ -20,7 +20,7 @@ Auth-session paths (group stays on **v2** together):
 | ------ | ---- | ---------- |
 | `GET` | `/api/v2/auth/csrf` | Browser CSRF bootstrap (do not copy `Set-Cookie` through SSR) |
 | `POST` | `/api/v2/auth/login` | Real login; ES256 access cookie |
-| `POST` | `/api/v2/auth/logout` | Later (#14 / later #33 slices) |
+| `POST` | `/api/v2/auth/logout` | End this session (signed access JWT; CSRF+Origin). SSR `POST /logout` is the Sign out form. |
 | `POST` | `/api/v2/auth/refresh` | Later (#14) |
 | `GET` | `/api/v2/auth/me` | SSR identity / RBAC bootstrap; Bearer or access cookie |
 | `POST` | `/api/v2/auth/change-password` | Browser posts (CSRF/Origin like login); JWT stays in the HttpOnly cookie |

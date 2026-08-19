@@ -214,7 +214,7 @@ Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default wi
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
    - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
 6. When the access token expires (~15m), sign in again through the UI (refresh is #14).
-7. Sign out from the header menu expires `__untangled_access` (cookie-clear only). Python does not mount logout and does not revoke refresh tokens; auth-service logout/refresh remains [#14](https://github.com/brettski74/untangled/issues/14).
+7. Sign out from the header menu is a POST form to `/logout`. The POST forwards CSRF+Origin to auth; `GET /logout` is 405. On success it asks auth to delete this `user_session` and expires `__untangled_access` and `__untangled_refresh`. If auth is unreachable, SSR returns 503 and keeps the cookies. JS auto-refresh is a later [#14](https://github.com/brettski74/untangled/issues/14) child.
 
 ### API versioning
 
@@ -521,8 +521,8 @@ Authenticated browser login posts to `/api/v2/auth/` on the public origin. Domai
 | `make up` / `make down` | Full Compose runtime (postgres + redis + api + web + auth + local-edge proxy); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
-| Auth (`POST /api/v2/auth/login`, `GET /me`, `POST /change-password`) | ES256 access JWT from auth; API/SSR verify public key; Python `/auth/*` unmounted; login padding / hash cap / PG failed-count lock (#213); Redis RL delay/L3/purge (#214); password expiry / grace / must-change (#215); auth + SSR `system_config` coherence subscribe | UI refresh (#14); change-password abuse (#216); unlock (#209) |
-| Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` on `/api/v2/auth/` (me + change-password too); Caddy local-edge; Playwright `https://localhost:8443` | Auth-service refresh/logout (#14 / later #33) |
+| Auth (`POST /api/v2/auth/login`, `GET /me`, `POST /change-password`, `POST /logout`) | ES256 access JWT from auth; API/SSR verify public key; Python `/auth/*` unmounted; login padding / hash cap / PG failed-count lock (#213); Redis RL delay/L3/purge (#214); password expiry / grace / must-change (#215); auth + SSR `system_config` coherence subscribe; Sign out deletes this `user_session` | JS/document auto-refresh (#14); change-password abuse (#216); unlock (#209) |
+| Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` on `/api/v2/auth/` (me, change-password, logout); Caddy local-edge; Playwright `https://localhost:8443` | JS/document auto-refresh (#14 children 6–7) |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
