@@ -1,4 +1,4 @@
-import { Form, Link } from "react-router";
+import { Link } from "react-router";
 import { CircleHelp, Search, Settings } from "lucide-react";
 import {
   useEffect,
@@ -7,6 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+
+import { LogoutForm } from "../auth/logout_form";
 
 export type ShellHeaderProps = {
   display_name: string;
@@ -94,16 +96,11 @@ export function ShellHeader({
                 </Link>
               </li>
               <li role="none">
-                <Form method="post" action="/logout">
-                  <input type="hidden" name="csrf_token" value={csrf_token} />
-                  <button
-                    type="submit"
-                    role="menuitem"
-                    className="block w-full px-3 py-1.5 text-left text-xs text-[var(--color-shell-chrome-muted)] hover:bg-white/10 hover:text-[var(--color-shell-chrome-fg)]"
-                  >
-                    Sign out
-                  </button>
-                </Form>
+                <LogoutForm
+                  csrf_token={csrf_token}
+                  button_role="menuitem"
+                  button_className="block w-full px-3 py-1.5 text-left text-xs text-[var(--color-shell-chrome-muted)] hover:bg-white/10 hover:text-[var(--color-shell-chrome-fg)]"
+                />
               </li>
             </ul>
           ) : null}

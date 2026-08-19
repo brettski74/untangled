@@ -4,14 +4,15 @@
  */
 import { importSPKI, jwtVerify } from "jose";
 
+import { CSRF_COOKIE_NAME } from "./cookie_names";
 import {
   access_token_remaining_seconds,
   cookie_secure_from_env,
   read_jwt_public_pem,
 } from "./config.server";
 
+export { CSRF_COOKIE_NAME };
 export const ACCESS_COOKIE_NAME = "__untangled_access";
-export const CSRF_COOKIE_NAME = "__untangled_csrf";
 export const REFRESH_COOKIE_NAME = "__untangled_refresh";
 export const ACCESS_COOKIE_PATH = "/";
 export const REFRESH_COOKIE_PATH = "/api/v2/auth/refresh";

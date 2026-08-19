@@ -1,4 +1,4 @@
-import { Form, data, redirect } from "react-router";
+import { data, redirect } from "react-router";
 
 import { fetch_me } from "../auth/api.server";
 import { ChangePasswordForm } from "../auth/change_password_form";
@@ -7,6 +7,7 @@ import {
   redirect_unauthenticated,
   redirect_unauthorized,
 } from "../auth/gate.server";
+import { LogoutForm } from "../auth/logout_form";
 import { parse_password_policy } from "../auth/password_policy";
 import { get_access_session, read_csrf_cookie } from "../auth/session.server";
 import { get_cached_system_config } from "../auth/system_config_cache.server";
@@ -81,15 +82,11 @@ export default function ExpiredPasswordPage({
           policy={policy}
           after_success="home"
         />
-        <Form method="post" action="/logout" className="mt-6 text-center">
-          <input type="hidden" name="csrf_token" value={csrf_token} />
-          <button
-            type="submit"
-            className="text-sm text-slate-600 underline hover:text-slate-900"
-          >
-            Sign out
-          </button>
-        </Form>
+        <LogoutForm
+          csrf_token={csrf_token}
+          className="mt-6 text-center"
+          button_className="text-sm text-slate-600 underline hover:text-slate-900"
+        />
       </div>
     </main>
   );
