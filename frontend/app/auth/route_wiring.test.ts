@@ -256,11 +256,7 @@ describe("route wiring", () => {
   it("logout GET is 405 with no session work", async () => {
     const fetch_mock = vi.fn();
     vi.stubGlobal("fetch", fetch_mock);
-    const response = await logout_loader({
-      request: new Request("http://web.test/logout"),
-      params: {},
-      context: {},
-    } as never);
+    const response = await logout_loader();
     expect(response.status).toBe(405);
     expect(fetch_mock).not.toHaveBeenCalled();
     expect(response.headers.get("Set-Cookie")).toBeNull();
@@ -302,8 +298,8 @@ describe("route wiring", () => {
       ),
     ).toBe(true);
     expect(fetch_mock).toHaveBeenCalledTimes(1);
-    const init = fetch_mock.mock.calls[0]?.[1] as RequestInit;
-    const headers = new Headers(init.headers);
+    const call = fetch_mock.mock.calls[0] as unknown as [unknown, RequestInit];
+    const headers = new Headers(call[1].headers);
     expect(headers.get("Authorization")).toBe(`Bearer ${token}`);
     expect(headers.get("Origin")).toBe("http://web.test");
     expect(headers.get("X-CSRF-Token")).toBe("csrf-test");

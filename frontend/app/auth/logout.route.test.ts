@@ -26,11 +26,7 @@ describe("SSR /logout (#234)", () => {
   it("GET does not call auth or expire cookies", async () => {
     const fetch_mock = vi.fn();
     vi.stubGlobal("fetch", fetch_mock);
-    const response = await logout_loader({
-      request: new Request("http://web.test/logout"),
-      params: {},
-      context: {},
-    } as never);
+    const response = await logout_loader();
     expect(response.status).toBe(405);
     expect(fetch_mock).not.toHaveBeenCalled();
     expect(response.headers.getSetCookie()).toEqual([]);
@@ -170,8 +166,8 @@ describe("SSR /logout (#234)", () => {
       params: {},
       context: {},
     } as never);
-    const init = fetch_mock.mock.calls[0]?.[1] as RequestInit;
-    const headers = new Headers(init.headers);
+    const call = fetch_mock.mock.calls[0] as unknown as [unknown, RequestInit];
+    const headers = new Headers(call[1].headers);
     expect(headers.get("Cookie")).toBe("__untangled_csrf=csrf-test");
     expect(headers.get("Cookie") ?? "").not.toMatch(/__untangled_refresh/);
     expect(headers.get("Cookie") ?? "").not.toMatch(/__untangled_access/);
