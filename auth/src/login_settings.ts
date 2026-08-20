@@ -37,6 +37,10 @@ export const INVALID_OR_OVERSIZE = "invalid-or-oversize";
 export const USERNAME_EVENT_BOUND = 256;
 export const ACCESS_DENIED = "Access denied";
 export const SERVICE_UNAVAILABLE = "Service unavailable";
+export const LOGIN_HASH_CAPACITY =
+  "Sign-in is temporarily busy. Try again in a moment.";
+export const CHANGE_PASSWORD_HASH_CAPACITY =
+  "Password change is temporarily busy. Try again in a moment.";
 
 export type RateLimitSettings = {
   per_user_threshold: number;

@@ -31,9 +31,15 @@ import {
 import { hmac_refresh_token, mint_refresh_token } from "./refresh_hmac.js";
 import { run_logout_pipeline } from "./logout_pipeline.js";
 import { REFRESH_RETRY, run_refresh_pipeline } from "./refresh_pipeline.js";
-import { ACCESS_DENIED, SERVICE_UNAVAILABLE } from "./login_settings.js";
+import {
+  ACCESS_DENIED,
+  CHANGE_PASSWORD_HASH_CAPACITY,
+  LOGIN_HASH_CAPACITY,
+  SERVICE_UNAVAILABLE,
+} from "./login_settings.js";
 import { run_login_pipeline } from "./login_pipeline.js";
 import { login_session_times } from "./session_issue.js";
+import { session_max_refresh_retries_for_client } from "./session_settings.js";
 import { new_uuid7 } from "./uuidv7.js";
 import { safe_next_path } from "./next_path.js";
 import { origin_is_exact_match } from "./origin.js";
@@ -229,7 +235,7 @@ async function handle_login(
   );
 
   if (result.kind === "capacity") {
-    json(response, 503, { detail: SERVICE_UNAVAILABLE });
+    json(response, 503, { detail: LOGIN_HASH_CAPACITY });
     return;
   }
   if (result.kind === "internal_error") {
@@ -388,7 +394,13 @@ async function handle_refresh(
     return;
   }
   if (result.kind === "soft") {
-    json(response, 401, { detail: ACCESS_DENIED, retry: REFRESH_RETRY });
+    json(response, 401, {
+      detail: ACCESS_DENIED,
+      retry: REFRESH_RETRY,
+      max_retries: session_max_refresh_retries_for_client(
+        settings.session_max_refresh_retries,
+      ),
+    });
     return;
   }
   if (result.kind === "hard") {
@@ -681,6 +693,22 @@ async function handle_change_password(
     parsed.invalidate_user_sessions,
   );
   const user_agent_header = header_value(request.headers["user-agent"]);
+  if (!config.hash_slots.try_acquire()) {
+    try {
+      await password_change_audit(config.audit, {
+        success: false,
+        user_id,
+        ip_address: identity.source_ip,
+        reason: "hash_capacity",
+        data: { context_path: CHANGE_PASSWORD_PATH },
+      });
+    } catch {
+      json(response, 500, { detail: "Internal error" });
+      return;
+    }
+    json(response, 503, { detail: CHANGE_PASSWORD_HASH_CAPACITY });
+    return;
+  }
   let outcome;
   try {
     outcome = await execute_change_password(config.change_password_apply, {
@@ -704,6 +732,8 @@ async function handle_change_password(
   } catch {
     json(response, 500, { detail: "Internal error" });
     return;
+  } finally {
+    config.hash_slots.release();
   }
 
   if (outcome.kind === "missing_user") {

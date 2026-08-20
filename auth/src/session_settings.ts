@@ -42,6 +42,8 @@ export type SessionIssueSettings = {
   session_total_ttl_seconds: number;
   session_refresh_reuse_grace_seconds: number;
   session_refresh_reuse_window_seconds: number;
+  session_max_refresh_retries: number;
+  session_refresh_cleanup_seconds: number;
   session_refresh_process_time_minimum: number;
   session_refresh_process_time_maximum: number;
 };
@@ -53,7 +55,22 @@ export function default_session_issue_settings(): SessionIssueSettings {
     session_total_ttl_seconds: SESSION_TOTAL_TTL_DEFAULT,
     session_refresh_reuse_grace_seconds: SESSION_REFRESH_REUSE_GRACE_DEFAULT,
     session_refresh_reuse_window_seconds: SESSION_REFRESH_REUSE_WINDOW_DEFAULT,
+    session_max_refresh_retries: SESSION_MAX_REFRESH_RETRIES_DEFAULT,
+    session_refresh_cleanup_seconds: SESSION_REFRESH_CLEANUP_DEFAULT,
     session_refresh_process_time_minimum: SESSION_REFRESH_PROCESS_TIME_MINIMUM_DEFAULT,
     session_refresh_process_time_maximum: SESSION_REFRESH_PROCESS_TIME_MAXIMUM_DEFAULT,
   };
+}
+
+/** Client-facing soft-fail bound: 1–10, else the product default. */
+export function session_max_refresh_retries_for_client(value: unknown): number {
+  if (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= SESSION_MAX_REFRESH_RETRIES_MIN &&
+    value <= SESSION_MAX_REFRESH_RETRIES_MAX
+  ) {
+    return value;
+  }
+  return SESSION_MAX_REFRESH_RETRIES_DEFAULT;
 }

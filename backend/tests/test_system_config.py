@@ -675,6 +675,27 @@ def test_cache_ttl_and_invalidate(
     assert get_system_config(db_conn, cache=cache).max_search_nesting_length == 44
 
 
+def test_cache_keeps_last_known_good_on_failed_reload(
+    demo_schema,
+    db_conn: Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert demo_schema
+    cache = SystemConfigCache()
+    first = get_system_config(db_conn, cache=cache)
+    cache.invalidate()
+
+    def boom(_conn: Connection):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr("untangled.system_config.cache.load_system_config", boom)
+    second = get_system_config(db_conn, cache=cache)
+    assert second.max_search_nesting_length == first.max_search_nesting_length
+    entry = cache._entry
+    assert entry is not None
+    assert entry.value is first
+
+
 def test_ensure_system_config_row_idempotent(demo_schema, db_conn: Connection) -> None:
     assert demo_schema
     ensure_system_config_row(db_conn)

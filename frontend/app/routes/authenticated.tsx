@@ -1,14 +1,16 @@
-import { Outlet, data, redirect } from "react-router";
+import { Outlet, data } from "react-router";
 
 import { fetch_me } from "../auth/api.server";
+import { RefreshBootstrap } from "../auth/refresh_bootstrap";
 import type { UserProfile } from "../auth/schemas";
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
+  DOCUMENT_BOOTSTRAP,
   forbidden_response,
-  redirect_unauthenticated,
   redirect_unauthorized,
+  require_document_access,
 } from "../auth/gate.server";
-import { get_access_session, read_csrf_cookie } from "../auth/session.server";
+import { read_csrf_cookie } from "../auth/session.server";
 import { load_default_nav } from "../shell/nav_config.server";
 import { filter_nav_by_permissions } from "../shell/nav_filter";
 import type { NavBarView } from "../shell/nav_schema";
@@ -20,25 +22,24 @@ export type AuthenticatedOutletContext = {
   nav: NavBarView;
 };
 
+const PRIVATE_NO_STORE = { "Cache-Control": "private, no-store" };
+
 export async function loader({ request }: Route.LoaderArgs) {
-  const session = await get_access_session(request);
-  if (session == null) {
-    throw redirect_unauthenticated(request);
-  }
-  if (session.password_change_required) {
-    throw redirect("/expired-password");
+  const access = await require_document_access(request);
+  if (access === DOCUMENT_BOOTSTRAP) {
+    return data({ bootstrap: true as const }, { headers: PRIVATE_NO_STORE });
   }
 
   try {
-    const me = await fetch_me(session.token);
+    const me = await fetch_me(access);
     const nav = filter_nav_by_permissions(
       load_default_nav(),
       me.permissions,
     );
 
     return data(
-      { me, nav, csrf_token: read_csrf_cookie(request) },
-      { headers: { "Cache-Control": "private, no-store" } },
+      { bootstrap: false as const, me, nav, csrf_token: read_csrf_cookie(request) },
+      { headers: PRIVATE_NO_STORE },
     );
   } catch (error) {
     if (error instanceof Response) {
@@ -57,6 +58,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function AuthenticatedLayout({
   loaderData,
 }: Route.ComponentProps) {
+  if (loaderData.bootstrap) {
+    return <RefreshBootstrap />;
+  }
   const { me, nav, csrf_token } = loaderData;
   const outlet_context: AuthenticatedOutletContext = { me, nav };
 

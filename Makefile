@@ -134,7 +134,6 @@ endif
 	@echo "    Proxy (browser origin, interim HTTPS): https://localhost:8443"
 	@echo "    Web: http://localhost:3000"
 	@echo "    Auth: http://localhost:3001"
-	@echo "    Host-dev (Vite, not e2e): http://localhost:5173"
 	@echo "    API: http://localhost:8000"
 
 reinstall-keep-data: ## Restart stack without wiping DB volume, then migrate and seed
@@ -147,7 +146,6 @@ endif
 	@echo "    Proxy (browser origin, interim HTTPS): https://localhost:8443"
 	@echo "    Web: http://localhost:3000"
 	@echo "    Auth: http://localhost:3001"
-	@echo "    Host-dev (Vite, not e2e): http://localhost:5173"
 	@echo "    API: http://localhost:8000"
 
 db-up: ## Start containerized PostgreSQL only (for host-run tests / persistence)
@@ -200,7 +198,6 @@ frontend-dev: frontend-install local-jwt-keys ## Run the React Router dev server
 		UNTANGLED_AUTH_BASE_URL=$${UNTANGLED_AUTH_BASE_URL:-http://localhost:3001} \
 		UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
 		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
-		UNTANGLED_AUTH_ORIGIN=$${UNTANGLED_AUTH_ORIGIN:-http://localhost:3001} \
 		npm run dev -- --host 127.0.0.1 --port 5173
 
 auth-dev: auth-install local-jwt-keys local-refresh-hmac ## Run the auth service on :3001 (host-dev)
@@ -208,8 +205,8 @@ auth-dev: auth-install local-jwt-keys local-refresh-hmac ## Run the auth service
 	cd $(AUTH_DIR) && \
 		DATABASE_URL=$${DATABASE_URL:-postgresql://untangled:untangled@localhost:5432/untangled} \
 		UNTANGLED_REDIS_URL=$${UNTANGLED_REDIS_URL:-redis://localhost:6379/0} \
-		UNTANGLED_PUBLIC_ORIGIN=$${UNTANGLED_PUBLIC_ORIGIN:-http://localhost:5173} \
-		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-false} \
+		UNTANGLED_PUBLIC_ORIGIN=$${UNTANGLED_PUBLIC_ORIGIN:-https://localhost:8443} \
+		UNTANGLED_COOKIE_SECURE=$${UNTANGLED_COOKIE_SECURE:-true} \
 		UNTANGLED_JWT_PRIVATE_KEY_PATH=$${UNTANGLED_JWT_PRIVATE_KEY_PATH:-$(CURDIR)/$(JWT_PRIVATE)} \
 		UNTANGLED_JWT_PUBLIC_KEY_PATH=$${UNTANGLED_JWT_PUBLIC_KEY_PATH:-$(CURDIR)/$(JWT_PUBLIC)} \
 		UNTANGLED_REFRESH_HMAC_SECRET_PATH=$${UNTANGLED_REFRESH_HMAC_SECRET_PATH:-$(CURDIR)/$(REFRESH_HMAC_SECRET)} \

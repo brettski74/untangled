@@ -283,7 +283,11 @@ describe("POST /api/v2/auth/refresh", () => {
     const sleeps_before = sleeps.length;
     const replay = await post_refresh({ access, refresh });
     assert.equal(replay.status, 401);
-    assert.deepEqual(await replay.json(), { detail: ACCESS_DENIED, retry: true });
+    assert.deepEqual(await replay.json(), {
+      detail: ACCESS_DENIED,
+      retry: true,
+      max_retries: 5,
+    });
     assert.equal(cookie_from_set_cookie(replay.headers.getSetCookie(), REFRESH_COOKIE_NAME), undefined);
     assert.equal(sessions.rows.length, session_count);
     assert.equal(sessions.used.length, used_count);

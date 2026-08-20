@@ -4,11 +4,12 @@ import { useFetcher } from "react-router";
 
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
+  DOCUMENT_BOOTSTRAP,
   forbidden_response,
   redirect_unauthenticated,
   redirect_unauthorized,
+  require_document_access,
 } from "../auth/gate.server";
-import { get_access_token } from "../auth/session.server";
 import {
   class_field_meta,
   type AttributeFieldMeta,
@@ -97,7 +98,7 @@ async function run_list_search(
   sort: ListSortSpec[] | null,
   limit: number = DEFAULT_PER_PAGE,
   offset: number = DEFAULT_OFFSET,
-): Promise<ListLoaderData> {
+): Promise<ListLoaderData | typeof DOCUMENT_BOOTSTRAP> {
   const class_name = params.class_name;
   const list_id = params.list_id;
   if (class_name == null || list_id == null) {
@@ -109,9 +110,9 @@ async function run_list_search(
     throw new Response("Not Found", { status: 404 });
   }
 
-  const access_token = await get_access_token(request);
-  if (access_token == null) {
-    throw redirect_unauthenticated(request);
+  const access_token = await require_document_access(request);
+  if (access_token === DOCUMENT_BOOTSTRAP) {
+    return DOCUMENT_BOOTSTRAP;
   }
 
   const meta = class_field_meta(match.section.class_name);
@@ -180,6 +181,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     (match.option.predicate as SearchPredicate | undefined) ?? null;
   try {
     const payload = await run_list_search(request, params, baseline, null);
+    if (payload === DOCUMENT_BOOTSTRAP) {
+      return data(null, { headers: { "Cache-Control": "private, no-store" } });
+    }
     return data(payload);
   } catch (error) {
     if (error instanceof SearchApiError) {
@@ -218,6 +222,9 @@ export async function action({
       paging.limit,
       paging.offset,
     );
+    if (payload === DOCUMENT_BOOTSTRAP) {
+      throw redirect_unauthenticated(request);
+    }
     return data({
       ok: true,
       rows: payload.rows,
@@ -261,6 +268,9 @@ export function shouldRevalidate({
 export default function DestinationListPage({
   loaderData,
 }: Route.ComponentProps) {
+  if (loaderData == null) {
+    return null;
+  }
   const { me } = useOutletContext<AuthenticatedOutletContext>();
   const can_create = can_create_class(me.permissions, loaderData.class_name);
 

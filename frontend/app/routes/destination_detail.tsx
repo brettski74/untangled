@@ -3,9 +3,11 @@ import { data, useFetcher, useOutletContext, useRevalidator } from "react-router
 
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
+  DOCUMENT_BOOTSTRAP,
   forbidden_response,
   redirect_unauthenticated,
   redirect_unauthorized,
+  require_document_access,
 } from "../auth/gate.server";
 import { get_access_token } from "../auth/session.server";
 import { DetailContextBar } from "../detail/detail_context_bar";
@@ -86,9 +88,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   // Reserved query: ignore unknown view=; always default layout in M1.
   void new URL(request.url).searchParams.get("view");
 
-  const access_token = await get_access_token(request);
-  if (access_token == null) {
-    throw redirect_unauthenticated(request);
+  const access_token = await require_document_access(request);
+  if (access_token === DOCUMENT_BOOTSTRAP) {
+    return data(null, { headers: { "Cache-Control": "private, no-store" } });
   }
 
   try {
@@ -245,6 +247,9 @@ export async function action({
 export default function DestinationDetailPage({
   loaderData,
 }: Route.ComponentProps) {
+  if (loaderData == null) {
+    return null;
+  }
   const { me } = useOutletContext<AuthenticatedOutletContext>();
   const can_update = can_update_class(me.permissions, loaderData.class_name);
   const editable = useMemo(

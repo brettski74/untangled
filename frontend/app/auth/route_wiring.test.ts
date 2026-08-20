@@ -236,6 +236,77 @@ describe("route wiring", () => {
     ).resolves.toBeNull();
   });
 
+  it("authenticated loader returns bootstrap HTML data on expired GET without /me", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const cookie = await session_cookie(
+      fake_access_token(60, { iat: now - 120, exp: now - 10 }),
+    );
+    const fetch_mock = vi.fn();
+    vi.stubGlobal("fetch", fetch_mock);
+
+    const result = await authenticated_loader({
+      request: new Request("http://web.test/change_request/lists/all", {
+        headers: { Cookie: cookie },
+      }),
+      params: {},
+      context: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      data: { bootstrap: true },
+    });
+    expect(result.init?.headers).toMatchObject({
+      "Cache-Control": "private, no-store",
+    });
+    expect(fetch_mock).not.toHaveBeenCalled();
+  });
+
+  it("authenticated loader sends expired must-change GET to login", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const cookie = await session_cookie(
+      fake_access_token(60, {
+        iat: now - 120,
+        exp: now - 10,
+        password_change_required: true,
+      }),
+    );
+    try {
+      await authenticated_loader({
+        request: new Request("http://web.test/change_request/lists/all", {
+          headers: { Cookie: cookie },
+        }),
+        params: {},
+        context: {},
+      } as never);
+      expect.unreachable("expected redirect");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      const response = error as Response;
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toMatch(/^\/login/);
+    }
+  });
+
+  it("home loader short-circuits expired GET without /me", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const cookie = await session_cookie(
+      fake_access_token(60, { iat: now - 120, exp: now - 10 }),
+    );
+    const fetch_mock = vi.fn();
+    vi.stubGlobal("fetch", fetch_mock);
+
+    await expect(
+      home_loader({
+        request: new Request("http://web.test/", {
+          headers: { Cookie: cookie },
+        }),
+        params: {},
+        context: {},
+      } as never),
+    ).resolves.toBeNull();
+    expect(fetch_mock).not.toHaveBeenCalled();
+  });
+
   it("login loader redirects away when already authenticated", async () => {
     const { commit_access_token } = await import("./session.server");
     const set_cookie = await commit_access_token(

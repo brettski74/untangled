@@ -97,6 +97,25 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
         );
         return;
       }
+      if (response.status === 503) {
+        let detail = "Sign-in is temporarily busy. Try again in a moment.";
+        try {
+          const payload: unknown = await response.json();
+          if (
+            typeof payload === "object" &&
+            payload != null &&
+            "detail" in payload &&
+            typeof payload.detail === "string" &&
+            payload.detail !== ""
+          ) {
+            detail = payload.detail;
+          }
+        } catch {
+          // Keep the non-accusatory fallback when the body is missing.
+        }
+        set_error(detail);
+        return;
+      }
       if (!response.ok) {
         set_error("Sign-in failed. Try again.");
         return;

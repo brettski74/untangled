@@ -2,7 +2,7 @@
 
 Local Compose presents **one HTTPS origin** so the browser can call SSR, the API, and the auth service by path. Production TLS and perimeter routing stay **customer-owned**; this file is the path and cookie contract those edges must implement, plus how the local proxy behaves.
 
-Browser login `POST`s to the auth service on this origin. The access JWT is stored only in an **HttpOnly** cookie (`__untangled_access`); it is not returned in JSON and is not readable by JavaScript. Playwright drives this same origin (`https://localhost:8443`). `make frontend-dev` on HTTP `:5173` is interactive host-dev only (Vite proxies `/api/v2/auth`); it is not an e2e or production gateway.
+Browser login `POST`s to the auth service on this origin. The access JWT is stored only in an **HttpOnly** cookie (`__untangled_access`); it is not returned in JSON and is not readable by JavaScript. Playwright drives this same origin (`https://localhost:8443`). SSR and `make frontend-dev` must not proxy, forward, or replay `/api/v2/auth` (including refresh).
 
 ## Path contract (pinned)
 
@@ -21,7 +21,7 @@ Auth-session paths (group stays on **v2** together):
 | `GET` | `/api/v2/auth/csrf` | Browser CSRF bootstrap (do not copy `Set-Cookie` through SSR) |
 | `POST` | `/api/v2/auth/login` | Real login; ES256 access cookie |
 | `POST` | `/api/v2/auth/logout` | End this session (signed access JWT; CSRF+Origin). SSR `POST /logout` is the Sign out form. |
-| `POST` | `/api/v2/auth/refresh` | Later (#14) |
+| `POST` | `/api/v2/auth/refresh` | Rotate access + refresh cookies (CSRF+Origin). `GET` is **405**. |
 | `GET` | `/api/v2/auth/me` | SSR identity / RBAC bootstrap; Bearer or access cookie |
 | `POST` | `/api/v2/auth/change-password` | Browser posts (CSRF/Origin like login); JWT stays in the HttpOnly cookie |
 
@@ -41,7 +41,7 @@ Rocky Compose publishes auth on host port **3001** (`UNTANGLED_AUTH_HOST_PORT`) 
 
 - Browser origin: `https://localhost:8443` (`UNTANGLED_PROXY_HOST_PORT`, default 8443 → container 443). `https://127.0.0.1:8443` and `https://[::1]:8443` **308** to that origin so auth's exact-Origin check still sees one host.
 - Host `3000` (web), `3001` (auth), and `8000` (api) stay published for host-dev and `/docs`. They are **not** the browser credential origin.
-- Playwright: `https://localhost:8443` through this Caddy path table. `make frontend-dev` stays on HTTP `:5173` with Vite's `/api/v2/auth` proxy for interactive host-dev only.
+- Playwright: `https://localhost:8443` through this Caddy path table. `make frontend-dev` on HTTP `:5173` is SSR HMR only; it is not a browser credential origin and does not proxy `/api/v2/auth`.
 
 ### TLS files
 
@@ -59,7 +59,7 @@ The OpenSSL pair will warn in browsers until you trust it. `curl -k` is fine for
 
 ES256 PEMs are gitignored `deploy/jwt/dev-es256-private.pem` and `dev-es256-public.pem`. Same both-missing / both-present / fail-if-one rule as the TLS files (`make local-jwt-keys` / `make up`). Auth mounts the private key; API and web mount the public key only.
 
-The refresh HMAC secret is gitignored `deploy/jwt/refresh_secret.b64` (`make local-refresh-hmac` / `make up`). Auth mounts that file only. API, web, and Caddy must not. Missing or empty → auth does not start; the auth process does not generate a secret. Non-Make deploys (including `./deploy.sh`) must provision the file. `session_*` attributes on `system_config` are stored now and do not drive token issuance yet.
+The refresh HMAC secret is gitignored `deploy/jwt/refresh_secret.b64` (`make local-refresh-hmac` / `make up`). Auth mounts that file only. API, web, and Caddy must not. Missing or empty → auth does not start; the auth process does not generate a secret. Non-Make deploys (including `./deploy.sh`) must provision the file. Login issuance uses `session_access_ttl_seconds`, `session_refresh_ttl_seconds`, and `session_total_ttl_seconds` on the `system_config` singleton. Soft refresh 401 includes `session_max_refresh_retries` as `max_retries`. Auth deletes expired `used_refresh_token` / `user_session` rows on a `session_refresh_cleanup_seconds` timer.
 
 ## Cookies and CSRF
 
@@ -73,10 +73,20 @@ Auth-set cookies are **host-only** (no `Domain`), `SameSite=Lax`, `Secure` on th
 
 `SameSite=Lax` is **not** enough for login CSRF (forced login does not need an existing cookie). `POST /api/v2/auth/login` requires:
 
-1. Exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` (scheme + host + port). Default local Compose and Playwright `https://localhost:8443`. Host-dev Vite `http://localhost:5173`. `127.0.0.1` is a different origin; no alias folding.
+1. Exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` (scheme + host + port). Default local Compose and Playwright `https://localhost:8443`. `127.0.0.1` is a different origin; no alias folding.
 2. CSRF token from `X-CSRF-Token` or form field `csrf_token` matching the CSRF cookie (CSPRNG; double-submit). The login page fetches CSRF from the **browser**.
 
-Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits `auth.csrf_denied` (`reason` is `origin_mismatch` or `csrf_mismatch` on that one event type). The event records `csrf_header_length` and `csrf_cookie_length` (0 if missing), not raw token values. The client body stays `{ detail: "Forbidden" }` with no reason. SSR and Python API Origin/CSRF failures are [#223](https://github.com/brettski74/untangled/issues/223); they do not emit yet. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503**. Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).
+Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits `auth.csrf_denied` (`reason` is `origin_mismatch` or `csrf_mismatch` on that one event type). The event records `csrf_header_length` and `csrf_cookie_length` (0 if missing), not raw token values. The client body stays `{ detail: "Forbidden" }` with no reason. SSR and Python API Origin/CSRF failures are [#223](https://github.com/brettski74/untangled/issues/223); they do not emit yet. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503** with distinct `detail` copy for login vs change-password (refresh audit-write 503 keeps a third string). Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).
+
+`POST /api/v2/auth/refresh` uses the same Origin + CSRF rules. The browser posts directly (SSR never sees `__untangled_refresh`). Responses:
+
+- **200** — new access and refresh cookies; body does not include a retry cap.
+- **401** expired/replay-within-grace (soft) — `{ detail: "Access denied", retry: true, max_retries: N }` where `N` is live `session_max_refresh_retries` (clamped 1–10). Browser JS retries refresh until that total (including the first POST).
+- **401** invalid/hard — `{ detail: "Access denied" }` only. Browser JS goes to login.
+- **403** Origin/CSRF mismatch — `{ detail: "Forbidden" }`; no refresh.
+- **405** on `GET /api/v2/auth/refresh`.
+
+Expired **document GET** (signature valid, `exp` in the past, not must-change) returns **200** bootstrap HTML at the original URL. Nested SSR loaders must not call `/me` or the API with that JWT. The page CSRF-POSTs refresh, then `location.replace`s. Invalid or missing access, expired must-change, and leftover SSR document **mutations** fail closed to login ([#238](https://github.com/brettski74/untangled/issues/238)). Valid must-change still goes to `/expired-password`.
 
 `POST /api/v2/auth/change-password` uses the same Origin + CSRF rules. The browser posts directly to auth (SSR does not proxy this request and never sees `__untangled_refresh`). Success is `{ ok: true, detail: "Password change complete." }` (tokens are **not** in the body).
 

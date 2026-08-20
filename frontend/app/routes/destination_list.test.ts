@@ -79,6 +79,24 @@ describe("destination_list loader", () => {
     expect(search_body).not.toHaveProperty("sort");
   });
 
+  it("returns null on expired GET without searching", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { loader } = await import("../routes/destination_list");
+    const cookie = await session_cookie(
+      fake_access_token(60, { iat: now - 120, exp: now - 10 }),
+    );
+    const result = await loader({
+      request: new Request("http://web.test/incident/lists/all", {
+        headers: { Cookie: cookie },
+      }),
+      params: { class_name: "incident", list_id: "all" },
+      context: {},
+    } as never);
+
+    expect(result.data).toBeNull();
+    expect(search_collection).not.toHaveBeenCalled();
+  });
+
   it("returns empty rows when search finds nothing", async () => {
     search_collection.mockResolvedValue({
       items: [],
@@ -197,6 +215,28 @@ describe("destination_list action", () => {
     };
     expect(search_body.predicate).toEqual(predicate);
     expect(search_body).not.toHaveProperty("sort");
+  });
+
+  it("sends expired POST to login without searching", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie(
+      fake_access_token(60, { iat: now - 120, exp: now - 10 }),
+    );
+    const form = new FormData();
+    form.set("predicate", "null");
+    await expect(
+      action({
+        request: new Request("http://web.test/incident/lists/all", {
+          method: "POST",
+          headers: { Cookie: cookie },
+          body: form,
+        }),
+        params: { class_name: "incident", list_id: "all" },
+        context: {},
+      } as never),
+    ).rejects.toMatchObject({ status: 302 });
+    expect(search_collection).not.toHaveBeenCalled();
   });
 
   it("forwards non-empty user sort and omits empty", async () => {
