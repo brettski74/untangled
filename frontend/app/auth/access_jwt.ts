@@ -1,14 +1,21 @@
-import { decodeJwt, jwtVerify, type JWTPayload } from "jose";
+import {
+  decodeJwt,
+  jwtVerify,
+  type JWTPayload,
+  type JWTVerifyOptions,
+} from "jose";
 
 export const ACCESS_TOKEN_TYP = "access";
 export const PASSWORD_CHANGE_REQUIRED_CLAIM = "password_change_required";
 export const SESSION_ID_CLAIM = "sid";
 export const ACCESS_TOKEN_IAT_SKEW_SECONDS = 60;
 
-const JOSE_VERIFY = {
+const JOSE_VERIFY: Required<
+  Pick<JWTVerifyOptions, "algorithms" | "requiredClaims">
+> = {
   algorithms: ["ES256"],
   requiredClaims: ["sub", "iat", "exp"],
-} as const;
+};
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
