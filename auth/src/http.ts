@@ -26,7 +26,7 @@ import { request_identity } from "./forwarded.js";
 import {
   session_id_claim,
   sign_access_token,
-  verify_access_token,
+  verify_access_jwt,
 } from "./jwt.js";
 import { hmac_refresh_token, mint_refresh_token } from "./refresh_hmac.js";
 import { run_logout_pipeline } from "./logout_pipeline.js";
@@ -552,20 +552,22 @@ async function handle_me(
 ): Promise<void> {
   const token = access_token_from_request(request);
   if (token == null) {
-    json(response, 401, { detail: "Could not validate credentials" });
+    credentials_denied(response, false);
     return;
   }
-  let sub: string;
-  try {
-    const payload = await verify_access_token(config.public_key, token);
-    sub = payload.sub as string;
-  } catch {
-    json(response, 401, { detail: "Could not validate credentials" });
+  const verified = await verify_access_jwt(config.public_key, token);
+  if (verified.kind === "invalid") {
+    credentials_denied(response, false);
     return;
   }
+  if (verified.kind === "expired") {
+    credentials_denied(response, true);
+    return;
+  }
+  const sub = verified.payload.sub as string;
   const user = await config.users.load_by_id(sub);
   if (user == null || !user.is_active) {
-    json(response, 401, { detail: "Could not validate credentials" });
+    credentials_denied(response, false);
     return;
   }
   const rbac = await config.users.roles_and_permissions(user.id);
@@ -647,19 +649,22 @@ async function handle_change_password(
 
   const access = access_token_from_request(request);
   if (access == null) {
-    json(response, 401, { detail: "Could not validate credentials" });
+    credentials_denied(response, false);
     return;
   }
-  let payload;
-  try {
-    payload = await verify_access_token(config.public_key, access);
-  } catch {
-    json(response, 401, { detail: "Could not validate credentials" });
+  const verified = await verify_access_jwt(config.public_key, access);
+  if (verified.kind === "invalid") {
+    credentials_denied(response, false);
     return;
   }
+  if (verified.kind === "expired") {
+    credentials_denied(response, true);
+    return;
+  }
+  const payload = verified.payload;
   const user_id = payload.sub as string;
   if (typeof user_id !== "string" || user_id === "") {
-    json(response, 401, { detail: "Could not validate credentials" });
+    credentials_denied(response, false);
     return;
   }
 
@@ -824,6 +829,14 @@ function submitted_csrf_token(
     return header_token;
   }
   return parsed.csrf_token ?? "";
+}
+
+function credentials_denied(response: ServerResponse, retry: boolean): void {
+  if (retry) {
+    json(response, 401, { detail: "Could not validate credentials", retry: REFRESH_RETRY });
+    return;
+  }
+  json(response, 401, { detail: "Could not validate credentials" });
 }
 
 function json(

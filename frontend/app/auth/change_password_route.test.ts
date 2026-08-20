@@ -107,6 +107,7 @@ describe("change-password route (#173/#215)", () => {
     expect(body.username).toBe("ada");
     expect(body.policy.password_minimum_chars).toBe(12);
     expect(body.policy.password_estimate_drift_factor).toBe(1.1);
+    expect(body.max_refresh_retries).toBe(5);
     expect(fetch_record).toHaveBeenCalledWith(
       expect.any(String),
       "system_config",

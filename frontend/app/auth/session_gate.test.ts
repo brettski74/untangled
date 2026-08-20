@@ -118,6 +118,22 @@ describe("auth gate + session", () => {
     expect(session_action_for_status(403)).toBe("preserve_session");
   });
 
+  it("does not POST refresh when the API 401 body has retry true", async () => {
+    const fetch_mock = vi.fn().mockResolvedValue(
+      Response.json(
+        { detail: "Could not validate credentials", retry: true },
+        { status: 401 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetch_mock);
+
+    await expect(api_fetch_with_token("t", "/api/v2/incident/x")).rejects.toBeInstanceOf(
+      ApiUnauthorizedError,
+    );
+    expect(fetch_mock).toHaveBeenCalledTimes(1);
+    expect(String(fetch_mock.mock.calls[0]?.[0])).toContain("/api/v2/incident/x");
+  });
+
   it("refuses to verify without UNTANGLED_JWT_PUBLIC_KEY", async () => {
     delete process.env.UNTANGLED_JWT_PUBLIC_KEY;
     reset_access_verifier_for_tests();

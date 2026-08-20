@@ -11,6 +11,7 @@ import {
   REFRESH_COOKIE_NAME,
   parse_cookie_header,
 } from "../src/cookies.js";
+import { sign_access_token } from "../src/jwt.js";
 import { create_server } from "../src/server.js";
 import { PUBLIC_ORIGIN, TEST_USER_ID, test_config } from "./helpers.js";
 
@@ -38,10 +39,12 @@ describe("auth me + change-password", () => {
   let server: Server;
   let base_url: string;
   let public_key: CryptoKey;
+  let private_key: CryptoKey;
 
   before(async () => {
     const config = await test_config();
     public_key = config.public_key;
+    private_key = config.private_key;
     server = create_server(config);
     await new Promise<void>((resolve) => {
       server.listen(0, "127.0.0.1", () => resolve());
@@ -86,6 +89,67 @@ describe("auth me + change-password", () => {
   it("GET /me returns 401 without a token", async () => {
     const response = await fetch(`${base_url}/api/v2/auth/me`);
     assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+      detail: "Could not validate credentials",
+    });
+  });
+
+  it("GET /me returns retry on expired-valid access and not on a bad signature", async () => {
+    const expired = await sign_access_token(private_key, TEST_USER_ID, {
+      ttl_seconds: 60,
+      sid: "01900000-0000-7000-8000-0000000000aa",
+      now: new Date(Date.now() - 120_000),
+    });
+    const expired_res = await fetch(`${base_url}/api/v2/auth/me`, {
+      headers: { Authorization: `Bearer ${expired}` },
+    });
+    assert.equal(expired_res.status, 401);
+    assert.deepEqual(await expired_res.json(), {
+      detail: "Could not validate credentials",
+      retry: true,
+    });
+
+    const live = await sign_access_token(private_key, TEST_USER_ID, {
+      ttl_seconds: 900,
+      sid: "01900000-0000-7000-8000-0000000000aa",
+    });
+    const tampered = `${live.slice(0, -4)}xxxx`;
+    const bad = await fetch(`${base_url}/api/v2/auth/me`, {
+      headers: { Authorization: `Bearer ${tampered}` },
+    });
+    assert.equal(bad.status, 401);
+    assert.deepEqual(await bad.json(), {
+      detail: "Could not validate credentials",
+    });
+  });
+
+  it("change-password returns retry on expired-valid access", async () => {
+    const expired = await sign_access_token(private_key, TEST_USER_ID, {
+      ttl_seconds: 60,
+      sid: "01900000-0000-7000-8000-0000000000aa",
+      now: new Date(Date.now() - 120_000),
+    });
+    const { token, cookie } = await issue_csrf();
+    const response = await fetch(`${base_url}/api/v2/auth/change-password`, {
+      method: "POST",
+      headers: {
+        Origin: PUBLIC_ORIGIN,
+        Cookie: `${cookie}; ${ACCESS_COOKIE_NAME}=${expired}`,
+        "X-CSRF-Token": token,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        current_password: "admin-change-me",
+        new_password: STRONG_NEW,
+        verify_new_password: STRONG_NEW,
+      }),
+    });
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+      detail: "Could not validate credentials",
+      retry: true,
+    });
   });
 
   it("GET /me returns profile for a Bearer token", async () => {

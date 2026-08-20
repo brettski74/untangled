@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from untangled.audit.deps import set_audit_logger
 from untangled.audit.file_sink import FileAuditLogger
 from untangled.audit.middleware import AuditCorrelationMiddleware
+from untangled.auth.dependencies import register_auth_exception_handlers
 from untangled.auth.settings import jwt_public_key
 from untangled.coherence import start_system_config_subscriber
 from untangled.records.mounts import v2_record_routers
@@ -51,6 +52,7 @@ app = FastAPI(
 _wire_audit_logger()
 app.add_middleware(AuditCorrelationMiddleware)
 register_request_validation_handlers(app)
+register_auth_exception_handlers(app)
 for _v2_router in v2_record_routers:
     app.include_router(_v2_router)
 

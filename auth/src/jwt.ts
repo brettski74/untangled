@@ -1,8 +1,17 @@
-import { compactVerify, SignJWT, jwtVerify, type JWTPayload } from "jose";
+import { decodeJwt, SignJWT, jwtVerify, type JWTPayload } from "jose";
 
 export const ACCESS_TOKEN_TYP = "access";
 export const PASSWORD_CHANGE_REQUIRED_CLAIM = "password_change_required";
 export const SESSION_ID_CLAIM = "sid";
+export const ACCESS_TOKEN_IAT_SKEW_SECONDS = 60;
+
+const JOSE_VERIFY = {
+  algorithms: ["ES256"],
+  requiredClaims: ["sub", "iat", "exp"],
+} as const;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type SignAccessTokenArgs = {
   ttl_seconds?: number;
@@ -11,6 +20,11 @@ export type SignAccessTokenArgs = {
   password_change_required?: boolean;
   now?: Date;
 };
+
+export type AccessJwtVerifyResult =
+  | { kind: "valid"; payload: JWTPayload }
+  | { kind: "expired"; payload: JWTPayload }
+  | { kind: "invalid" };
 
 export async function sign_access_token(
   private_key: CryptoKey,
@@ -41,70 +55,109 @@ export async function sign_access_token(
     .sign(private_key);
 }
 
+function custom_claims_ok(payload: JWTPayload, now_seconds: number): boolean {
+  if (payload.typ !== ACCESS_TOKEN_TYP) {
+    return false;
+  }
+  if (typeof payload.sub !== "string" || !UUID_RE.test(payload.sub)) {
+    return false;
+  }
+  const sid = payload[SESSION_ID_CLAIM];
+  if (typeof sid !== "string" || sid === "") {
+    return false;
+  }
+  const iat = payload.iat;
+  const exp = payload.exp;
+  if (typeof iat !== "number" || typeof exp !== "number") {
+    return false;
+  }
+  if (!(exp > iat)) {
+    return false;
+  }
+  if (iat > now_seconds + ACCESS_TOKEN_IAT_SKEW_SECONDS) {
+    return false;
+  }
+  return true;
+}
+
+function peek_iat(token: string): number | null {
+  try {
+    const peeked = decodeJwt(token);
+    return typeof peeked.iat === "number" ? peeked.iat : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Single access-JWT verify used by resource routes, refresh, and logout.
+ * `expired` means jose accepted the token when `currentDate` was `iat`
+ * (exp may be in the past vs wall clock) and custom claims passed.
+ */
+export async function verify_access_jwt(
+  public_key: CryptoKey,
+  token: string,
+  now: Date = new Date(),
+): Promise<AccessJwtVerifyResult> {
+  const now_seconds = Math.floor(now.getTime() / 1000);
+  try {
+    const { payload } = await jwtVerify(token, public_key, {
+      ...JOSE_VERIFY,
+      currentDate: now,
+    });
+    if (!custom_claims_ok(payload, now_seconds)) {
+      return { kind: "invalid" };
+    }
+    return { kind: "valid", payload };
+  } catch {
+    // Relax exp via jose currentDate = iat; do not hand-roll claim checks.
+  }
+  const iat = peek_iat(token);
+  if (iat == null) {
+    return { kind: "invalid" };
+  }
+  try {
+    const { payload } = await jwtVerify(token, public_key, {
+      ...JOSE_VERIFY,
+      currentDate: new Date(iat * 1000),
+    });
+    if (!custom_claims_ok(payload, now_seconds)) {
+      return { kind: "invalid" };
+    }
+    return { kind: "expired", payload };
+  } catch {
+    return { kind: "invalid" };
+  }
+}
+
+/** Unexpired access JWT only. */
 export async function verify_access_token(
   public_key: CryptoKey,
   token: string,
+  now: Date = new Date(),
 ): Promise<JWTPayload> {
-  const { payload } = await jwtVerify(token, public_key, {
-    algorithms: ["ES256"],
-    requiredClaims: ["sub", "iat", "exp"],
-  });
-  if (payload.typ !== ACCESS_TOKEN_TYP) {
-    throw new Error("not an access token");
+  const result = await verify_access_jwt(public_key, token, now);
+  if (result.kind !== "valid") {
+    throw new Error("invalid access token");
   }
-  if (typeof payload.sub !== "string" || payload.sub === "") {
-    throw new Error("missing subject");
-  }
-  return payload;
+  return result.payload;
 }
 
-export function password_change_required(payload: JWTPayload): boolean {
-  return payload[PASSWORD_CHANGE_REQUIRED_CLAIM] === true;
-}
-
-export const ACCESS_TOKEN_IAT_SKEW_SECONDS = 60;
-
+/** Access JWT whose `exp` may be past; still requires every other check. */
 export async function verify_access_token_for_refresh(
   public_key: CryptoKey,
   token: string,
   now: Date = new Date(),
 ): Promise<JWTPayload> {
-  const { payload: raw } = await compactVerify(token, public_key, {
-    algorithms: ["ES256"],
-  });
-  let claims: unknown;
-  try {
-    claims = JSON.parse(new TextDecoder().decode(raw));
-  } catch {
-    throw new Error("malformed access token payload");
+  const result = await verify_access_jwt(public_key, token, now);
+  if (result.kind === "invalid") {
+    throw new Error("invalid access token");
   }
-  if (claims == null || typeof claims !== "object") {
-    throw new Error("malformed access token payload");
-  }
-  const payload = claims as JWTPayload;
-  if (payload.typ !== ACCESS_TOKEN_TYP) {
-    throw new Error("not an access token");
-  }
-  if (typeof payload.sub !== "string" || payload.sub === "") {
-    throw new Error("missing subject");
-  }
-  const sid = payload[SESSION_ID_CLAIM];
-  if (typeof sid !== "string" || sid === "") {
-    throw new Error("missing session id");
-  }
-  const iat = payload.iat;
-  const exp = payload.exp;
-  if (typeof iat !== "number" || typeof exp !== "number") {
-    throw new Error("missing lifetime claims");
-  }
-  if (!(exp > iat)) {
-    throw new Error("inverted lifetime");
-  }
-  const now_seconds = Math.floor(now.getTime() / 1000);
-  if (iat > now_seconds + ACCESS_TOKEN_IAT_SKEW_SECONDS) {
-    throw new Error("iat in the future");
-  }
-  return payload;
+  return result.payload;
+}
+
+export function password_change_required(payload: JWTPayload): boolean {
+  return payload[PASSWORD_CHANGE_REQUIRED_CLAIM] === true;
 }
 
 export function session_id_claim(payload: JWTPayload): string | undefined {

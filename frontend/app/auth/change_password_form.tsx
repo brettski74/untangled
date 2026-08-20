@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { change_password_response_schema } from "./schemas";
+import { authenticated_fetch } from "./refresh_fetch";
 import {
   evaluate_new_password_strength,
   validate_change_password_form,
@@ -29,6 +30,7 @@ export type ChangePasswordFormProps = {
   policy: PasswordPolicy;
   after_success?: "stay" | "home";
   action_data?: ChangePasswordActionData;
+  max_refresh_retries?: number;
 };
 
 function strength_label(classification: StrengthClass | null): string {
@@ -100,6 +102,7 @@ export function ChangePasswordForm({
   policy,
   after_success = "stay",
   action_data,
+  max_refresh_retries,
 }: ChangePasswordFormProps) {
   const form_id = useId();
 
@@ -197,9 +200,10 @@ export function ChangePasswordForm({
     set_api_failure(null);
     set_pending(true);
     try {
-      const response = await fetch("/api/v2/auth/change-password", {
+      const response = await authenticated_fetch("/api/v2/auth/change-password", {
         method: "POST",
         credentials: "include",
+        max_refresh_retries,
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",

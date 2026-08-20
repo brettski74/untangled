@@ -1,6 +1,7 @@
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 
 const ADMIN_SUB = "01900000-0000-7000-8000-000000000001";
+const TEST_SID = "01900000-0000-7000-8000-0000000000aa";
 
 let private_key: KeyObject | null = null;
 
@@ -29,6 +30,7 @@ export function fake_access_token(
   const payload = Buffer.from(
     JSON.stringify({
       sub: ADMIN_SUB,
+      sid: TEST_SID,
       iat: now,
       exp: now + ttl_seconds,
       typ: "access",

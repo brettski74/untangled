@@ -2,8 +2,9 @@
  * HttpOnly `__untangled_access` cookie: issued by the auth service, verified
  * here with the ES256 public key. The JWT is never exposed to browser JS.
  */
-import { importSPKI, jwtVerify } from "jose";
+import { importSPKI } from "jose";
 
+import { verify_access_jwt } from "./access_jwt";
 import { CSRF_COOKIE_NAME } from "./cookie_names";
 import {
   access_token_remaining_seconds,
@@ -81,24 +82,14 @@ async function verified_access_session(
   token: string,
   key: CryptoKey,
 ): Promise<{ token: string; password_change_required: boolean } | null> {
-  try {
-    const { payload } = await jwtVerify(token, key, {
-      algorithms: ["ES256"],
-      requiredClaims: ["sub", "iat", "exp"],
-    });
-    if (payload.typ !== "access") {
-      return null;
-    }
-    if (typeof payload.sub !== "string" || payload.sub === "") {
-      return null;
-    }
-    return {
-      token,
-      password_change_required: payload.password_change_required === true,
-    };
-  } catch {
+  const result = await verify_access_jwt(key, token);
+  if (result.kind !== "valid") {
     return null;
   }
+  return {
+    token,
+    password_change_required: result.payload.password_change_required === true,
+  };
 }
 
 export type AccessSession = {

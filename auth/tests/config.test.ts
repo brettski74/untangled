@@ -113,6 +113,7 @@ describe("jwt", () => {
     const user_id = "01900000-0000-7000-8000-000000000001";
     const with_claim = await sign_access_token(privateKey, user_id, {
       ttl_seconds: 900,
+      sid: "01900000-0000-7000-8000-0000000000aa",
       password_change_required: true,
     });
     const payload = await verify_access_token(publicKey, with_claim);

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from jwt_mint import bearer_for
+from jwt_mint import bearer_for, mint_access_token
 from psycopg import Connection
 
 from untangled.main import app
@@ -114,7 +114,34 @@ def test_unauthenticated_junk_locator_is_401(tickets_client: TestClient) -> None
 
 
 def test_unauthenticated_is_401(tickets_client: TestClient) -> None:
-    assert tickets_client.get(f"/api/v2/incident/{SEED_INCIDENT_1_ID}").status_code == 401
+    response = tickets_client.get(f"/api/v2/incident/{SEED_INCIDENT_1_ID}")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Could not validate credentials"}
+    assert "retry" not in response.json()
+
+
+def test_expired_access_is_401_with_retry(tickets_client: TestClient) -> None:
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    token = mint_access_token(SEED_USERS[0].id, now=past, ttl_seconds=1)
+    response = tickets_client.get(
+        f"/api/v2/incident/{SEED_INCIDENT_1_ID}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Could not validate credentials",
+        "retry": True,
+    }
+
+
+def test_tampered_access_is_401_without_retry(tickets_client: TestClient) -> None:
+    token = mint_access_token(SEED_USERS[0].id) + "x"
+    response = tickets_client.get(
+        f"/api/v2/incident/{SEED_INCIDENT_1_ID}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Could not validate credentials"}
 
 
 def test_readonly_cannot_create(tickets_client: TestClient) -> None:
