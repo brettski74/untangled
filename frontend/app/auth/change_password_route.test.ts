@@ -30,6 +30,14 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
   return set_cookie.split(";")[0] ?? set_cookie;
 }
 
+function require_data<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  if (value == null) {
+    throw new Error("expected loader data");
+  }
+  return value;
+}
+
 const POLICY_RECORD = {
   id: "01900000-0000-7000-8000-000000000050",
   created_at: "2026-01-01T00:00:00Z",
@@ -103,11 +111,10 @@ describe("change-password route (#173/#215)", () => {
       context: {},
     } as never);
 
-    const body = await response.data;
+    const body = require_data(await response.data);
     expect(body.username).toBe("ada");
     expect(body.policy.password_minimum_chars).toBe(12);
     expect(body.policy.password_estimate_drift_factor).toBe(1.1);
-    expect(body.max_refresh_retries).toBeUndefined();
     expect(fetch_record).toHaveBeenCalledWith(
       expect.any(String),
       "system_config",

@@ -52,7 +52,7 @@ describe("authenticated_fetch", () => {
 
   it("POSTs same-origin refresh then retries the original request on expiry 401", async () => {
     let original_calls = 0;
-    const fetch_mock = vi.fn(async (input: RequestInfo) => {
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/v2/auth/csrf")) {
         return Response.json({ csrf_token: "csrf-from-fetch" });
@@ -116,7 +116,7 @@ describe("authenticated_fetch", () => {
   });
 
   it("retries soft refresh 401s up to max_retries then goes to login", async () => {
-    const fetch_mock = vi.fn(async (input: RequestInfo) => {
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/v2/auth/csrf")) {
         return Response.json({ csrf_token: "csrf-from-fetch" });
@@ -144,7 +144,7 @@ describe("authenticated_fetch", () => {
   });
 
   it("defaults omitted max_retries to five refresh POSTs", async () => {
-    const fetch_mock = vi.fn(async (input: RequestInfo) => {
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/v2/auth/csrf")) {
         return Response.json({ csrf_token: "csrf-from-fetch" });
@@ -171,7 +171,7 @@ describe("authenticated_fetch", () => {
   });
 
   it("goes to login on a hard refresh 401", async () => {
-    const fetch_mock = vi.fn(async (input: RequestInfo) => {
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/v2/auth/csrf")) {
         return Response.json({ csrf_token: "csrf-from-fetch" });

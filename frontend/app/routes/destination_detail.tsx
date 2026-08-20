@@ -250,18 +250,19 @@ export default function DestinationDetailPage({
   if (loaderData == null) {
     return null;
   }
+  const loaded = loaderData;
   const { me } = useOutletContext<AuthenticatedOutletContext>();
-  const can_update = can_update_class(me.permissions, loaderData.class_name);
+  const can_update = can_update_class(me.permissions, loaded.class_name);
   const editable = useMemo(
-    () => editable_field_names(loaderData.layout),
-    [loaderData.layout],
+    () => editable_field_names(loaded.layout),
+    [loaded.layout],
   );
 
   const [editor, set_editor] = useState<EditorSnapshot>(() =>
-    create_editor_snapshot(loaderData.record, editable),
+    create_editor_snapshot(loaded.record, editable),
   );
   const [display_record, set_display_record] = useState<Record<string, unknown>>(
-    loaderData.record,
+    loaded.record,
   );
   const [save_error, set_save_error] = useState<string | null>(null);
   const [pending_refresh, set_pending_refresh] = useState(false);
@@ -283,14 +284,14 @@ export default function DestinationDetailPage({
     if (!pending_refresh || revalidator.state !== "idle") {
       return;
     }
-    set_display_record(loaderData.record);
-    set_editor(reset_editor_from_record(loaderData.record, editable));
+    set_display_record(loaded.record);
+    set_editor(reset_editor_from_record(loaded.record, editable));
     set_save_error(null);
     set_pending_refresh(false);
   }, [
     pending_refresh,
     revalidator.state,
-    loaderData.record,
+    loaded.record,
     editable,
   ]);
 
@@ -368,8 +369,8 @@ export default function DestinationDetailPage({
 
   function on_refresh() {
     // Discard dirty immediately (user asked to reload); then revalidate.
-    set_editor(reset_editor_from_record(loaderData.record, editable));
-    set_display_record(loaderData.record);
+    set_editor(reset_editor_from_record(loaded.record, editable));
+    set_display_record(loaded.record);
     set_save_error(null);
     set_pending_refresh(true);
     revalidator.revalidate();
@@ -382,9 +383,9 @@ export default function DestinationDetailPage({
     <>
       <ShellContextBar>
         <DetailContextBar
-          class_display_name={loaderData.class_display_name}
-          title_token={loaderData.title_token}
-          copy_url={loaderData.copy_path}
+          class_display_name={loaded.class_display_name}
+          title_token={loaded.title_token}
+          copy_url={loaded.copy_path}
           dirty={dirty}
           save_enabled={save_enabled}
           save_pending={fetcher.state !== "idle"}
@@ -412,7 +413,7 @@ export default function DestinationDetailPage({
 
       <DetailForm
         form_ref={form_ref}
-        layout={loaderData.layout}
+        layout={loaded.layout}
         record={form_record}
         draft={editor.draft}
         can_update={can_update}

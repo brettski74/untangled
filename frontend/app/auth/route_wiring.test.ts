@@ -110,7 +110,11 @@ describe("route wiring", () => {
         },
       },
     });
-    expect(result.data.nav?.map((s: { class_name: string }) => s.class_name)).toEqual(
+    expect(result.data.bootstrap).toBe(false);
+    if (result.data.bootstrap) {
+      throw new Error("expected authenticated layout data");
+    }
+    expect(result.data.nav.map((s: { class_name: string }) => s.class_name)).toEqual(
       ["change_request", "incident", "system_config"],
     );
     expect(result.init?.headers).toMatchObject({

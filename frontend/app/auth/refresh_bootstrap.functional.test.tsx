@@ -25,7 +25,7 @@ describe("RefreshBootstrap", () => {
   });
 
   it("renders a blank page and replaces after successful refresh", async () => {
-    const fetch_mock = vi.fn(async (input: RequestInfo) => {
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/v2/auth/csrf")) {
         return Response.json({ csrf_token: "csrf-from-fetch" });

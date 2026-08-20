@@ -23,6 +23,14 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
   return set_cookie.split(";")[0] ?? set_cookie;
 }
 
+function require_data<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  if (value == null) {
+    throw new Error("expected loader data");
+  }
+  return value;
+}
+
 describe("destination_list loader", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
@@ -59,7 +67,7 @@ describe("destination_list loader", () => {
       context: {},
     } as never);
 
-    const body = result.data;
+    const body = require_data(result.data);
     expect(body.class_name).toBe("incident");
     expect(body.total).toBe(1);
     expect(body.rows).toHaveLength(1);
@@ -115,7 +123,7 @@ describe("destination_list loader", () => {
       context: {},
     } as never);
 
-    const body = result.data;
+    const body = require_data(result.data);
     expect(body.rows).toEqual([]);
     expect(body.total).toBe(0);
     expect(body.baseline_predicate).toMatchObject({ op: "and" });
@@ -512,7 +520,7 @@ describe("destination_list filter editor destination identity", () => {
       new URL("./destination_list.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toMatch(/<ListFilterChrome[\s\S]*key=\{loaderData\.path\}/);
+    expect(source).toMatch(/<ListFilterChrome[\s\S]*key=\{loaded\.path\}/);
   });
 });
 
@@ -523,14 +531,14 @@ describe("destination_list context bar destination identity", () => {
       new URL("./destination_list.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toMatch(/list_destination_ui_sync\(loaderData\)/);
+    expect(source).toMatch(/list_destination_ui_sync\(loaded\)/);
     expect(source).toMatch(
       /set_selected_name\(synced\.quick_filter\.selected_name\)/,
     );
     expect(source).toMatch(/set_values\(synced\.quick_filter\.values\)/);
     expect(source).toMatch(/set_sort\(\[\]\)/);
     expect(source).toMatch(
-      /\/\/ Same destination identity[\s\S]*\[loaderData\.path\]/,
+      /\/\/ Same destination identity[\s\S]*\[loaded\.path\]/,
     );
   });
 
