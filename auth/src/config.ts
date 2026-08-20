@@ -2,8 +2,12 @@ import pg from "pg";
 import { createClient } from "redis";
 
 import { make_file_audit_sink, type AuditSink } from "./audit.js";
-import { cookie_secure_from_env } from "./cookie_secure.js";
+import {
+  make_change_password_apply,
+  type ChangePasswordApply,
+} from "./change_password_apply.js";
 import { start_system_config_subscriber } from "./coherence.js";
+import { cookie_secure_from_env } from "./cookie_secure.js";
 import { password_expiry_evaluator, type ExpiryEvaluator } from "./expiry.js";
 import { make_hash_slot_limiter, type HashSlotLimiter } from "./hash_slots.js";
 import { load_private_key, load_public_key } from "./keys.js";
@@ -34,6 +38,7 @@ export type AuthConfig = {
   expiry: ExpiryEvaluator;
   users: UserRepository;
   sessions: SessionRepository;
+  change_password_apply: ChangePasswordApply;
   verify_password: (hash: string, password: string) => Promise<boolean>;
   dummy_hash: string;
   audit: AuditSink;
@@ -160,6 +165,7 @@ export async function load_config_from_env(
     expiry: password_expiry_evaluator(),
     users: make_user_repository(pool),
     sessions: make_session_repository(pool),
+    change_password_apply: make_change_password_apply(pool),
     verify_password,
     dummy_hash,
     audit,

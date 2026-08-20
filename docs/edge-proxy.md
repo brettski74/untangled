@@ -69,7 +69,7 @@ Auth-set cookies are **host-only** (no `Domain`), `SameSite=Lax`, `Secure` on th
 | ------ | ---- |
 | `__untangled_csrf` | Double-submit CSRF; **not** HttpOnly |
 | `__untangled_access` | Access JWT; **HttpOnly**. SSR verifies with the public key and uses the JWT as Bearer to the API. |
-| `__untangled_refresh` | Opaque refresh token; **HttpOnly**. Set on normal login. Must-change login does not set it. Refresh protocol is a later #14 child. |
+| `__untangled_refresh` | Opaque refresh token; **HttpOnly**. Set on normal login and on first refresh after a successful must-change password change. Must-change login does not set it. |
 
 `SameSite=Lax` is **not** enough for login CSRF (forced login does not need an existing cookie). `POST /api/v2/auth/login` requires:
 
@@ -78,7 +78,11 @@ Auth-set cookies are **host-only** (no `Domain`), `SameSite=Lax`, `Secure` on th
 
 Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits `auth.csrf_denied` (`reason` is `origin_mismatch` or `csrf_mismatch` on that one event type). The event records `csrf_header_length` and `csrf_cookie_length` (0 if missing), not raw token values. The client body stays `{ detail: "Forbidden" }` with no reason. SSR and Python API Origin/CSRF failures are [#223](https://github.com/brettski74/untangled/issues/223); they do not emit yet. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503**. Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).
 
-`POST /api/v2/auth/change-password` uses the same Origin + CSRF rules. Success is `{ ok: true, detail: "Password change complete." }` (JWT is **not** in the body); auth sets a replacement `__untangled_access` cookie without `password_change_required`, keeping the previous `exp`.
+`POST /api/v2/auth/change-password` uses the same Origin + CSRF rules. The browser posts directly to auth (SSR does not proxy this request and never sees `__untangled_refresh`). Success is `{ ok: true, detail: "Password change complete." }` (tokens are **not** in the body).
+
+- Must-change session (`refresh_hmac` null): success issues the first refresh cookie (`Path=/api/v2/auth/refresh`) and a replacement `__untangled_access` without `password_change_required`, keeping the previous JWT `exp`. Access cookie `Max-Age` switches to remaining idle time.
+- Already-refreshable session: success does not set cookies (the existing access JWT stays as-is).
+- `invalidate_user_sessions` (boolean request field, default false): when true after success, auth deletes all `user_session` rows for that user and expires both cookies (logout). Outstanding access JWTs on other devices live until claim `exp`.
 
 ## Forwarded client identity
 

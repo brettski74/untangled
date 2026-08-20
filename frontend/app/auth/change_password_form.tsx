@@ -111,6 +111,8 @@ export function ChangePasswordForm({
   const [mask_current, set_mask_current] = useState(true);
   const [mask_new, set_mask_new] = useState(true);
   const [mask_verify, set_mask_verify] = useState(true);
+  const [invalidate_user_sessions, set_invalidate_user_sessions] =
+    useState(false);
   const [client_errors, set_client_errors] = useState<string[]>([]);
   const [success_message, set_success_message] = useState<string | null>(
     action_data?.ok === true ? action_data.detail : null,
@@ -164,6 +166,7 @@ export function ChangePasswordForm({
     set_mask_current(true);
     set_mask_new(true);
     set_mask_verify(true);
+    set_invalidate_user_sessions(false);
     set_client_errors([]);
     set_success_message(null);
     set_api_failure(null);
@@ -207,6 +210,7 @@ export function ChangePasswordForm({
           current_password,
           new_password,
           verify_new_password,
+          invalidate_user_sessions,
         }),
       });
       if (response.status === 401) {
@@ -240,6 +244,10 @@ export function ChangePasswordForm({
         detail = change_password_response_schema.parse(payload).detail;
       } catch {
         // Keep generic success copy when body is missing or malformed.
+      }
+      if (invalidate_user_sessions) {
+        window.location.assign("/login");
+        return;
       }
       if (after_success === "home") {
         window.location.assign("/");
@@ -307,6 +315,19 @@ export function ChangePasswordForm({
         on_change={set_verify_new_password}
         on_toggle_mask={() => set_mask_verify((v) => !v)}
       />
+
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          name="invalidate_user_sessions"
+          className="mt-0.5"
+          checked={invalidate_user_sessions}
+          onChange={(event) =>
+            set_invalidate_user_sessions(event.target.checked)
+          }
+        />
+        <span>Log out all of your user sessions (including this one)?</span>
+      </label>
 
       {client_errors.length > 0 ? (
         <div

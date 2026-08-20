@@ -8,6 +8,7 @@ import { jwtVerify } from "jose";
 import {
   ACCESS_COOKIE_NAME,
   CSRF_COOKIE_NAME,
+  REFRESH_COOKIE_NAME,
   parse_cookie_header,
 } from "../src/cookies.js";
 import { create_server } from "../src/server.js";
@@ -129,7 +130,7 @@ describe("auth me + change-password", () => {
     });
   });
 
-  it("change-password requires Origin/CSRF and reissues without the claim", async () => {
+  it("change-password requires Origin/CSRF and does not reissue tokens on a normal session", async () => {
     const access = await login_access();
     const { token, cookie } = await issue_csrf();
     const denied = await fetch(`${base_url}/api/v2/auth/change-password`, {
@@ -166,9 +167,14 @@ describe("auth me + change-password", () => {
     const payload = (await ok.json()) as { ok: boolean; detail: string };
     assert.equal(payload.ok, true);
     assert.equal("access_token" in payload, false);
-    const value = cookie_value(ok.headers.getSetCookie(), ACCESS_COOKIE_NAME);
-    assert.ok(value != null);
-    const { payload: jwt_payload } = await jwtVerify(value, public_key, {
+    assert.equal("refresh_token" in payload, false);
+    const set_cookies = ok.headers.getSetCookie();
+    assert.equal(cookie_from_set_cookie(set_cookies, ACCESS_COOKIE_NAME), undefined);
+    assert.equal(
+      cookie_from_set_cookie(set_cookies, REFRESH_COOKIE_NAME),
+      undefined,
+    );
+    const { payload: jwt_payload } = await jwtVerify(access, public_key, {
       algorithms: ["ES256"],
     });
     assert.equal(jwt_payload.sub, TEST_USER_ID);

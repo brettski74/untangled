@@ -40,9 +40,9 @@ import { origin_is_exact_match } from "./origin.js";
 import {
   PASSWORD_CHANGE_FAILED,
   PASSWORD_CHANGE_OK,
+  execute_change_password,
   password_change_audit,
   remaining_access_exp,
-  run_change_password,
 } from "./change_password.js";
 
 const CSRF_PATH = "/api/v2/auth/csrf";
@@ -584,7 +584,12 @@ const change_password_schema = z.object({
   current_password: z.string().optional(),
   new_password: z.string().optional(),
   verify_new_password: z.string().optional(),
+  invalidate_user_sessions: z.union([z.boolean(), z.string()]).optional(),
 });
+
+function parse_invalidate_user_sessions(value: unknown): boolean {
+  return value === true || value === "true" || value === "on" || value === "1";
+}
 
 async function handle_change_password(
   request: IncomingMessage,
@@ -652,8 +657,8 @@ async function handle_change_password(
     json(response, 401, { detail: "Could not validate credentials" });
     return;
   }
-  const user = await config.users.load_by_id(payload.sub as string);
-  if (user == null) {
+  const user_id = payload.sub as string;
+  if (typeof user_id !== "string" || user_id === "") {
     json(response, 401, { detail: "Could not validate credentials" });
     return;
   }
@@ -667,25 +672,46 @@ async function handle_change_password(
     return;
   }
 
-  const outcome = await run_change_password(
-    user,
-    {
-      current_password: parsed.current_password ?? "",
-      new_password: parsed.new_password ?? "",
-      verify_new_password: parsed.verify_new_password ?? "",
-    },
-    settings,
-    config.users,
-    config.verify_password,
+  const invalidate_user_sessions = parse_invalidate_user_sessions(
+    parsed.invalidate_user_sessions,
   );
+  const user_agent_header = header_value(request.headers["user-agent"]);
+  let outcome;
+  try {
+    outcome = await execute_change_password(config.change_password_apply, {
+      user_id,
+      session_id: session_id_claim(payload),
+      input: {
+        current_password: parsed.current_password ?? "",
+        new_password: parsed.new_password ?? "",
+        verify_new_password: parsed.verify_new_password ?? "",
+      },
+      invalidate_user_sessions,
+      settings,
+      verify_password: config.verify_password,
+      refresh_hmac_secret: config.refresh_hmac_secret,
+      ip_address: identity.source_ip ?? null,
+      user_agent:
+        user_agent_header == null || user_agent_header === ""
+          ? null
+          : user_agent_header,
+    });
+  } catch {
+    json(response, 500, { detail: "Internal error" });
+    return;
+  }
 
+  if (outcome.kind === "missing_user") {
+    json(response, 401, { detail: "Could not validate credentials" });
+    return;
+  }
   if (outcome.kind === "locked") {
     await password_change_audit(config.audit, {
       success: false,
-      user_id: user.id,
+      user_id,
       ip_address: identity.source_ip,
       reason: "password_change_locked",
-      data: { username: user.username },
+      data: { username: outcome.username },
     });
     json(response, 401, { detail: ACCESS_DENIED });
     return;
@@ -693,30 +719,66 @@ async function handle_change_password(
   if (outcome.kind === "failed") {
     await password_change_audit(config.audit, {
       success: false,
-      user_id: user.id,
+      user_id,
       ip_address: identity.source_ip,
       reason: "password_change_failed",
-      data: { username: user.username },
+      data: { username: outcome.username },
     });
     json(response, 422, { detail: PASSWORD_CHANGE_FAILED });
     return;
   }
 
-  const exp = remaining_access_exp(payload);
-  const token = await sign_access_token(config.private_key, user.id, {
-    exp,
-    sid: session_id_claim(payload),
-  });
-  response.setHeader(
-    "Set-Cookie",
-    access_cookie(token, config.cookie_secure, Math.max(1, (exp ?? 1) - Math.floor(Date.now() / 1000))),
-  );
+  if (outcome.effect.kind === "logged_out") {
+    response.setHeader("Set-Cookie", [
+      expire_access_cookie(config.cookie_secure),
+      expire_refresh_cookie(config.cookie_secure),
+    ]);
+    await password_change_audit(config.audit, {
+      success: true,
+      user_id,
+      ip_address: identity.source_ip,
+      reason: "password_change_ok",
+      data: {
+        username: outcome.username,
+        invalidate_user_sessions: true,
+      },
+    });
+    json(response, 200, { ok: true, detail: PASSWORD_CHANGE_OK });
+    return;
+  }
+
+  if (outcome.effect.kind === "first_refresh") {
+    const exp = remaining_access_exp(payload);
+    let token: string;
+    try {
+      token = await sign_access_token(config.private_key, user_id, {
+        exp,
+        sid: session_id_claim(payload),
+      });
+    } catch {
+      json(response, 500, { detail: "Internal error" });
+      return;
+    }
+    response.setHeader("Set-Cookie", [
+      access_cookie(
+        token,
+        config.cookie_secure,
+        outcome.effect.refresh_max_age,
+      ),
+      refresh_cookie(
+        outcome.effect.refresh_token,
+        config.cookie_secure,
+        outcome.effect.refresh_max_age,
+      ),
+    ]);
+  }
+
   await password_change_audit(config.audit, {
     success: true,
-    user_id: user.id,
+    user_id,
     ip_address: identity.source_ip,
     reason: "password_change_ok",
-    data: { username: user.username },
+    data: { username: outcome.username },
   });
   json(response, 200, { ok: true, detail: PASSWORD_CHANGE_OK });
 }
