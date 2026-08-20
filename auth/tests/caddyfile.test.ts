@@ -46,3 +46,12 @@ describe("Caddyfile path contract", () => {
     );
   });
 });
+
+describe("web / Vite must not proxy auth-session paths", () => {
+  it("does not reverse-proxy /api/v2/auth through the SSR dev server", () => {
+    const vite = readFileSync(join(repo_root, "frontend", "vite.config.ts"), "utf8");
+    assert.doesNotMatch(vite, /proxy\s*:/);
+    assert.doesNotMatch(vite, /\/api\/v2\/auth/);
+    assert.doesNotMatch(vite, /UNTANGLED_AUTH_ORIGIN/);
+  });
+});

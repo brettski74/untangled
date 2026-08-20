@@ -2,7 +2,7 @@
 
 Untangled is **containers-first**: `make up` brings up PostgreSQL, Redis, the API, the web app, the auth service, and (locally) an HTTPS reverse proxy via Compose (Podman or Docker).
 
-For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` on the host (with `make db-up` / `make redis-up` if you need Postgres or Redis). Those are not required for the Compose runtime.
+For iterative coding with hot reload, use `make backend-dev` / `make frontend-dev` / `make auth-dev` on the host (with `make db-up` / `make redis-up` if you need Postgres or Redis). Those are not required for the Compose runtime. Browser login and `/api/v2/auth` stay on Caddy (`https://localhost:8443`); the Vite dev server does not proxy auth.
 
 Schema apply and baseline seed are **intentional**: after `make up`, run `make migrate` then `make seed`. Neither runs automatically on Compose start.
 
@@ -88,7 +88,7 @@ API processes publish and subscribe **cache-coherence / invalidation** signals o
 | Connections | Command clients (publish / future GET/SET) are separate from dedicated subscriber connections |
 | API startup | Subscriber for system-config flush starts in process lifespan; missing/unreachable Redis fails loudly |
 | Publish on write | Fail-soft: system-config write still succeeds; publish failure is logged (Redis URLs redacted) |
-| SSR / web | Auth and SSR each hold a TTL cache of `system_config` and subscribe-on-boot to the flush topic (this is the #224 auth-side subscribe, folded here). Web Compose injects `UNTANGLED_REDIS_URL`; Redis hardening remains [#182](https://github.com/brettski74/untangled/issues/182) |
+| SSR / web | Auth and API hold last-known-good `system_config` in process memory (coherence **kicks a reload** and does not drop the object). Web still TTL-caches password-policy reads with the operator JWT. Web Compose injects `UNTANGLED_REDIS_URL`; Redis hardening remains [#182](https://github.com/brettski74/untangled/issues/182) |
 | Spoof / integrity | Unauthenticated local Redis can deliver spoofed invalidates — residual until #182 |
 
 Host `make backend-dev` expects Redis reachable at the default URL (`make redis-up` if needed). The unset-env host default is a **local-dev convenience only** — production-capable deploys must set an explicit `UNTANGLED_REDIS_URL` (Compose already does); an explicitly empty value fails closed.
@@ -97,8 +97,8 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 | Setting | Default (Compose / docs) |
 | ------- | ------------------------ |
 | `UNTANGLED_JWT_PRIVATE_KEY_PATH` / `UNTANGLED_JWT_PUBLIC_KEY_PATH` | Gitignored `deploy/jwt/dev-es256-*.pem` (`make local-jwt-keys`). Auth gets both; API and web get the public key only. |
-| `UNTANGLED_REFRESH_HMAC_SECRET_PATH` | Gitignored `deploy/jwt/refresh_secret.b64` (`make local-refresh-hmac` / `make up`). Auth-only; API, web, and Caddy must not receive this file. Base64 of ≥32 CSPRNG bytes. Missing, empty, invalid base64, or too-short decoded material → auth does not start. Auth never generates this file. Operators / Rocky CI provision it for non-Make deploys (`UNTANGLED_REFRESH_HMAC_SECRET` GitHub Environment secret is written to the file; it is not a container env). Login issuance TTLs come from `session_access_ttl_seconds`, `session_refresh_ttl_seconds`, and `session_total_ttl_seconds` on the `system_config` singleton (not env vars). |
-| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose / Playwright: `https://localhost:8443`. Host-dev Vite: `http://localhost:5173` |
+| `UNTANGLED_REFRESH_HMAC_SECRET_PATH` | Gitignored `deploy/jwt/refresh_secret.b64` (`make local-refresh-hmac` / `make up`). Auth-only; API, web, and Caddy must not receive this file. Base64 of ≥32 CSPRNG bytes. Missing, empty, invalid base64, or too-short decoded material → auth does not start. Auth never generates this file. Operators / Rocky CI provision it for non-Make deploys (`UNTANGLED_REFRESH_HMAC_SECRET` GitHub Environment secret is written to the file; it is not a container env). Login issuance TTLs come from `session_access_ttl_seconds`, `session_refresh_ttl_seconds`, and `session_total_ttl_seconds` on the `system_config` singleton (not env vars). Refresh soft-fail 401 includes `session_max_refresh_retries` as `max_retries`. Auth cleanup period is `session_refresh_cleanup_seconds`. |
+| `UNTANGLED_PUBLIC_ORIGIN` | Exact browser origin. Compose / Playwright / host `make auth-dev`: `https://localhost:8443` |
 | `UNTANGLED_COOKIE_SECURE` | `false` for plain-HTTP local (must set explicitly; unset defaults to Secure); `true` behind HTTPS |
 | `UNTANGLED_API_BASE_URL` | Compose web: `http://api:8000`; host `make frontend-dev`: `http://localhost:8000` |
 | `UNTANGLED_AUTH_BASE_URL` | Compose web SSR: `http://auth:3000`; host `make frontend-dev`: `http://localhost:3001` (`GET /api/v2/auth/me`) |
@@ -121,7 +121,7 @@ Host `make backend-dev` expects Redis reachable at the default URL (`make redis-
 - Auth login events use the **original client IP** from the trusted `Forwarded` header Caddy overwrites (else the socket peer). API `ip_address` is still the **direct peer** as seen by the API (in Compose UI traffic this is often the `web` container). Full trusted-proxy / `X-Forwarded-For` policy is tracked separately (#67).
 - Bulk-read volume thresholds live on `system_config` (`audit_bulk_read_window_seconds`, `audit_bulk_read_max_searches`): crossing them emits a **signal-only** event (no throttle).
 
-`password_*` `system_config` attributes are **password policy**. `login_*` attributes are **authentication process** (padding window, per-process hash concurrency, failed-attempt lock-of-record, Redis delay/lockout). Do not mix those prefixes. Login padding applies to **failed** attempts only; success returns immediately. When no hash slot is free the auth process returns **503** (capacity, not an auth verdict) and does not wait. PostgreSQL `failed_login_count` / `login_maximum_failed_count` is the account lock-of-record until admin unlock (#209). Redis rate-limit contexts (per folded username or `invalid-or-oversize`, and per source IP) are created only on failed login; evaluate returns a delay and does not sleep. Defaults: sample period S=300 s, lockout L=900 s, thresholds 10, L1/L2 delays 500/2000 ms. Prefix budget `login_rate_limit_max_kib` (min/default/max 8192/16384/262144 kiB): async purge of empty expired contexts above 80%; refuse new contexts if still over budget (existing lockouts are kept). Residual: an attacker who knows a valid username can still increment the PostgreSQL counter until the account is locked, and can L3-lock that username in Redis for L seconds after a Th burst. Auth cache of these knobs is TTL-only until [#224](https://github.com/brettski74/untangled/issues/224).
+`password_*` `system_config` attributes are **password policy**. `login_*` attributes are **authentication process** (padding window, per-process hash concurrency, failed-attempt lock-of-record, Redis delay/lockout). Do not mix those prefixes. Login padding applies to **failed** attempts only; success returns immediately. When no hash slot is free the auth process returns **503** (capacity, not an auth verdict) and does not wait; login and change-password use distinct `detail` copy. PostgreSQL `failed_login_count` / `login_maximum_failed_count` is the account lock-of-record until admin unlock (#209). Redis rate-limit contexts (per folded username or `invalid-or-oversize`, and per source IP) are created only on failed login; evaluate returns a delay and does not sleep. Defaults: sample period S=300 s, lockout L=900 s, thresholds 10, L1/L2 delays 500/2000 ms. Prefix budget `login_rate_limit_max_kib` (min/default/max 8192/16384/262144 kiB): async purge of empty expired contexts above 80%; refuse new contexts if still over budget (existing lockouts are kept). Residual: an attacker who knows a valid username can still increment the PostgreSQL counter until the account is locked, and can L3-lock that username in Redis for L seconds after a Th burst. Auth and API `system_config` caches keep last-known-good on a failed reload (coherence kicks reload; they do not serve empty).
 
 Seed users (usernames are case-normalized to lowercase):
 
@@ -186,19 +186,19 @@ Authenticated but unauthorized → **403**. Missing/invalid Bearer → **401**.
 
 ### UI login (SSR gate)
 
-Local-dev convention: after `make up` + `make migrate` + `make seed`, open `https://localhost:8443` (trust the local cert or use `curl -k`) and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above). `https://127.0.0.1:8443` redirects there (`127.0.0.1` is a different origin). Host-dev: `make auth-dev` in one terminal and `make frontend-dev` in another, then `http://localhost:5173`.
+Local-dev convention: after `make up` + `make migrate` + `make seed`, open `https://localhost:8443` (trust the local cert or use `curl -k`) and sign in with a seed user (`admin` / `readonly` / `readwrite` / `change` / `incident` and their default passwords above). `https://127.0.0.1:8443` redirects there (`127.0.0.1` is a different origin). Do not browse `:5173` or `:3001` for login; the reverse proxy is the only browser path to `/api/v2/auth`.
 
 - Unauthenticated routes redirect to `/login` (fail-closed).
 - The login page is SSR; the browser posts to `POST /api/v2/auth/login` after `GET /api/v2/auth/csrf`. Auth sets HttpOnly `__untangled_access` (ES256). The JWT is not in the JSON body.
 - SSR verifies that cookie with the public key and calls the API with Bearer. The authenticated layout loads `GET /api/v2/auth/me` on the auth service once per navigation tree; the header user chip uses display name (hover = username). A signed `password_change_required` claim redirects every nested route to `/expired-password` (bare form, no shell).
-- Access expiry / API **401** expires the cookie and returns to login; **403** keeps the session. Token refresh is #14; YAML nav destinations are #66; broader auth security review is #67. Login padding, hash-capacity shedding, PostgreSQL failed-count lock-of-record, and Redis delay/L3 (#214) are in place. Password expiry / grace / must-change is #215; change-password abuse controls are #216.
+- Access expiry: **document GET** with an expired-but-valid JWT (not must-change) returns 200 bootstrap HTML; nested loaders do not fetch. Browser JS CSRF-POSTs `/api/v2/auth/refresh` then `location.replace`s. Invalid/missing access, expired must-change, and leftover SSR mutations go to login ([#238](https://github.com/brettski74/untangled/issues/238)). API **401** with `retry: true` is expiry (in-app JS refreshes); hard 401 / **403** do not. YAML nav destinations are #66; broader auth security review is #67. Login padding, hash-capacity shedding, PostgreSQL failed-count lock-of-record, and Redis delay/L3 (#214) are in place. Password expiry / grace / must-change is #215; change-password abuse controls are #216.
 
 Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default with explicit local opt-out. Access cookie `Path=/`; refresh cookie `Path=/api/v2/auth/refresh` only (not sent to SSR or the API). Access JWT `exp` uses `session_access_ttl_seconds`; access cookie `Max-Age` follows remaining idle/hard-cap on a normal login and JWT lifetime on must-change. The JWT is never exposed to browser JavaScript. Path and CSRF details: [edge-proxy.md](./edge-proxy.md).
 
 ### `/docs` Authorize loop
 
 1. Open `http://localhost:8000/docs`.
-2. Sign in through the UI (Compose `:8443` or host-dev `:5173`), then copy the `__untangled_access` cookie value from the browser's cookie inspector (HttpOnly: not visible to page script).
+2. Sign in through the UI at `https://localhost:8443`, then copy the `__untangled_access` cookie value from the browser's cookie inspector (HttpOnly: not visible to page script).
 3. Click **Authorize**, paste that JWT as Bearer, then Try-it-out on domain record routes. Identity/RBAC bootstrap is `GET /api/v2/auth/me` on the auth service (not Python). Python does not mount `/auth/*`.
 4. Exercise Incident / Change Request CRUD (after `make migrate` + `make seed`):
    - Live record contract: `GET /api/v2/incident/{locator}` /
@@ -213,8 +213,8 @@ Cookie posture: `httpOnly`, `sameSite=lax`, host-only, `secure` on by default wi
      and [API versioning](#api-versioning) below).
    - Omit `predicate` or set it to `null` to match all rows (still paginated / sorted / projected).
    - Empty matches → **200** with `items: []`, `total: 0` (never **404**).
-6. When the access token expires (~15m), sign in again through the UI (refresh is #14).
-7. Sign out from the header menu is a POST form to `/logout`. The POST forwards CSRF+Origin to auth; `GET /logout` is 405. On success it asks auth to delete this `user_session` and expires `__untangled_access` and `__untangled_refresh`. If auth is unreachable, SSR returns 503 and keeps the cookies. JS auto-refresh is a later [#14](https://github.com/brettski74/untangled/issues/14) child.
+6. When the access token expires (~15m), reload the page: document GET bootstrap CSRF-POSTs refresh at the same URL. In-app API calls refresh the same way. Sign in again only after a hard refresh failure.
+7. Sign out from the header menu is a POST form to `/logout`. The POST forwards CSRF+Origin to auth; `GET /logout` is 405. On success it asks auth to delete this `user_session` and expires `__untangled_access` and `__untangled_refresh`. If auth is unreachable, SSR returns 503 and keeps the cookies.
 
 ### API versioning
 
@@ -425,7 +425,7 @@ Six incident rows and fourteen change_request rows are seeded; full stable UUID 
 | `make migrate` | Apply YAML schema intent via production CLI (`python -m untangled.schema`) |
 | `make seed` | Idempotent seed of baseline users + RBAC + sample INC/CHG (`python -m untangled.seed`) |
 | `make backend-dev` | Run FastAPI with reload on the host (port 8000) |
-| `make frontend-dev` | Run React Router dev server on the host (port 5173; proxies `/api/v2/auth` to `:3001`) |
+| `make frontend-dev` | Run React Router dev server on the host (port 5173; SSR HMR only — does not proxy `/api/v2/auth`) |
 | `make auth-dev` | Run the auth service on the host (port 3001) |
 | `make lint` | Backend `ruff` + frontend TypeScript typecheck + auth typecheck |
 | `make test` | Backend pytest (starts DB + Redis; uses migrate path) + frontend build smoke + auth unit tests |
@@ -458,7 +458,7 @@ Ensure host ports **5432**, **6379**, **8000**, **3000**, **3001**, **5173**, an
 | web | `3000` | Maps to container port **3000**. |
 | auth | `3001` | Maps to container port **3000**. Customer edge / host-dev. Not the browser credential origin. |
 | proxy | `8443` | Local HTTPS browser origin (`local-edge` profile). Playwright default. See [edge-proxy.md](./edge-proxy.md). |
-| Vite | `5173` | Host-dev only (`make frontend-dev`). Not the e2e origin. |
+| Vite | `5173` | Host SSR HMR (`make frontend-dev`). Not a browser credential origin; does not proxy `/api/v2/auth`. |
 
 ## Smoke tests
 
@@ -493,7 +493,7 @@ make e2e-smoke   # CI-equivalent gate
 make e2e         # full suite
 ```
 
-Override base URL with `PLAYWRIGHT_BASE_URL` if needed. Playwright ignores the self-signed local Caddy cert (`ignoreHTTPSErrors`); that is a test fixture, not a product TLS profile. `make frontend-dev` on `:5173` is interactive host-dev only (Vite proxies `/api/v2/auth` to the auth service) and is not an e2e origin.
+Override base URL with `PLAYWRIGHT_BASE_URL` if needed. Playwright ignores the self-signed local Caddy cert (`ignoreHTTPSErrors`); that is a test fixture, not a product TLS profile. `make frontend-dev` on `:5173` is SSR HMR only; it does not proxy `/api/v2/auth` and is not an e2e or login origin.
 
 After `make db-up` only (postgres):
 
@@ -521,8 +521,8 @@ Authenticated browser login posts to `/api/v2/auth/` on the public origin. Domai
 | `make up` / `make down` | Full Compose runtime (postgres + redis + api + web + auth + local-edge proxy); **no auto-migrate/seed** | — |
 | `make migrate` / `python -m untangled.schema` | Diff-based schema apply (YAML intent → DB) | Domain classes via same path |
 | `make seed` / `python -m untangled.seed` | Users + RBAC + sample INC/CHG (intentional) | Role-admin HTTP APIs later |
-| Auth (`POST /api/v2/auth/login`, `GET /me`, `POST /change-password`, `POST /logout`) | ES256 access JWT from auth; API/SSR verify public key; Python `/auth/*` unmounted; login padding / hash cap / PG failed-count lock (#213); Redis RL delay/L3/purge (#214); password expiry / grace / must-change (#215); auth + SSR `system_config` coherence subscribe; Sign out deletes this `user_session`; must-change password success issues the first refresh cookie; `invalidate_user_sessions` on change-password logs out all of that user's sessions | JS/document auto-refresh (#14); change-password abuse (#216); unlock (#209) |
-| Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` on `/api/v2/auth/` (me, change-password, logout); Caddy local-edge; Playwright `https://localhost:8443` | JS/document auto-refresh (#14 children 6–7) |
+| Auth (`POST /api/v2/auth/login`, `GET /me`, `POST /change-password`, `POST /logout`, `POST /refresh`) | ES256 access JWT from auth; API/SSR verify public key; Python `/auth/*` unmounted; login padding / hash cap / PG failed-count lock (#213); Redis RL delay/L3/purge (#214); password expiry / grace / must-change (#215); auth + API last-known-good `system_config` cache; Sign out deletes this `user_session`; must-change password success issues the first refresh cookie; `invalidate_user_sessions` on change-password logs out all of that user's sessions; document-GET bootstrap + in-app JS refresh; leftover SSR mutations [#238](https://github.com/brettski74/untangled/issues/238) | Change-password abuse (#216); unlock (#209) |
+| Auth service + HTTPS proxy | Real login + CSRF + `__untangled_access` / `__untangled_refresh` on `/api/v2/auth/` (me, change-password, logout, refresh); Caddy local-edge; Playwright `https://localhost:8443` | — |
 | Incident / Change Request CRUD | Authenticated create/fetch/update/delete; UUID or friendly_id locator | — |
 | Predicate search (`POST …/search`) | Envelope, logical ops, `eq`/`ne`/`empty`/`not_empty`, ordered `gt`/`gte`/`lt`/`lte` (#52), text patterns (#53), sort/projection/pagination (#51 / epic #11) | Case-insensitive search + text sort collation (#61); search-editor progressive limit UX (#152) |
 | `make db-up` / Postgres | Real DB for mapping persistence / tests | Keep persistence stack as domain grows |
@@ -531,7 +531,7 @@ Authenticated browser login posts to `/api/v2/auth/` on the public origin. Domai
 | Class definitions + `make models` | Real codegen (includes Create/Update models) | See [class-definitions.md](./class-definitions.md) |
 | Persistence (`untangled.persistence`) | Thin SQL create/fetch/update/delete + friendly_id assign | Domain routes stamp authenticated actor |
 | System principal (`SYSTEM_USER_ID`) | Distinct non-login actor for migrate/bootstrap/non-HTTP stamps | HTTP writes use the authenticated user; `#155` bootstrap uses this id |
-| Frontend SSR login + shell chrome | Real `/login`, httpOnly access JWT cookie, header/nav/context chrome | YAML nav (#66), refresh (#14) |
+| Frontend SSR login + shell chrome | Real `/login`, httpOnly access JWT cookie, header/nav/context chrome, document-GET refresh bootstrap | YAML nav (#66), leftover SSR mutations (#238) |
 | `backend/requirements.lock` | Pinned deps | Regenerate when `pyproject.toml` changes |
 | `frontend/package-lock.json` | Pinned deps | Regenerate when `package.json` changes |
 | `auth/package-lock.json` | Pinned deps | Regenerate when `auth/package.json` changes |

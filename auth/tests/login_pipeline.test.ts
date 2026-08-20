@@ -392,7 +392,9 @@ describe("login http outcomes", () => {
         body: "username=admin&password=admin-change-me",
       });
       assert.equal(response.status, 503);
-      assert.deepEqual(await response.json(), { detail: "Service unavailable" });
+      assert.deepEqual(await response.json(), {
+        detail: "Sign-in is temporarily busy. Try again in a moment.",
+      });
     });
   });
 

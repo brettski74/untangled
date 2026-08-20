@@ -9,7 +9,6 @@ import {
 } from "../auth/gate.server";
 import { LogoutForm } from "../auth/logout_form";
 import { parse_password_policy } from "../auth/password_policy";
-import { session_max_refresh_retries_from_config } from "../auth/refresh_fetch";
 import { get_access_session, read_csrf_cookie } from "../auth/session.server";
 import { get_cached_system_config } from "../auth/system_config_cache.server";
 import type { Route } from "./+types/expired_password";
@@ -46,9 +45,6 @@ export async function loader({ request }: Route.LoaderArgs) {
         display_name: me.display_name,
         policy,
         csrf_token: read_csrf_cookie(request),
-        max_refresh_retries: session_max_refresh_retries_from_config(
-          record.session_max_refresh_retries,
-        ),
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );
@@ -69,8 +65,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function ExpiredPasswordPage({
   loaderData,
 }: Route.ComponentProps) {
-  const { username, display_name, policy, csrf_token, max_refresh_retries } =
-    loaderData;
+  const { username, display_name, policy, csrf_token } = loaderData;
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-10">
@@ -85,7 +80,6 @@ export default function ExpiredPasswordPage({
           username={username}
           display_name={display_name}
           policy={policy}
-          max_refresh_retries={max_refresh_retries}
           after_success="home"
         />
         <LogoutForm

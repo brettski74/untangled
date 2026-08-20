@@ -84,6 +84,7 @@ def test_system_config_peer_cache_invalidates_on_publish(
     peer = SystemConfigCache()
     peer._entry = _CacheEntry(value=_Cfg(), expires_at=time.monotonic() + 900)
     assert peer._entry is not None
+    original_expiry = peer._entry.expires_at
 
     stop = start_system_config_subscriber(bus=redis_bus, cache=peer)
     try:
@@ -92,7 +93,12 @@ def test_system_config_peer_cache_invalidates_on_publish(
             SYSTEM_CONFIG_INVALIDATE_TOPIC,
             SYSTEM_CONFIG_INVALIDATE_PAYLOAD,
         )
-        _wait_until(lambda: peer._entry is None)
+        _wait_until(
+            lambda: peer._entry is not None
+            and peer._entry.expires_at < original_expiry
+        )
+        assert peer._entry is not None
+        assert peer._entry.value.system_config_cache_ttl_seconds == 900
     finally:
         stop()
 
@@ -119,7 +125,9 @@ def test_notify_fail_soft_logs_without_raising(
     with caplog.at_level(logging.ERROR, logger="untangled.coherence"):
         notify_system_config_changed(bus=BrokenBus(), cache=cache)
 
-    assert cache._entry is None
+    assert cache._entry is not None
+    assert cache._entry.expires_at <= time.monotonic()
+    assert cache._entry.value.system_config_cache_ttl_seconds == 900
     assert any("system-config coherence publish failed" in r.message for r in caplog.records)
     for record in caplog.records:
         assert "s3cret" not in record.getMessage()

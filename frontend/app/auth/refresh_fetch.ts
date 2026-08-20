@@ -6,9 +6,9 @@ const CSRF_PATH = "/api/v2/auth/csrf";
 const LOGIN_PATH = "/api/v2/auth/login";
 const REFRESH_PATH = "/api/v2/auth/refresh";
 
-export type AuthenticatedFetchOptions = RequestInit & {
-  max_refresh_retries?: number;
-};
+export type AuthenticatedFetchOptions = RequestInit;
+
+export type RefreshAttemptResult = "ok" | "hard_fail";
 
 export function session_max_refresh_retries_from_config(
   value: unknown,
@@ -52,7 +52,7 @@ function is_refresh_bootstrap(href: string): boolean {
   }
 }
 
-function assign_login(): void {
+export function assign_login(): void {
   if (typeof window === "undefined") {
     return;
   }
@@ -63,22 +63,27 @@ function assign_login(): void {
   );
 }
 
+async function parse_json_body(response: Response): Promise<unknown> {
+  try {
+    return await response.clone().json();
+  } catch {
+    return null;
+  }
+}
+
 async function response_allows_refresh(response: Response): Promise<boolean> {
   if (response.status !== 401) {
     return false;
   }
-  try {
-    const body: unknown = await response.clone().json();
-    return body_allows_refresh(body);
-  } catch {
-    return false;
-  }
+  return body_allows_refresh(await parse_json_body(response));
 }
 
-async function csrf_token(): Promise<string> {
-  const from_cookie = csrf_token_from_document_cookie();
-  if (from_cookie !== "") {
-    return from_cookie;
+async function csrf_token(force_fetch = false): Promise<string> {
+  if (!force_fetch) {
+    const from_cookie = csrf_token_from_document_cookie();
+    if (from_cookie !== "") {
+      return from_cookie;
+    }
   }
   const response = await fetch(CSRF_PATH, { credentials: "include" });
   if (!response.ok) {
@@ -100,8 +105,8 @@ async function csrf_token(): Promise<string> {
   return "";
 }
 
-async function post_refresh(): Promise<Response> {
-  const token = await csrf_token();
+async function post_refresh(force_csrf_fetch = false): Promise<Response> {
+  const token = await csrf_token(force_csrf_fetch);
   const headers = new Headers({
     Accept: "application/json",
   });
@@ -116,6 +121,35 @@ async function post_refresh(): Promise<Response> {
 }
 
 /**
+ * POST ``/api/v2/auth/refresh`` until success, a hard failure, or the live
+ * ``max_retries`` bound (total attempts including the first POST). Soft 401
+ * bodies supply ``max_retries``; omitted or out-of-range values use 5.
+ */
+export async function run_refresh_attempts(): Promise<RefreshAttemptResult> {
+  let attempts = 0;
+  let bound = DEFAULT_SESSION_MAX_REFRESH_RETRIES;
+  while (true) {
+    attempts += 1;
+    const refreshed = await post_refresh(attempts === 1);
+    if (refreshed.status === 200) {
+      return "ok";
+    }
+    const body = await parse_json_body(refreshed);
+    if (refreshed.status === 401 && body_allows_refresh(body)) {
+      bound = session_max_refresh_retries_from_config(
+        typeof body === "object" && body != null && "max_retries" in body
+          ? (body as { max_retries: unknown }).max_retries
+          : undefined,
+      );
+      if (attempts < bound) {
+        continue;
+      }
+    }
+    return "hard_fail";
+  }
+}
+
+/**
  * Same-origin fetch that CSRF-POSTs ``/api/v2/auth/refresh`` on retryable
  * resource 401s, then retries the original request. 403 never refreshes.
  * Hard 401 (no ``retry``) sends the operator to login.
@@ -124,16 +158,12 @@ export async function authenticated_fetch(
   input: RequestInfo | URL,
   init: AuthenticatedFetchOptions = {},
 ): Promise<Response> {
-  const { max_refresh_retries, ...request_init } = init;
-  const cap =
-    max_refresh_retries ?? DEFAULT_SESSION_MAX_REFRESH_RETRIES;
-  const bound = Math.min(10, Math.max(1, cap));
   const href = request_href(input);
   const skip_refresh = is_refresh_bootstrap(href);
 
   const original = await fetch(input, {
-    ...request_init,
-    credentials: request_init.credentials ?? "include",
+    ...init,
+    credentials: init.credentials ?? "include",
   });
   if (skip_refresh || original.status === 403) {
     return original;
@@ -146,19 +176,12 @@ export async function authenticated_fetch(
     return original;
   }
 
-  for (let attempt = 0; attempt < bound; attempt += 1) {
-    const refreshed = await post_refresh();
-    if (refreshed.status === 200) {
-      return fetch(input, {
-        ...request_init,
-        credentials: request_init.credentials ?? "include",
-      });
-    }
-    if (refreshed.status === 401 && (await response_allows_refresh(refreshed))) {
-      continue;
-    }
-    assign_login();
-    return refreshed;
+  const refreshed = await run_refresh_attempts();
+  if (refreshed === "ok") {
+    return fetch(input, {
+      ...init,
+      credentials: init.credentials ?? "include",
+    });
   }
   assign_login();
   return original;

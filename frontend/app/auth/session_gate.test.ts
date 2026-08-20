@@ -8,8 +8,10 @@ import {
 import { api_fetch_with_token, session_action_for_status } from "./api.server";
 import { ApiForbiddenError, ApiUnauthorizedError } from "./errors";
 import {
+  DOCUMENT_BOOTSTRAP,
   redirect_unauthenticated,
   redirect_unauthorized,
+  require_document_access,
 } from "./gate.server";
 import {
   ACCESS_COOKIE_NAME,
@@ -70,6 +72,48 @@ describe("auth gate + session", () => {
     expect(response.headers.get("Location")).toBe(
       "/login?next=%2Fprotected%3Fx%3D1",
     );
+  });
+
+  it("require_document_access returns bootstrap on expired GET and login otherwise", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const expired = fake_access_token(60, { iat: now - 120, exp: now - 10 });
+    const set_cookie = await commit_access_token(
+      new Request("http://web.test/"),
+      expired,
+    );
+    const cookie = cookie_header_from_set_cookie(set_cookie);
+    const get_request = new Request("http://web.test/incident/lists/all", {
+      headers: { Cookie: cookie },
+    });
+    expect(await require_document_access(get_request)).toBe(DOCUMENT_BOOTSTRAP);
+    expect(await get_access_token(get_request)).toBeNull();
+
+    const post_request = new Request("http://web.test/incident/lists/all", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    await expect(require_document_access(post_request)).rejects.toMatchObject({
+      status: 302,
+    });
+
+    const must_change = fake_access_token(60, {
+      iat: now - 120,
+      exp: now - 10,
+      password_change_required: true,
+    });
+    const must_cookie = cookie_header_from_set_cookie(
+      await commit_access_token(new Request("http://web.test/"), must_change),
+    );
+    try {
+      await require_document_access(
+        new Request("http://web.test/", { headers: { Cookie: must_cookie } }),
+      );
+      expect.unreachable("expected redirect");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      expect((error as Response).status).toBe(302);
+      expect((error as Response).headers.get("Location")).toBe("/login");
+    }
   });
 
   it("stores access_token in the access cookie and reads it back", async () => {

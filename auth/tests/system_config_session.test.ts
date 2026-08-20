@@ -41,6 +41,8 @@ function config_row(
     session_access_ttl_seconds: 900,
     session_refresh_ttl_seconds: 604800,
     session_total_ttl_seconds: 2592000,
+    session_max_refresh_retries: 5,
+    session_refresh_cleanup_seconds: 14400,
     ...overrides,
   };
 }
@@ -54,6 +56,8 @@ describe("session knobs on auth cache load", () => {
     assert.equal(settings.session_access_ttl_seconds, 900);
     assert.equal(settings.session_refresh_ttl_seconds, 604800);
     assert.equal(settings.session_total_ttl_seconds, 2592000);
+    assert.equal(settings.session_max_refresh_retries, 5);
+    assert.equal(settings.session_refresh_cleanup_seconds, 14400);
     assert.equal(settings.session_refresh_reuse_grace_seconds, 15);
     assert.equal(settings.session_refresh_reuse_window_seconds, 86400);
     assert.equal(settings.session_refresh_process_time_minimum, 300);
@@ -138,5 +142,42 @@ describe("session knobs on auth cache load", () => {
       cache.get(),
       /session_refresh_reuse_window_seconds must be > session_refresh_reuse_grace_seconds/,
     );
+  });
+
+  it("keeps last-known-good when a later reload fails to read", async () => {
+    let calls = 0;
+    const pool = {
+      query: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return { rows: [config_row()] };
+        }
+        throw new Error("db down");
+      },
+    } as unknown as Pool;
+    const cache = make_login_settings_cache(pool);
+    const first = await cache.get();
+    assert.equal(first.session_max_refresh_retries, 5);
+    cache.invalidate();
+    const second = await cache.get();
+    assert.equal(second.session_access_ttl_seconds, 900);
+    assert.equal(calls, 2);
+  });
+
+  it("still aborts when a successful reload fails abort-family bounds", async () => {
+    let calls = 0;
+    const pool = {
+      query: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return { rows: [config_row()] };
+        }
+        return { rows: [config_row({ session_refresh_reuse_grace_seconds: 4 })] };
+      },
+    } as unknown as Pool;
+    const cache = make_login_settings_cache(pool);
+    await cache.get();
+    cache.invalidate();
+    await assert.rejects(cache.get(), /session_refresh_reuse_grace_seconds is out of range/);
   });
 });

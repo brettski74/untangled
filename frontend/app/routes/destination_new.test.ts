@@ -30,6 +30,14 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
   return set_cookie.split(";")[0] ?? set_cookie;
 }
 
+function require_data<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  if (value == null) {
+    throw new Error("expected loader data");
+  }
+  return value;
+}
+
 const SEED_ADMIN = "01900000-0000-7000-8000-000000000001";
 
 const CREATED_INC = {
@@ -79,7 +87,7 @@ describe("destination_new loader", () => {
       context: {},
     } as never);
 
-    const body = result.data;
+    const body = require_data(result.data);
     expect(body.class_name).toBe("incident");
     expect(body.title_token).toBe("(new)");
     expect(body.copy_path).toBe("/incident/new");
@@ -108,8 +116,9 @@ describe("destination_new loader", () => {
       params: { class_name: "change_request" },
       context: {},
     } as never);
-    expect(result.data.seed_record.status).toBe("draft");
-    expect(result.data.seed_record.requested_by).toBe(SEED_ADMIN);
+    const body = require_data(result.data);
+    expect(body.seed_record.status).toBe("draft");
+    expect(body.seed_record.requested_by).toBe(SEED_ADMIN);
   });
 
   it("N3: 403 without create permission", async () => {
@@ -174,7 +183,7 @@ describe("destination_new loader", () => {
       params: { class_name: "incident" },
       context: {},
     } as never);
-    expect(result.data.title_token).toBe("(new)");
+    expect(require_data(result.data).title_token).toBe("(new)");
   });
 });
 

@@ -69,10 +69,11 @@ def start_system_config_subscriber(
     bus: CoherenceBus | None = None,
     cache: SystemConfigCache | None = None,
 ) -> Callable[[], None]:
-    """Subscribe to system-config invalidate and clear ``cache`` (default process).
+    """Subscribe to system-config invalidate and expire ``cache`` (default process).
 
     Fails loudly if Redis is missing/unreachable. Returns a stop callable for
     clean process shutdown. Does not connect at module import — only when called.
+    Invalidate keeps last-known-good; the next get reloads.
     """
     target = cache if cache is not None else default_cache
     transport = bus if bus is not None else RedisCoherenceBus()

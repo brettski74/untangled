@@ -51,16 +51,24 @@ describe("authenticated_fetch", () => {
   });
 
   it("POSTs same-origin refresh then retries the original request on expiry 401", async () => {
-    const fetch_mock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        Response.json(
+    let original_calls = 0;
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/v2/auth/csrf")) {
+        return Response.json({ csrf_token: "csrf-from-fetch" });
+      }
+      if (url.includes("/api/v2/auth/refresh")) {
+        return Response.json({ ok: true }, { status: 200 });
+      }
+      original_calls += 1;
+      if (original_calls === 1) {
+        return Response.json(
           { detail: "Could not validate credentials", retry: true },
           { status: 401 },
-        ),
-      )
-      .mockResolvedValueOnce(Response.json({ ok: true }, { status: 200 }))
-      .mockResolvedValueOnce(Response.json({ ok: true, detail: "done" }, { status: 200 }));
+        );
+      }
+      return Response.json({ ok: true, detail: "done" }, { status: 200 });
+    });
     vi.stubGlobal("fetch", fetch_mock);
 
     const response = await authenticated_fetch("/api/v2/auth/change-password", {
@@ -69,14 +77,15 @@ describe("authenticated_fetch", () => {
     });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, detail: "done" });
-    expect(fetch_mock).toHaveBeenCalledTimes(3);
-    expect(String(fetch_mock.mock.calls[1]?.[0])).toBe("/api/v2/auth/refresh");
-    expect(fetch_mock.mock.calls[1]?.[1]).toMatchObject({
+    expect(fetch_mock).toHaveBeenCalledTimes(4);
+    expect(String(fetch_mock.mock.calls[1]?.[0])).toBe("/api/v2/auth/csrf");
+    expect(String(fetch_mock.mock.calls[2]?.[0])).toBe("/api/v2/auth/refresh");
+    expect(fetch_mock.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
       credentials: "include",
     });
-    const refresh_headers = new Headers(fetch_mock.mock.calls[1]?.[1]?.headers);
-    expect(refresh_headers.get("X-CSRF-Token")).toBe("csrf-from-cookie");
+    const refresh_headers = new Headers(fetch_mock.mock.calls[2]?.[1]?.headers);
+    expect(refresh_headers.get("X-CSRF-Token")).toBe("csrf-from-fetch");
     expect(assign).not.toHaveBeenCalled();
   });
 
@@ -106,9 +115,40 @@ describe("authenticated_fetch", () => {
     expect(assign).toHaveBeenCalledWith("/login?next=%2Fchange-password");
   });
 
-  it("retries soft refresh 401s up to the cap then goes to login", async () => {
-    const fetch_mock = vi.fn(async (input: RequestInfo) => {
+  it("retries soft refresh 401s up to max_retries then goes to login", async () => {
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
       const url = String(input);
+      if (url.includes("/api/v2/auth/csrf")) {
+        return Response.json({ csrf_token: "csrf-from-fetch" });
+      }
+      if (url.includes("/api/v2/auth/refresh")) {
+        return Response.json(
+          { detail: "Access denied", retry: true, max_retries: 2 },
+          { status: 401 },
+        );
+      }
+      return Response.json(
+        { detail: "Could not validate credentials", retry: true },
+        { status: 401 },
+      );
+    });
+    vi.stubGlobal("fetch", fetch_mock);
+
+    const response = await authenticated_fetch("/api/v2/auth/change-password");
+    expect(response.status).toBe(401);
+    const refresh_calls = fetch_mock.mock.calls.filter((call) =>
+      String(call[0]).includes("/api/v2/auth/refresh"),
+    );
+    expect(refresh_calls).toHaveLength(2);
+    expect(assign).toHaveBeenCalled();
+  });
+
+  it("defaults omitted max_retries to five refresh POSTs", async () => {
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/v2/auth/csrf")) {
+        return Response.json({ csrf_token: "csrf-from-fetch" });
+      }
       if (url.includes("/api/v2/auth/refresh")) {
         return Response.json(
           { detail: "Access denied", retry: true },
@@ -122,34 +162,33 @@ describe("authenticated_fetch", () => {
     });
     vi.stubGlobal("fetch", fetch_mock);
 
-    const response = await authenticated_fetch("/api/v2/auth/change-password", {
-      max_refresh_retries: 2,
-    });
-    expect(response.status).toBe(401);
+    await authenticated_fetch("/api/v2/auth/change-password");
     const refresh_calls = fetch_mock.mock.calls.filter((call) =>
       String(call[0]).includes("/api/v2/auth/refresh"),
     );
-    expect(refresh_calls).toHaveLength(2);
+    expect(refresh_calls).toHaveLength(5);
     expect(assign).toHaveBeenCalled();
   });
 
   it("goes to login on a hard refresh 401", async () => {
-    const fetch_mock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        Response.json(
-          { detail: "Could not validate credentials", retry: true },
-          { status: 401 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        Response.json({ detail: "Access denied" }, { status: 401 }),
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/v2/auth/csrf")) {
+        return Response.json({ csrf_token: "csrf-from-fetch" });
+      }
+      if (url.includes("/api/v2/auth/refresh")) {
+        return Response.json({ detail: "Access denied" }, { status: 401 });
+      }
+      return Response.json(
+        { detail: "Could not validate credentials", retry: true },
+        { status: 401 },
       );
+    });
     vi.stubGlobal("fetch", fetch_mock);
 
     const response = await authenticated_fetch("/api/v2/auth/change-password");
     expect(response.status).toBe(401);
-    expect(String(fetch_mock.mock.calls[1]?.[0])).toBe("/api/v2/auth/refresh");
+    expect(String(fetch_mock.mock.calls[2]?.[0])).toBe("/api/v2/auth/refresh");
     expect(assign).toHaveBeenCalled();
   });
 

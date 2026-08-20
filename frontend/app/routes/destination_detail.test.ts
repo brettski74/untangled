@@ -30,6 +30,14 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
   return set_cookie.split(";")[0] ?? set_cookie;
 }
 
+function require_data<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  if (value == null) {
+    throw new Error("expected loader data");
+  }
+  return value;
+}
+
 const INC_RECORD = {
   id: "01901234-5678-7abc-89ab-cdef01234567",
   number: "INC00000001",
@@ -91,7 +99,7 @@ describe("destination_detail loader", () => {
       context: {},
     } as never);
 
-    const body = result.data;
+    const body = require_data(result.data);
     expect(body.class_name).toBe("incident");
     expect(body.title_token).toBe("INC00000001");
     expect(body.record.number).toBe("INC00000001");
@@ -119,8 +127,9 @@ describe("destination_detail loader", () => {
       params: { class_name: "incident", locator: INC_RECORD.id },
       context: {},
     } as never);
-    expect(result.data.title_token).toBe("INC00000001");
-    expect(result.data.copy_path).toBe("/incident/INC00000001");
+    const body = require_data(result.data);
+    expect(body.title_token).toBe("INC00000001");
+    expect(body.copy_path).toBe("/incident/INC00000001");
   });
 
   it("D3: loads CHG by friendly-id", async () => {
@@ -134,9 +143,10 @@ describe("destination_detail loader", () => {
       params: { class_name: "change_request", locator: "CHG00000001" },
       context: {},
     } as never);
-    expect(result.data.class_name).toBe("change_request");
-    expect(result.data.class_display_name).toBe("Change Request");
-    expect(result.data.layout.compact.some((s) => s.name_snake === "status")).toBe(
+    const body = require_data(result.data);
+    expect(body.class_name).toBe("change_request");
+    expect(body.class_display_name).toBe("Change Request");
+    expect(body.layout.compact.some((s) => s.name_snake === "status")).toBe(
       true,
     );
   });
@@ -230,7 +240,7 @@ describe("destination_detail loader", () => {
       params: { class_name: "incident", locator: "INC00000001" },
       context: {},
     } as never);
-    expect(result.data.record.number).toBe("INC00000001");
+    expect(require_data(result.data).record.number).toBe("INC00000001");
   });
 
   it("D10: calls fetch seam once with collection + locator (no search)", async () => {

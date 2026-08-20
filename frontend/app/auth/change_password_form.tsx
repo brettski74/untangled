@@ -30,7 +30,6 @@ export type ChangePasswordFormProps = {
   policy: PasswordPolicy;
   after_success?: "stay" | "home";
   action_data?: ChangePasswordActionData;
-  max_refresh_retries?: number;
 };
 
 function strength_label(classification: StrengthClass | null): string {
@@ -102,7 +101,6 @@ export function ChangePasswordForm({
   policy,
   after_success = "stay",
   action_data,
-  max_refresh_retries,
 }: ChangePasswordFormProps) {
   const form_id = useId();
 
@@ -203,7 +201,6 @@ export function ChangePasswordForm({
       const response = await authenticated_fetch("/api/v2/auth/change-password", {
         method: "POST",
         credentials: "include",
-        max_refresh_retries,
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -236,6 +233,25 @@ export function ChangePasswordForm({
           // Keep generic failure when body is missing or malformed.
         }
         set_api_failure(detail || "Password change failed.");
+        return;
+      }
+      if (response.status === 503) {
+        let detail = "Password change is temporarily busy. Try again in a moment.";
+        try {
+          const payload: unknown = await response.json();
+          if (
+            typeof payload === "object" &&
+            payload != null &&
+            "detail" in payload &&
+            typeof payload.detail === "string" &&
+            payload.detail !== ""
+          ) {
+            detail = payload.detail;
+          }
+        } catch {
+          // Keep the non-accusatory fallback when the body is missing.
+        }
+        set_api_failure(detail);
         return;
       }
       if (!response.ok) {

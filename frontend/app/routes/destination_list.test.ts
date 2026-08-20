@@ -23,6 +23,14 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
   return set_cookie.split(";")[0] ?? set_cookie;
 }
 
+function require_data<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  if (value == null) {
+    throw new Error("expected loader data");
+  }
+  return value;
+}
+
 describe("destination_list loader", () => {
   beforeEach(() => {
     process.env.UNTANGLED_API_BASE_URL = "http://api.test";
@@ -59,7 +67,7 @@ describe("destination_list loader", () => {
       context: {},
     } as never);
 
-    const body = result.data;
+    const body = require_data(result.data);
     expect(body.class_name).toBe("incident");
     expect(body.total).toBe(1);
     expect(body.rows).toHaveLength(1);
@@ -77,6 +85,24 @@ describe("destination_list loader", () => {
       attributes: expect.arrayContaining(["number", "summary", "status"]),
     });
     expect(search_body).not.toHaveProperty("sort");
+  });
+
+  it("returns null on expired GET without searching", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { loader } = await import("../routes/destination_list");
+    const cookie = await session_cookie(
+      fake_access_token(60, { iat: now - 120, exp: now - 10 }),
+    );
+    const result = await loader({
+      request: new Request("http://web.test/incident/lists/all", {
+        headers: { Cookie: cookie },
+      }),
+      params: { class_name: "incident", list_id: "all" },
+      context: {},
+    } as never);
+
+    expect(result.data).toBeNull();
+    expect(search_collection).not.toHaveBeenCalled();
   });
 
   it("returns empty rows when search finds nothing", async () => {
@@ -97,7 +123,7 @@ describe("destination_list loader", () => {
       context: {},
     } as never);
 
-    const body = result.data;
+    const body = require_data(result.data);
     expect(body.rows).toEqual([]);
     expect(body.total).toBe(0);
     expect(body.baseline_predicate).toMatchObject({ op: "and" });
@@ -197,6 +223,28 @@ describe("destination_list action", () => {
     };
     expect(search_body.predicate).toEqual(predicate);
     expect(search_body).not.toHaveProperty("sort");
+  });
+
+  it("sends expired POST to login without searching", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { action } = await import("../routes/destination_list");
+    const cookie = await session_cookie(
+      fake_access_token(60, { iat: now - 120, exp: now - 10 }),
+    );
+    const form = new FormData();
+    form.set("predicate", "null");
+    await expect(
+      action({
+        request: new Request("http://web.test/incident/lists/all", {
+          method: "POST",
+          headers: { Cookie: cookie },
+          body: form,
+        }),
+        params: { class_name: "incident", list_id: "all" },
+        context: {},
+      } as never),
+    ).rejects.toMatchObject({ status: 302 });
+    expect(search_collection).not.toHaveBeenCalled();
   });
 
   it("forwards non-empty user sort and omits empty", async () => {
@@ -472,7 +520,7 @@ describe("destination_list filter editor destination identity", () => {
       new URL("./destination_list.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toMatch(/<ListFilterChrome[\s\S]*key=\{loaderData\.path\}/);
+    expect(source).toMatch(/<ListFilterChrome[\s\S]*key=\{loaded\.path\}/);
   });
 });
 
@@ -483,14 +531,14 @@ describe("destination_list context bar destination identity", () => {
       new URL("./destination_list.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toMatch(/list_destination_ui_sync\(loaderData\)/);
+    expect(source).toMatch(/list_destination_ui_sync\(loaded\)/);
     expect(source).toMatch(
       /set_selected_name\(synced\.quick_filter\.selected_name\)/,
     );
     expect(source).toMatch(/set_values\(synced\.quick_filter\.values\)/);
     expect(source).toMatch(/set_sort\(\[\]\)/);
     expect(source).toMatch(
-      /\/\/ Same destination identity[\s\S]*\[loaderData\.path\]/,
+      /\/\/ Same destination identity[\s\S]*\[loaded\.path\]/,
     );
   });
 

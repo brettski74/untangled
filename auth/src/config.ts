@@ -18,6 +18,7 @@ import { make_dummy_hash, verify_password } from "./passwords.js";
 import type { RateLimitEvaluator } from "./rate_limit.js";
 import { make_redis_rate_limit } from "./rate_limit_redis.js";
 import { redact_redis_url, redis_url_from_env } from "./redis_url.js";
+import { start_session_cleanup } from "./session_cleanup.js";
 import { make_session_repository, type SessionRepository } from "./sessions.js";
 import {
   make_login_settings_cache,
@@ -148,6 +149,7 @@ export async function load_config_from_env(
     redis_url,
     cache: settings_source,
   });
+  start_session_cleanup({ pool, get_settings });
   return {
     public_origin,
     cookie_secure: cookie_secure_from_env(env.UNTANGLED_COOKIE_SECURE),

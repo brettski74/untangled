@@ -30,6 +30,14 @@ async function session_cookie(token = fake_access_token()): Promise<string> {
   return set_cookie.split(";")[0] ?? set_cookie;
 }
 
+function require_data<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  if (value == null) {
+    throw new Error("expected loader data");
+  }
+  return value;
+}
+
 const POLICY_RECORD = {
   id: "01900000-0000-7000-8000-000000000050",
   created_at: "2026-01-01T00:00:00Z",
@@ -103,16 +111,33 @@ describe("change-password route (#173/#215)", () => {
       context: {},
     } as never);
 
-    const body = await response.data;
+    const body = require_data(await response.data);
     expect(body.username).toBe("ada");
     expect(body.policy.password_minimum_chars).toBe(12);
     expect(body.policy.password_estimate_drift_factor).toBe(1.1);
-    expect(body.max_refresh_retries).toBe(5);
     expect(fetch_record).toHaveBeenCalledWith(
       expect.any(String),
       "system_config",
       POLICY_RECORD.id,
     );
+  });
+
+  it("loader returns null on expired GET without fetching policy", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { loader } = await import("../routes/change_password");
+    const cookie = await session_cookie(
+      fake_access_token(60, { iat: now - 120, exp: now - 10 }),
+    );
+    const result = await loader({
+      request: new Request("http://web.test/change-password", {
+        headers: { Cookie: cookie },
+      }),
+      params: {},
+      context: {},
+    } as never);
+    expect(result.data).toBeNull();
+    expect(fetch_me).not.toHaveBeenCalled();
+    expect(fetch_record).not.toHaveBeenCalled();
   });
 
   it("loader fails closed when policy fields are missing", async () => {

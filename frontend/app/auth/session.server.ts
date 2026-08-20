@@ -82,14 +82,36 @@ async function verified_access_session(
   token: string,
   key: CryptoKey,
 ): Promise<{ token: string; password_change_required: boolean } | null> {
-  const result = await verify_access_jwt(key, token);
-  if (result.kind !== "valid") {
+  const classified = await classify_access_token(token, key);
+  if (classified.kind !== "valid") {
     return null;
   }
   return {
     token,
-    password_change_required: result.payload.password_change_required === true,
+    password_change_required: classified.password_change_required,
   };
+}
+
+export type AccessClassification =
+  | { kind: "missing" }
+  | { kind: "invalid" }
+  | { kind: "expired"; password_change_required: boolean }
+  | { kind: "valid"; token: string; password_change_required: boolean };
+
+async function classify_access_token(
+  token: string,
+  key: CryptoKey,
+): Promise<AccessClassification> {
+  const result = await verify_access_jwt(key, token);
+  if (result.kind === "invalid") {
+    return { kind: "invalid" };
+  }
+  const password_change_required =
+    result.payload.password_change_required === true;
+  if (result.kind === "expired") {
+    return { kind: "expired", password_change_required };
+  }
+  return { kind: "valid", token, password_change_required };
 }
 
 export type AccessSession = {
@@ -108,6 +130,19 @@ export async function get_access_session(
   }
   const key = await jwt_public_key();
   return verified_access_session(token, key);
+}
+
+export async function classify_access_cookie(
+  request: Request,
+): Promise<AccessClassification> {
+  const token = parse_cookie_header(request.headers.get("Cookie")).get(
+    ACCESS_COOKIE_NAME,
+  );
+  if (token == null || token === "") {
+    return { kind: "missing" };
+  }
+  const key = await jwt_public_key();
+  return classify_access_token(token, key);
 }
 
 export async function get_access_token(

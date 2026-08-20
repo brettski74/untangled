@@ -14,6 +14,7 @@ import {
   parse_cookie_header,
 } from "../src/cookies.js";
 import { hmac_refresh_token } from "../src/refresh_hmac.js";
+import { make_hash_slot_limiter } from "../src/hash_slots.js";
 import { create_server } from "../src/server.js";
 import { memory_sessions } from "../src/sessions.js";
 import {
@@ -394,6 +395,30 @@ describe("voluntary password change with invalidate_user_sessions", () => {
       assert.equal(max_age(cookie_from_set_cookie(set_cookies, ACCESS_COOKIE_NAME)!), 0);
       assert.equal(max_age(cookie_from_set_cookie(set_cookies, REFRESH_COOKIE_NAME)!), 0);
       assert.equal(sessions.rows.length, 0);
+    } finally {
+      await close_server(server);
+    }
+  });
+});
+
+describe("change-password hash-capacity 503", () => {
+  it("returns distinct copy and does not mutate sessions", async () => {
+    const sessions = memory_sessions();
+    const limiter = make_hash_slot_limiter(() => 1);
+    const config = await test_config({ sessions, hash_slots: limiter });
+    const { server, base_url } = await listen(config);
+    try {
+      const login = await login_json(base_url);
+      const access = cookie_value(login.headers.getSetCookie(), ACCESS_COOKIE_NAME);
+      assert.ok(access != null);
+      const before = sessions.rows.length;
+      assert.equal(limiter.try_acquire(), true);
+      const response = await change_password(base_url, access, {});
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), {
+        detail: "Password change is temporarily busy. Try again in a moment.",
+      });
+      assert.equal(sessions.rows.length, before);
     } finally {
       await close_server(server);
     }

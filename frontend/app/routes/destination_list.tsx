@@ -4,11 +4,12 @@ import { useFetcher } from "react-router";
 
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
+  DOCUMENT_BOOTSTRAP,
   forbidden_response,
   redirect_unauthenticated,
   redirect_unauthorized,
+  require_document_access,
 } from "../auth/gate.server";
-import { get_access_token } from "../auth/session.server";
 import {
   class_field_meta,
   type AttributeFieldMeta,
@@ -97,7 +98,7 @@ async function run_list_search(
   sort: ListSortSpec[] | null,
   limit: number = DEFAULT_PER_PAGE,
   offset: number = DEFAULT_OFFSET,
-): Promise<ListLoaderData> {
+): Promise<ListLoaderData | typeof DOCUMENT_BOOTSTRAP> {
   const class_name = params.class_name;
   const list_id = params.list_id;
   if (class_name == null || list_id == null) {
@@ -109,9 +110,9 @@ async function run_list_search(
     throw new Response("Not Found", { status: 404 });
   }
 
-  const access_token = await get_access_token(request);
-  if (access_token == null) {
-    throw redirect_unauthenticated(request);
+  const access_token = await require_document_access(request);
+  if (access_token === DOCUMENT_BOOTSTRAP) {
+    return DOCUMENT_BOOTSTRAP;
   }
 
   const meta = class_field_meta(match.section.class_name);
@@ -180,6 +181,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     (match.option.predicate as SearchPredicate | undefined) ?? null;
   try {
     const payload = await run_list_search(request, params, baseline, null);
+    if (payload === DOCUMENT_BOOTSTRAP) {
+      return data(null, { headers: { "Cache-Control": "private, no-store" } });
+    }
     return data(payload);
   } catch (error) {
     if (error instanceof SearchApiError) {
@@ -218,6 +222,9 @@ export async function action({
       paging.limit,
       paging.offset,
     );
+    if (payload === DOCUMENT_BOOTSTRAP) {
+      throw redirect_unauthenticated(request);
+    }
     return data({
       ok: true,
       rows: payload.rows,
@@ -261,10 +268,14 @@ export function shouldRevalidate({
 export default function DestinationListPage({
   loaderData,
 }: Route.ComponentProps) {
+  if (loaderData == null) {
+    return null;
+  }
+  const loaded = loaderData;
   const { me } = useOutletContext<AuthenticatedOutletContext>();
-  const can_create = can_create_class(me.permissions, loaderData.class_name);
+  const can_create = can_create_class(me.permissions, loaded.class_name);
 
-  const initial = list_destination_ui_sync(loaderData);
+  const initial = list_destination_ui_sync(loaded);
   const [search, set_search] = useState<ListSearchPayload>(initial.search);
   const [selected_name, set_selected_name] = useState(
     initial.quick_filter.selected_name,
@@ -279,19 +290,19 @@ export default function DestinationListPage({
   const [layout_notice, set_layout_notice] = useState<string | null>(null);
   const [sort, set_sort] = useState<ListSortSpec[]>([]);
   const [column_layout, set_column_layout] = useState<ColumnLayoutSession>(
-    () => seed_column_layout(loaderData.columns),
+    () => seed_column_layout(loaded.columns),
   );
   const [column_signature, set_column_signature] = useState(() =>
-    column_set_signature(loaderData.columns),
+    column_set_signature(loaded.columns),
   );
-  const loader_column_signature = column_set_signature(loaderData.columns);
+  const loader_column_signature = column_set_signature(loaded.columns);
 
   const fetcher = useFetcher<ListSearchActionResult>();
   const fetcher_path_ref = useRef<string | null>(null);
-  const seeded_signature_ref = useRef(column_set_signature(loaderData.columns));
-  const seeded_path_ref = useRef(loaderData.path);
+  const seeded_signature_ref = useRef(column_set_signature(loaded.columns));
+  const seeded_path_ref = useRef(loaded.path);
   const effective_ref = useRef<SearchPredicate | null>(
-    search.effective_predicate ?? loaderData.baseline_predicate,
+    search.effective_predicate ?? loaded.baseline_predicate,
   );
   const sort_ref = useRef<ListSortSpec[]>(sort);
   const paging_ref = useRef({ limit: search.limit, offset: search.offset });
@@ -306,7 +317,7 @@ export default function DestinationListPage({
   }, [search.limit, search.offset]);
 
   useEffect(() => {
-    const synced = list_destination_ui_sync(loaderData);
+    const synced = list_destination_ui_sync(loaded);
     set_search(synced.search);
     set_selected_name(synced.quick_filter.selected_name);
     set_values(synced.quick_filter.values);
@@ -314,14 +325,14 @@ export default function DestinationListPage({
     set_search_failed(false);
     set_layout_notice(null);
     set_sort([]);
-    const seeded = seed_column_layout(loaderData.columns);
-    const signature = column_set_signature(loaderData.columns);
+    const seeded = seed_column_layout(loaded.columns);
+    const signature = column_set_signature(loaded.columns);
     set_column_layout(seeded);
     set_column_signature(signature);
     seeded_signature_ref.current = signature;
-    seeded_path_ref.current = loaderData.path;
+    seeded_path_ref.current = loaded.path;
     effective_ref.current =
-      synced.search.effective_predicate ?? loaderData.baseline_predicate;
+      synced.search.effective_predicate ?? loaded.baseline_predicate;
     paging_ref.current = {
       limit: synced.search.limit,
       offset: synced.search.offset,
@@ -330,18 +341,18 @@ export default function DestinationListPage({
     fetcher_path_ref.current = null;
     // Same destination identity for search rows and list chrome.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- path is the list identity
-  }, [loaderData.path]);
+  }, [loaded.path]);
 
   useEffect(() => {
     // Destination identity changed — path effect owns the reset (order-independent).
-    if (seeded_path_ref.current !== loaderData.path) {
+    if (seeded_path_ref.current !== loaded.path) {
       return;
     }
     if (loader_column_signature === seeded_signature_ref.current) {
       return;
     }
     const reconciled = reconcile_column_layout(
-      loaderData.columns,
+      loaded.columns,
       column_layout,
       column_signature,
     );
@@ -358,12 +369,12 @@ export default function DestinationListPage({
     }
     // Mid-session column-set identity only (hot reload / regenerated meta).
     // eslint-disable-next-line react-hooks/exhaustive-deps -- signature/layout owned elsewhere
-  }, [loader_column_signature, loaderData.path]);
+  }, [loader_column_signature, loaded.path]);
 
   useEffect(() => {
     effective_ref.current =
-      search.effective_predicate ?? loaderData.baseline_predicate;
-  }, [search.effective_predicate, loaderData.baseline_predicate]);
+      search.effective_predicate ?? loaded.baseline_predicate;
+  }, [search.effective_predicate, loaded.baseline_predicate]);
 
   const submit_search = useCallback(
     (args: {
@@ -391,17 +402,17 @@ export default function DestinationListPage({
       }
       form.set("limit", String(limit));
       form.set("offset", String(offset));
-      fetcher_path_ref.current = loaderData.path;
+      fetcher_path_ref.current = loaded.path;
       void fetcher.submit(form, { method: "post" });
     },
-    [fetcher, loaderData.path],
+    [fetcher, loaded.path],
   );
 
   useEffect(() => {
     if (fetcher.state !== "idle" || fetcher.data == null) {
       return;
     }
-    if (fetcher_path_ref.current !== loaderData.path) {
+    if (fetcher_path_ref.current !== loaded.path) {
       return;
     }
     const result = fetcher.data;
@@ -450,7 +461,7 @@ export default function DestinationListPage({
       offset: result.offset,
       effective_predicate: result.effective_predicate,
     });
-  }, [fetcher.state, fetcher.data, loaderData.path, submit_search]);
+  }, [fetcher.state, fetcher.data, loaded.path, submit_search]);
 
   const on_selected_name_change = useCallback((name: string) => {
     set_selected_name(name);
@@ -514,15 +525,15 @@ export default function DestinationListPage({
 
   const display_columns = useMemo(() => {
     try {
-      return apply_column_order(loaderData.columns, column_layout.order);
+      return apply_column_order(loaded.columns, column_layout.order);
     } catch (error) {
       console.warn(
         "list column session order invalid; falling back to schema defaults",
         error,
       );
-      return loaderData.columns;
+      return loaded.columns;
     }
-  }, [loaderData.columns, column_layout.order]);
+  }, [loaded.columns, column_layout.order]);
 
   const busy = fetcher.state !== "idle";
 
@@ -530,11 +541,11 @@ export default function DestinationListPage({
     <div className="flex h-full min-h-0 flex-col">
       <ShellContextBar>
         <ListContextBar
-          class_display_name={loaderData.class_display_name}
-          class_name={loaderData.class_name}
-          list_path={loaderData.path}
+          class_display_name={loaded.class_display_name}
+          class_name={loaded.class_name}
+          list_path={loaded.path}
           can_create={can_create}
-          attributes={loaderData.attributes}
+          attributes={loaded.attributes}
           effective_ref={effective_ref}
           busy={busy}
           submit_search={submit_search}
@@ -548,8 +559,8 @@ export default function DestinationListPage({
       </ShellContextBar>
 
       <ListFilterChrome
-        key={loaderData.path}
-        attributes={loaderData.attributes}
+        key={loaded.path}
+        attributes={loaded.attributes}
         effective_predicate={search.effective_predicate}
         busy={busy}
         submit_search={submit_search}
@@ -566,7 +577,7 @@ export default function DestinationListPage({
       ) : null}
 
       <BasicList
-        class_name={loaderData.class_name}
+        class_name={loaded.class_name}
         columns={display_columns}
         widths={column_layout.widths}
         sort={sort}

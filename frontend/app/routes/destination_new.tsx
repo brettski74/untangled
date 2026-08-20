@@ -9,9 +9,11 @@ import {
 import { fetch_me } from "../auth/api.server";
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
+  DOCUMENT_BOOTSTRAP,
   forbidden_response,
   redirect_unauthenticated,
   redirect_unauthorized,
+  require_document_access,
 } from "../auth/gate.server";
 import { get_access_token } from "../auth/session.server";
 import { commit_active_editor_field } from "../detail/commit_active_editor_field";
@@ -91,9 +93,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   // Reserved query: ignore unknown view=; always default layout in M1.
   void new URL(request.url).searchParams.get("view");
 
-  const access_token = await get_access_token(request);
-  if (access_token == null) {
-    throw redirect_unauthenticated(request);
+  const access_token = await require_document_access(request);
+  if (access_token === DOCUMENT_BOOTSTRAP) {
+    return data(null, { headers: { "Cache-Control": "private, no-store" } });
   }
 
   try {
@@ -256,19 +258,23 @@ export async function action({
 export default function DestinationNewPage({
   loaderData,
 }: Route.ComponentProps) {
+  if (loaderData == null) {
+    return null;
+  }
+  const loaded = loaderData;
   const { me } = useOutletContext<AuthenticatedOutletContext>();
-  const can_create = can_create_class(me.permissions, loaderData.class_name);
-  const field_meta = class_field_meta(loaderData.class_name);
+  const can_create = can_create_class(me.permissions, loaded.class_name);
+  const field_meta = class_field_meta(loaded.class_name);
   const editable = useMemo(
-    () => editable_field_names(loaderData.layout),
-    [loaderData.layout],
+    () => editable_field_names(loaded.layout),
+    [loaded.layout],
   );
 
   const [editor, set_editor] = useState<EditorSnapshot>(() =>
-    create_editor_snapshot(loaderData.seed_record, editable),
+    create_editor_snapshot(loaded.seed_record, editable),
   );
   const [display_record, set_display_record] = useState<Record<string, unknown>>(
-    loaderData.seed_record,
+    loaded.seed_record,
   );
   const [save_error, set_save_error] = useState<string | null>(null);
 
@@ -285,7 +291,7 @@ export default function DestinationNewPage({
       ? merge_create_body(field_meta, editor.draft)
       : { ...editor.draft };
   const create_schema =
-    field_meta != null ? create_schema_for_class(loaderData.class_name) : null;
+    field_meta != null ? create_schema_for_class(loaded.class_name) : null;
   const create_valid =
     create_schema == null
       ? true
@@ -310,7 +316,7 @@ export default function DestinationNewPage({
 
     if (fetcher.data.ok) {
       set_save_error(null);
-      const meta_for_nav = class_field_meta(loaderData.class_name);
+      const meta_for_nav = class_field_meta(loaded.class_name);
       const locator =
         meta_for_nav != null
           ? preferred_create_locator(meta_for_nav, fetcher.data.record)
@@ -318,7 +324,7 @@ export default function DestinationNewPage({
             ? fetcher.data.record.id
             : null;
       if (locator != null) {
-        void navigate(record_detail_path(loaderData.class_name, locator));
+        void navigate(record_detail_path(loaded.class_name, locator));
       } else {
         set_save_error("Create succeeded but record locator is missing");
       }
@@ -329,7 +335,7 @@ export default function DestinationNewPage({
     fetcher.state,
     fetcher.data,
     fetcher.formAction,
-    loaderData.class_name,
+    loaded.class_name,
     navigate,
   ]);
 
@@ -363,12 +369,12 @@ export default function DestinationNewPage({
     // Time24Field commits on blur; flush before reading draft for create body.
     commit_active_editor_field(form_ref.current);
     const draft = editor_ref.current.draft;
-    const meta_now = class_field_meta(loaderData.class_name);
+    const meta_now = class_field_meta(loaded.class_name);
     const merged =
       meta_now != null
         ? merge_create_body(meta_now, draft)
         : { ...draft };
-    const schema = create_schema_for_class(loaderData.class_name);
+    const schema = create_schema_for_class(loaded.class_name);
     if (schema != null) {
       const parsed = schema.safeParse(merged);
       if (!parsed.success) {
@@ -389,8 +395,8 @@ export default function DestinationNewPage({
   };
 
   function on_refresh() {
-    set_display_record(loaderData.seed_record);
-    set_editor(reset_editor_from_record(loaderData.seed_record, editable));
+    set_display_record(loaded.seed_record);
+    set_editor(reset_editor_from_record(loaded.seed_record, editable));
     set_save_error(null);
   }
 
@@ -398,9 +404,9 @@ export default function DestinationNewPage({
     <>
       <ShellContextBar>
         <DetailContextBar
-          class_display_name={loaderData.class_display_name}
-          title_token={loaderData.title_token}
-          copy_url={loaderData.copy_path}
+          class_display_name={loaded.class_display_name}
+          title_token={loaded.title_token}
+          copy_url={loaded.copy_path}
           dirty={dirty}
           save_enabled={save_enabled}
           save_pending={fetcher.state !== "idle"}
@@ -427,7 +433,7 @@ export default function DestinationNewPage({
 
       <DetailForm
         form_ref={form_ref}
-        layout={loaderData.layout}
+        layout={loaded.layout}
         record={display_record}
         draft={editor.draft}
         can_update={can_create}

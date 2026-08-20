@@ -45,8 +45,8 @@ describe("DestinationListPage shared search submit", () => {
       new URL("../routes/destination_list.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toMatch(/fetcher_path_ref\.current !== loaderData\.path/);
-    expect(source).toMatch(/fetcher_path_ref\.current = loaderData\.path/);
+    expect(source).toMatch(/fetcher_path_ref\.current !== loaded\.path/);
+    expect(source).toMatch(/fetcher_path_ref\.current = loaded\.path/);
     expect(source).toMatch(/ListFilterChrome/);
     expect(source).toMatch(/SearchApiError/);
   });

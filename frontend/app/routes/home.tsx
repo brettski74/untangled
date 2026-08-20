@@ -3,11 +3,11 @@ import { redirect } from "react-router";
 import { fetch_me } from "../auth/api.server";
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
+  DOCUMENT_BOOTSTRAP,
   forbidden_response,
-  redirect_unauthenticated,
   redirect_unauthorized,
+  require_document_access,
 } from "../auth/gate.server";
-import { get_access_token } from "../auth/session.server";
 import { load_default_nav } from "../shell/nav_config.server";
 import { default_landing_path } from "../shell/nav_landing";
 import type { Route } from "./+types/home";
@@ -30,9 +30,9 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const access_token = await get_access_token(request);
-  if (access_token == null) {
-    throw redirect_unauthenticated(request);
+  const access_token = await require_document_access(request);
+  if (access_token === DOCUMENT_BOOTSTRAP) {
+    return null;
   }
 
   try {
