@@ -1,6 +1,7 @@
 import { generateKeyPair } from "jose";
 
 import { memory_audit_sink, type AuditEvent, type AuditSink } from "../src/audit.js";
+import { memory_change_password_apply } from "../src/change_password_apply.js";
 import type { AuthConfig } from "../src/config.js";
 import { cookie_secure_from_env } from "../src/cookie_secure.js";
 import { password_expiry_evaluator } from "../src/expiry.js";
@@ -104,6 +105,7 @@ export async function test_config(
     settings?: AuthRuntimeSettings;
     users?: UserRepository;
     sessions?: SessionRepository;
+    change_password_apply?: AuthConfig["change_password_apply"];
     verify_password?: AuthConfig["verify_password"];
     dummy_hash?: string;
     audit_events?: AuditEvent[];
@@ -131,6 +133,10 @@ export async function test_config(
       }
       return password_hash === TEST_PASSWORD_HASH && password === "admin-change-me";
     });
+  const memory_session_store =
+    "rows" in sessions && "used" in sessions
+      ? (sessions as ReturnType<typeof memory_sessions>)
+      : memory_sessions();
   return {
     public_origin: overrides.public_origin ?? PUBLIC_ORIGIN,
     cookie_secure: overrides.cookie_secure ?? true,
@@ -145,6 +151,9 @@ export async function test_config(
     expiry: overrides.expiry ?? password_expiry_evaluator(),
     users,
     sessions,
+    change_password_apply:
+      overrides.change_password_apply ??
+      memory_change_password_apply(users, memory_session_store),
     verify_password,
     dummy_hash: overrides.dummy_hash ?? TEST_DUMMY_HASH,
     audit: overrides.audit ?? memory_audit_sink(audit_events),
