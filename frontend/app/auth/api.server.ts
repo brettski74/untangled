@@ -2,7 +2,8 @@
  * Server-side auth API seam: GET /api/v2/auth/me and POST /api/v2/auth/logout
  * on the auth service, Bearer fetch to the Python domain API. Browser login
  * and change-password post to the auth service; this module never sees
- * passwords. Refresh is deferred to later #14 children.
+ * passwords. JS auto-refresh is browser-only; this SSR Bearer seam stays
+ * retry-blind even when an API 401 body contains ``retry: true``.
  */
 import { ApiForbiddenError, ApiUnauthorizedError } from "./errors";
 import { user_profile_schema, type UserProfile } from "./schemas";

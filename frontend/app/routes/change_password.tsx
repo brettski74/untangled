@@ -9,6 +9,7 @@ import {
   redirect_unauthorized,
 } from "../auth/gate.server";
 import { parse_password_policy } from "../auth/password_policy";
+import { session_max_refresh_retries_from_config } from "../auth/refresh_fetch";
 import { get_access_token } from "../auth/session.server";
 import { get_cached_system_config } from "../auth/system_config_cache.server";
 import { ShellContextBar } from "../shell/shell_context_bar";
@@ -43,6 +44,9 @@ export async function loader({ request }: Route.LoaderArgs) {
         username: me.username,
         display_name: me.display_name,
         policy,
+        max_refresh_retries: session_max_refresh_retries_from_config(
+          record.session_max_refresh_retries,
+        ),
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );
@@ -83,6 +87,7 @@ export default function ChangePasswordPage({
         username={username}
         display_name={display_name}
         policy={loaderData.policy}
+        max_refresh_retries={loaderData.max_refresh_retries}
         after_success="stay"
       />
     </>

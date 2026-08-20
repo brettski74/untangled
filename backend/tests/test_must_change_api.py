@@ -52,6 +52,7 @@ def test_must_change_refuses_other_reads(api_client: TestClient) -> None:
     body = response.json()
     assert body["detail"]["error"] == PASSWORD_CHANGE_REQUIRED_ERROR
     assert body["detail"]["error"] != "Forbidden"
+    assert "retry" not in body
 
 
 def test_must_change_refuses_system_config_write(api_client: TestClient) -> None:

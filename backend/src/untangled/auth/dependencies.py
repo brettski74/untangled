@@ -6,8 +6,8 @@ from collections.abc import Iterator
 from typing import Annotated, Any
 from uuid import UUID
 
-import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg import Connection
 
@@ -17,14 +17,23 @@ from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.auth.store import fetch_user_by_id
 from untangled.auth.tokens import (
     PASSWORD_CHANGE_REQUIRED_ERROR,
-    decode_access_payload,
     password_change_required,
+    verify_access_jwt,
 )
 from untangled.mapping.well_known import SYSTEM_CONFIG_ID
 from untangled.persistence.connection import connect
 
 # auto_error=False: default HTTPBearer raises 403 on a missing header.
 _bearer_scheme = HTTPBearer(auto_error=False)
+
+_CREDENTIALS_DETAIL = "Could not validate credentials"
+
+
+class CredentialsDenied(Exception):
+    """Resource 401. ``retry`` is set only for expired-but-otherwise-valid access JWTs."""
+
+    def __init__(self, *, retry: bool = False) -> None:
+        self.retry = retry
 
 
 def get_db() -> Iterator[Connection]:
@@ -39,12 +48,22 @@ def get_db() -> Iterator[Connection]:
 DbConn = Annotated[Connection, Depends(get_db)]
 
 
-def _credentials_exc() -> HTTPException:
-    return HTTPException(
+async def credentials_denied_handler(
+    _request: Request, exc: CredentialsDenied
+) -> JSONResponse:
+    body: dict[str, Any] = {"detail": _CREDENTIALS_DETAIL}
+    if exc.retry:
+        body["retry"] = True
+    return JSONResponse(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        content=body,
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def register_auth_exception_handlers(app: FastAPI) -> None:
+    """Install the resource-401 handler (sibling ``retry`` field)."""
+    app.add_exception_handler(CredentialsDenied, credentials_denied_handler)
 
 
 def _must_change_exc() -> HTTPException:
@@ -62,7 +81,7 @@ def _access_token(
 ) -> str:
     """Extract the Bearer JWT, or 401 if the Authorization header is missing/non-Bearer."""
     if creds is None or not creds.credentials:
-        raise _credentials_exc()
+        raise CredentialsDenied()
     return creds.credentials
 
 
@@ -81,11 +100,8 @@ def get_current_user(
     conn: DbConn,
 ) -> dict[str, Any]:
     """Resolve the Bearer access token to an active user row."""
-    credentials_exc = _credentials_exc()
-    try:
-        payload = decode_access_payload(token)
-        user_id = UUID(payload["sub"])
-    except jwt.PyJWTError as exc:
+    verified = verify_access_jwt(token)
+    if verified.kind == "invalid" or verified.payload is None:
         emit_best_effort(
             make_event(
                 event_type=EventType.RECORD_AUTHN_DENIED,
@@ -96,7 +112,22 @@ def get_current_user(
                 ip_address=client_ip(request),
             )
         )
-        raise credentials_exc from exc
+        raise CredentialsDenied()
+    if verified.kind == "expired":
+        emit_best_effort(
+            make_event(
+                event_type=EventType.RECORD_AUTHN_DENIED,
+                actor_channel=ActorChannel.HUMAN,
+                outcome=Outcome.FAILURE,
+                reason="expired_access_token",
+                severity=Severity.WARNING,
+                ip_address=client_ip(request),
+            )
+        )
+        raise CredentialsDenied(retry=True)
+
+    payload = verified.payload
+    user_id = UUID(payload["sub"])
 
     if password_change_required(payload) and not _system_config_singleton_get(
         request
@@ -116,7 +147,7 @@ def get_current_user(
                 ip_address=client_ip(request),
             )
         )
-        raise credentials_exc
+        raise CredentialsDenied()
     return user
 
 

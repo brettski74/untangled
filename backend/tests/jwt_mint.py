@@ -27,6 +27,7 @@ def mint_access_token(
     issued = now or datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
+        "sid": "01900000-0000-7000-8000-0000000000aa",
         "iat": int(issued.timestamp()),
         "exp": int((issued + timedelta(seconds=ttl_seconds)).timestamp()),
         "typ": "access",

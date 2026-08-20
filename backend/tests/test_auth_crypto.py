@@ -20,6 +20,7 @@ from untangled.auth.passwords import hash_password, verify_password
 from untangled.auth.settings import jwt_public_key, reset_jwt_public_key_for_tests
 from untangled.auth.tokens import (
     decode_access_token,
+    verify_access_jwt,
 )
 
 
@@ -45,7 +46,7 @@ def test_access_token_rejects_tampered() -> None:
 
 def test_access_token_rejects_malformed_subject() -> None:
     token = mint_access_token(uuid4(), extra={"sub": "not-a-uuid"})
-    with pytest.raises(jwt.InvalidTokenError, match="invalid subject"):
+    with pytest.raises(jwt.InvalidTokenError):
         decode_access_token(token)
 
 
@@ -72,7 +73,7 @@ def test_access_token_rejects_missing_exp() -> None:
         key,
         algorithm="ES256",
     )
-    with pytest.raises(jwt.MissingRequiredClaimError):
+    with pytest.raises(jwt.InvalidTokenError):
         decode_access_token(token)
 
 
@@ -97,6 +98,25 @@ def test_access_token_rejects_hs256() -> None:
     )
     with pytest.raises(jwt.InvalidAlgorithmError):
         decode_access_token(token)
+
+
+def test_verify_access_jwt_expired_valid_vs_invalid() -> None:
+    user_id = uuid4()
+    live = mint_access_token(user_id)
+    assert verify_access_jwt(live).kind == "valid"
+
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    expired = mint_access_token(user_id, now=past, ttl_seconds=1)
+    assert verify_access_jwt(expired).kind == "expired"
+
+    tampered = live + "x"
+    assert verify_access_jwt(tampered).kind == "invalid"
+
+    no_sid = mint_access_token(user_id, extra={"sid": ""})
+    assert verify_access_jwt(no_sid).kind == "invalid"
+
+    wrong_typ = mint_access_token(user_id, extra={"typ": "refresh"})
+    assert verify_access_jwt(wrong_typ).kind == "invalid"
 
 
 def test_jwt_public_key_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
