@@ -1,21 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  data,
-  useFetcher,
-  useNavigate,
-  useOutletContext,
-} from "react-router";
+import { data, useNavigate, useOutletContext } from "react-router";
 
 import { fetch_me } from "../auth/api.server";
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
   DOCUMENT_BOOTSTRAP,
   forbidden_response,
-  redirect_unauthenticated,
   redirect_unauthorized,
   require_document_access,
 } from "../auth/gate.server";
-import { get_access_token } from "../auth/session.server";
 import { commit_active_editor_field } from "../detail/commit_active_editor_field";
 import {
   merge_create_body,
@@ -38,17 +31,10 @@ import { DetailForm } from "../detail/detail_form";
 import { partition_detail_layout } from "../detail/default_layout";
 import { use_record_editor_undo } from "../detail/use_record_editor_undo";
 import { class_field_meta } from "../generated/field_meta";
-import { create_record } from "../records/create.server";
-import {
-  create_schema_for_class,
-  create_schema_keys,
-} from "../records/create_schema_registry";
+import { create_record } from "../records/browser_api";
+import { create_schema_for_class } from "../records/create_schema_registry";
+import { prepare_create_body } from "../records/mutation_body";
 import { record_detail_path } from "../records/record_paths";
-import { is_json_object } from "../records/update.server";
-import {
-  zod_error_detail,
-  zod_error_http_status,
-} from "../records/zod_http_status";
 import { can_create_class } from "../shell/nav_filter";
 import { ShellContextBar } from "../shell/shell_context_bar";
 import { clock_env } from "../shell/well_known_substitute";
@@ -63,10 +49,6 @@ export type NewLoaderData = {
   seed_record: Record<string, unknown>;
   layout: ReturnType<typeof partition_detail_layout>;
 };
-
-export type NewSaveActionResult =
-  | { ok: true; record: Record<string, unknown> }
-  | { ok: false; status: number; detail: string };
 
 export function meta({ loaderData: loader_data }: Route.MetaArgs) {
   if (loader_data == null) {
@@ -129,132 +111,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 }
 
-export async function action({
-  request,
-  params,
-}: Route.ActionArgs): Promise<ReturnType<typeof data<NewSaveActionResult>>> {
-  const class_name = params.class_name;
-  if (class_name == null) {
-    throw new Response("Not Found", { status: 404 });
-  }
-
-  const field_meta = class_field_meta(class_name);
-  if (field_meta == null) {
-    throw new Response("Not Found", { status: 404 });
-  }
-
-  const access_token = await get_access_token(request);
-  if (access_token == null) {
-    throw redirect_unauthenticated(request);
-  }
-
-  try {
-    const me = await fetch_me(access_token);
-    if (!can_create_class(me.permissions, class_name)) {
-      return data(
-        { ok: false, status: 403, detail: "Forbidden" },
-        { status: 403 },
-      );
-    }
-  } catch (error) {
-    if (error instanceof ApiUnauthorizedError) {
-      throw await redirect_unauthorized(request);
-    }
-    if (error instanceof ApiForbiddenError) {
-      return data(
-        { ok: false, status: 403, detail: "Forbidden" },
-        { status: 403 },
-      );
-    }
-    throw error;
-  }
-
-  let body_unknown: unknown;
-  try {
-    body_unknown = await request.json();
-  } catch {
-    return data(
-      { ok: false, status: 400, detail: "Invalid JSON body" },
-      { status: 400 },
-    );
-  }
-
-  if (!is_json_object(body_unknown)) {
-    return data(
-      { ok: false, status: 400, detail: "Body must be a JSON object" },
-      { status: 400 },
-    );
-  }
-
-  const merged = merge_create_body(field_meta, body_unknown, clock_env());
-  const schema = create_schema_for_class(class_name);
-  if (schema != null) {
-    const known = create_schema_keys(schema);
-    const unknown_keys = Object.keys(merged).filter((k) => !known.has(k));
-    if (unknown_keys.length > 0) {
-      return data(
-        {
-          ok: false,
-          status: 400,
-          detail: `Unrecognized attributes: ${unknown_keys.join(", ")}`,
-        },
-        { status: 400 },
-      );
-    }
-    const parsed = schema.safeParse(merged);
-    if (!parsed.success) {
-      const status = zod_error_http_status(parsed.error);
-      const { detail } = zod_error_detail(parsed.error);
-      return data({ ok: false, status, detail }, { status });
-    }
-  }
-
-  try {
-    const record = await create_record(access_token, class_name, merged);
-    return data({ ok: true, record } satisfies NewSaveActionResult);
-  } catch (error) {
-    if (error instanceof ApiUnauthorizedError) {
-      throw await redirect_unauthorized(request);
-    }
-    if (error instanceof ApiForbiddenError) {
-      return data(
-        { ok: false, status: 403, detail: "Forbidden" },
-        { status: 403 },
-      );
-    }
-    if (error instanceof Response) {
-      let detail = error.statusText || `Create failed (${error.status})`;
-      try {
-        const text = await error.clone().text();
-        if (text.length > 0) {
-          try {
-            const json: unknown = JSON.parse(text);
-            if (
-              json != null &&
-              typeof json === "object" &&
-              "detail" in json &&
-              typeof (json as { detail: unknown }).detail === "string"
-            ) {
-              detail = (json as { detail: string }).detail;
-            } else {
-              detail = text;
-            }
-          } catch {
-            detail = text;
-          }
-        }
-      } catch {
-        // keep statusText
-      }
-      return data(
-        { ok: false, status: error.status, detail },
-        { status: error.status },
-      );
-    }
-    throw error;
-  }
-}
-
 export default function DestinationNewPage({
   loaderData,
 }: Route.ComponentProps) {
@@ -277,13 +133,12 @@ export default function DestinationNewPage({
     loaded.seed_record,
   );
   const [save_error, set_save_error] = useState<string | null>(null);
+  const [save_pending, set_save_pending] = useState(false);
 
   const form_ref = useRef<HTMLDivElement>(null);
   const editor_ref = useRef(editor);
   editor_ref.current = editor;
   const navigate = useNavigate();
-  const fetcher = useFetcher<NewSaveActionResult>();
-  const handled_fetcher_key = useRef<string | null>(null);
 
   const dirty = is_dirty(editor.baseline, editor.draft, editable);
   const merged_for_enablement =
@@ -302,42 +157,6 @@ export default function DestinationNewPage({
     create_valid,
     schema_available: create_schema != null,
   });
-
-  // Apply successful create: navigate to detail; keep draft on failure.
-  useEffect(() => {
-    if (fetcher.state !== "idle" || fetcher.data == null) {
-      return;
-    }
-    const data_key = `${fetcher.formAction ?? "create"}:${JSON.stringify(fetcher.data)}`;
-    if (handled_fetcher_key.current === data_key) {
-      return;
-    }
-    handled_fetcher_key.current = data_key;
-
-    if (fetcher.data.ok) {
-      set_save_error(null);
-      const meta_for_nav = class_field_meta(loaded.class_name);
-      const locator =
-        meta_for_nav != null
-          ? preferred_create_locator(meta_for_nav, fetcher.data.record)
-          : typeof fetcher.data.record.id === "string"
-            ? fetcher.data.record.id
-            : null;
-      if (locator != null) {
-        void navigate(record_detail_path(loaded.class_name, locator));
-      } else {
-        set_save_error("Create succeeded but record locator is missing");
-      }
-    } else {
-      set_save_error(fetcher.data.detail);
-    }
-  }, [
-    fetcher.state,
-    fetcher.data,
-    fetcher.formAction,
-    loaded.class_name,
-    navigate,
-  ]);
 
   use_record_editor_undo(
     form_ref,
@@ -363,35 +182,42 @@ export default function DestinationNewPage({
 
   const activate_save_ref = useRef(() => {});
   activate_save_ref.current = () => {
-    if (!can_create || fetcher.state !== "idle") {
+    if (!can_create || save_pending) {
       return;
     }
     // Time24Field commits on blur; flush before reading draft for create body.
     commit_active_editor_field(form_ref.current);
     const draft = editor_ref.current.draft;
-    const meta_now = class_field_meta(loaded.class_name);
-    const merged =
-      meta_now != null
-        ? merge_create_body(meta_now, draft)
-        : { ...draft };
-    const schema = create_schema_for_class(loaded.class_name);
-    if (schema != null) {
-      const parsed = schema.safeParse(merged);
-      if (!parsed.success) {
-        const { detail } = zod_error_detail(parsed.error);
-        set_save_error(detail);
-        return;
-      }
+    const prepared = prepare_create_body(
+      loaded.class_name,
+      draft,
+      clock_env(),
+    );
+    if (!prepared.ok) {
+      set_save_error(prepared.detail);
+      return;
     }
     set_save_error(null);
-    void fetcher.submit(
-      draft as Record<string, string | number | boolean | null>,
-      {
-        method: "POST",
-        action: `.`,
-        encType: "application/json",
-      },
-    );
+    set_save_pending(true);
+    void create_record(loaded.class_name, prepared.body).then((result) => {
+      set_save_pending(false);
+      if (!result.ok) {
+        set_save_error(result.detail);
+        return;
+      }
+      const meta_for_nav = class_field_meta(loaded.class_name);
+      const locator =
+        meta_for_nav != null
+          ? preferred_create_locator(meta_for_nav, result.record)
+          : typeof result.record.id === "string"
+            ? result.record.id
+            : null;
+      if (locator != null) {
+        void navigate(record_detail_path(loaded.class_name, locator));
+      } else {
+        set_save_error("Create succeeded but record locator is missing");
+      }
+    });
   };
 
   function on_refresh() {
@@ -409,7 +235,7 @@ export default function DestinationNewPage({
           copy_url={loaded.copy_path}
           dirty={dirty}
           save_enabled={save_enabled}
-          save_pending={fetcher.state !== "idle"}
+          save_pending={save_pending}
           on_save={() => activate_save_ref.current()}
           on_refresh={on_refresh}
         />

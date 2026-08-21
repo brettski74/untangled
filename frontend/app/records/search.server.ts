@@ -1,34 +1,21 @@
 /**
  * Server-side domain search seam. Browser must not call this path directly.
  */
-import { z } from "zod";
-
 import { api_fetch_with_token } from "../auth/api.server";
 import { class_field_meta } from "../generated/field_meta";
-import { parse_enriched_record } from "./fetch.server";
+import { parse_enriched_record } from "./enriched_record";
+import {
+  search_response_schema,
+  type SearchCollectionBody,
+  type SearchResponse,
+  type SearchSortSpec,
+} from "./search_envelope";
 
-export const search_response_schema = z.object({
-  items: z.array(z.record(z.string(), z.unknown())),
-  limit: z.number().int(),
-  offset: z.number().int(),
-  total: z.number().int(),
-});
-
-export type SearchResponse = z.infer<typeof search_response_schema>;
-
-/** Wire sort entry for POST /api/v2/{class_name}/search (user-selected only). */
-export type SearchSortSpec = {
-  attribute: string;
-  direction: "asc" | "desc";
-};
-
-export type SearchCollectionBody = {
-  predicate?: unknown | null;
-  attributes: string[];
-  /** Omitted from the wire body when empty/undefined — never invent a default. */
-  sort?: SearchSortSpec[];
-  limit?: number;
-  offset?: number;
+export {
+  search_response_schema,
+  type SearchCollectionBody,
+  type SearchResponse,
+  type SearchSortSpec,
 };
 
 /** Typed search API failure with FastAPI ``detail`` when available. */

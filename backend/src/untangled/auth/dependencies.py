@@ -1,4 +1,4 @@
-"""FastAPI dependencies for Bearer access-token auth."""
+"""FastAPI dependencies for access-token auth (Bearer xor access cookie)."""
 
 from __future__ import annotations
 
@@ -8,12 +8,13 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg import Connection
 
 from untangled.audit.context import client_ip
 from untangled.audit.emit import emit_best_effort, make_event
 from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
+from untangled.auth.csrf import enforce_cookie_csrf
+from untangled.auth.settings import ACCESS_COOKIE_NAME
 from untangled.auth.store import fetch_user_by_id
 from untangled.auth.tokens import (
     PASSWORD_CHANGE_REQUIRED_ERROR,
@@ -23,10 +24,8 @@ from untangled.auth.tokens import (
 from untangled.mapping.well_known import SYSTEM_CONFIG_ID
 from untangled.persistence.connection import connect
 
-# auto_error=False: default HTTPBearer raises 403 on a missing header.
-_bearer_scheme = HTTPBearer(auto_error=False)
-
 _CREDENTIALS_DETAIL = "Could not validate credentials"
+_DUAL_PRESENTATION_DETAIL = "Bad request"
 
 
 class CredentialsDenied(Exception):
@@ -48,9 +47,7 @@ def get_db() -> Iterator[Connection]:
 DbConn = Annotated[Connection, Depends(get_db)]
 
 
-async def credentials_denied_handler(
-    _request: Request, exc: CredentialsDenied
-) -> JSONResponse:
+async def credentials_denied_handler(_request: Request, exc: CredentialsDenied) -> JSONResponse:
     body: dict[str, Any] = {"detail": _CREDENTIALS_DETAIL}
     if exc.retry:
         body["retry"] = True
@@ -76,13 +73,48 @@ def _must_change_exc() -> HTTPException:
     )
 
 
-def _access_token(
-    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
-) -> str:
-    """Extract the Bearer JWT, or 401 if the Authorization header is missing/non-Bearer."""
-    if creds is None or not creds.credentials:
+def _nonempty_stripped(value: str | None) -> str:
+    if value is None:
+        return ""
+    return value.strip()
+
+
+def _bearer_credentials(request: Request) -> str:
+    """Return a non-empty Bearer token, or empty when that presentation is absent."""
+    header = request.headers.get("authorization")
+    if header is None:
+        return ""
+    parts = header.split(None, 1)
+    if not parts or parts[0].lower() != "bearer":
+        return ""
+    if len(parts) == 1:
+        return ""
+    return _nonempty_stripped(parts[1])
+
+
+def _access_cookie(request: Request) -> str:
+    return _nonempty_stripped(request.cookies.get(ACCESS_COOKIE_NAME))
+
+
+def _access_token(request: Request) -> str:
+    """Exactly one of Bearer or ``__untangled_access``; dual presentation is 400.
+
+    Cookie-authenticated methods other than GET/OPTIONS require Origin + CSRF
+    before the JWT is inspected.
+    """
+    bearer = _bearer_credentials(request)
+    cookie = _access_cookie(request)
+    if bearer != "" and cookie != "":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_DUAL_PRESENTATION_DETAIL,
+        )
+    if bearer == "" and cookie == "":
         raise CredentialsDenied()
-    return creds.credentials
+    if cookie != "":
+        enforce_cookie_csrf(request)
+        return cookie
+    return bearer
 
 
 AccessToken = Annotated[str, Depends(_access_token)]
@@ -99,7 +131,7 @@ def get_current_user(
     token: AccessToken,
     conn: DbConn,
 ) -> dict[str, Any]:
-    """Resolve the Bearer access token to an active user row."""
+    """Resolve the access token to an active user row."""
     verified = verify_access_jwt(token)
     if verified.kind == "invalid" or verified.payload is None:
         emit_best_effort(
@@ -129,9 +161,7 @@ def get_current_user(
     payload = verified.payload
     user_id = UUID(payload["sub"])
 
-    if password_change_required(payload) and not _system_config_singleton_get(
-        request
-    ):
+    if password_change_required(payload) and not _system_config_singleton_get(request):
         raise _must_change_exc()
 
     user = fetch_user_by_id(conn, user_id)
