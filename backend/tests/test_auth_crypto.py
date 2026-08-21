@@ -16,8 +16,14 @@ from cryptography.hazmat.primitives.serialization import (
 )
 from jwt_mint import mint_access_token
 
+from untangled.auth.csrf import origin_is_exact_match
 from untangled.auth.passwords import hash_password, verify_password
-from untangled.auth.settings import jwt_public_key, reset_jwt_public_key_for_tests
+from untangled.auth.settings import (
+    jwt_public_key,
+    public_origin,
+    reset_jwt_public_key_for_tests,
+    reset_public_origin_for_tests,
+)
 from untangled.auth.tokens import (
     decode_access_token,
     verify_access_jwt,
@@ -127,3 +133,27 @@ def test_jwt_public_key_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
         jwt_public_key()
     monkeypatch.undo()
     reset_jwt_public_key_for_tests()
+
+
+def test_origin_is_exact_match() -> None:
+    origin = "https://localhost:8443"
+    assert origin_is_exact_match("https://localhost:8443", origin) is True
+    assert origin_is_exact_match("https://127.0.0.1:8443", origin) is False
+    assert origin_is_exact_match("https://localhost:443", origin) is False
+    assert origin_is_exact_match(None, origin) is False
+    assert origin_is_exact_match("", origin) is False
+
+
+def test_public_origin_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("UNTANGLED_PUBLIC_ORIGIN", raising=False)
+    reset_public_origin_for_tests()
+    with pytest.raises(RuntimeError, match="UNTANGLED_PUBLIC_ORIGIN"):
+        public_origin()
+    monkeypatch.setenv("UNTANGLED_PUBLIC_ORIGIN", "https://localhost:8443/extra")
+    reset_public_origin_for_tests()
+    with pytest.raises(RuntimeError, match="exact origin"):
+        public_origin()
+    monkeypatch.setenv("UNTANGLED_PUBLIC_ORIGIN", "https://localhost:8443")
+    reset_public_origin_for_tests()
+    assert public_origin() == "https://localhost:8443"
+    reset_public_origin_for_tests()

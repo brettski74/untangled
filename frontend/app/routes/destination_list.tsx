@@ -1,12 +1,10 @@
 import { data, useOutletContext } from "react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useFetcher } from "react-router";
 
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
   DOCUMENT_BOOTSTRAP,
   forbidden_response,
-  redirect_unauthenticated,
   redirect_unauthorized,
   require_document_access,
 } from "../auth/gate.server";
@@ -28,7 +26,6 @@ import { list_display_columns, type ListColumn } from "../list/columns";
 import { ListFilterChrome } from "../list/filter_chrome";
 import {
   apply_sort_click,
-  parse_sort_form_value,
   type ListSortSpec,
 } from "../list/header_sort";
 import {
@@ -41,14 +38,10 @@ import {
   clamped_offset_for_total,
   DEFAULT_OFFSET,
   DEFAULT_PER_PAGE,
-  parse_paging_form_values,
   start_past_last_page,
 } from "../list/pagination";
-import {
-  parse_predicate_json,
-  type QuickFilterValues,
-  type SearchPredicate,
-} from "../list/quick_filter";
+import { type QuickFilterValues, type SearchPredicate } from "../list/quick_filter";
+import { search_records } from "../records/browser_api";
 import {
   SearchApiError,
   search_collection,
@@ -75,10 +68,6 @@ export type ListLoaderData = {
   offset: number;
   effective_predicate: SearchPredicate | null;
 };
-
-export type ListSearchActionResult =
-  | ({ ok: true } & ListSearchPayload)
-  | { ok: false; status: number; detail: string };
 
 export function meta({ loaderData: loader_data }: Route.MetaArgs) {
   if (loader_data == null) {
@@ -194,77 +183,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 }
 
-export async function action({
-  request,
-  params,
-}: Route.ActionArgs): Promise<ReturnType<typeof data<ListSearchActionResult>>> {
-  const form = await request.formData();
-  const parsed = parse_predicate_json(form.get("predicate"));
-  if (!parsed.ok) {
-    throw new Response("Invalid predicate", { status: 400 });
-  }
-  const sort_parsed = parse_sort_form_value(form.get("sort"));
-  if (!sort_parsed.ok) {
-    throw new Response("Invalid sort", { status: 400 });
-  }
-
-  const paging = parse_paging_form_values(form.get("limit"), form.get("offset"));
-  if (!paging.ok) {
-    throw new Response("Invalid limit or offset", { status: 422 });
-  }
-
-  try {
-    const payload = await run_list_search(
-      request,
-      params,
-      parsed.predicate,
-      sort_parsed.sort,
-      paging.limit,
-      paging.offset,
-    );
-    if (payload === DOCUMENT_BOOTSTRAP) {
-      throw redirect_unauthenticated(request);
-    }
-    return data({
-      ok: true,
-      rows: payload.rows,
-      total: payload.total,
-      limit: payload.limit,
-      offset: payload.offset,
-      effective_predicate: payload.effective_predicate,
-    } satisfies ListSearchActionResult);
-  } catch (error) {
-    if (error instanceof SearchApiError) {
-      return data(
-        {
-          ok: false,
-          status: error.status,
-          detail: error.detail,
-        } satisfies ListSearchActionResult,
-        { status: error.status },
-      );
-    }
-    throw error;
-  }
-}
-
-/**
- * Action returns the searched rows via fetcher; skip loader revalidation so the
- * baseline nav predicate does not clobber the effective filter result set.
- */
-export function shouldRevalidate({
-  formMethod,
-  defaultShouldRevalidate,
-}: {
-  formMethod?: string;
-  defaultShouldRevalidate: boolean;
-}) {
-  if (formMethod != null && formMethod.toUpperCase() !== "GET") {
-    return false;
-  }
-  return defaultShouldRevalidate;
-}
-
 export default function DestinationListPage({
   loaderData,
 }: Route.ComponentProps) {
@@ -297,8 +215,8 @@ export default function DestinationListPage({
   );
   const loader_column_signature = column_set_signature(loaded.columns);
 
-  const fetcher = useFetcher<ListSearchActionResult>();
-  const fetcher_path_ref = useRef<string | null>(null);
+  const [search_busy, set_search_busy] = useState(false);
+  const search_gen_ref = useRef(0);
   const seeded_signature_ref = useRef(column_set_signature(loaded.columns));
   const seeded_path_ref = useRef(loaded.path);
   const effective_ref = useRef<SearchPredicate | null>(
@@ -338,7 +256,8 @@ export default function DestinationListPage({
       offset: synced.search.offset,
     };
     clamp_inflight_ref.current = false;
-    fetcher_path_ref.current = null;
+    search_gen_ref.current += 1;
+    set_search_busy(false);
     // Same destination identity for search rows and list chrome.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- path is the list identity
   }, [loaded.path]);
@@ -392,76 +311,70 @@ export default function DestinationListPage({
         offset = 0;
       }
       paging_ref.current = { limit, offset };
-      const form = new FormData();
-      form.set(
-        "predicate",
-        args.predicate == null ? "null" : JSON.stringify(args.predicate),
-      );
-      if (sort.length > 0) {
-        form.set("sort", JSON.stringify(sort));
-      }
-      form.set("limit", String(limit));
-      form.set("offset", String(offset));
-      fetcher_path_ref.current = loaded.path;
-      void fetcher.submit(form, { method: "post" });
+      const attributes = loaded.columns.map((column) => column.name_snake);
+      const gen = search_gen_ref.current;
+      set_search_busy(true);
+      void (async () => {
+        const result = await search_records(loaded.class_name, {
+          predicate: args.predicate,
+          attributes,
+          limit,
+          offset,
+          ...(sort.length > 0 ? { sort } : {}),
+        });
+        if (gen !== search_gen_ref.current) {
+          return;
+        }
+        if (!result.ok) {
+          clamp_inflight_ref.current = false;
+          set_search_busy(false);
+          set_warning(result.detail);
+          set_search_failed(true);
+          set_search((current) => ({
+            rows: [],
+            total: 0,
+            limit: current.limit,
+            offset: 0,
+            // Keep last-good applied filter — failed body must not become effective.
+            effective_predicate: current.effective_predicate,
+          }));
+          paging_ref.current = { limit: paging_ref.current.limit, offset: 0 };
+          return;
+        }
+        const payload = result.search;
+        if (
+          start_past_last_page(payload.offset, payload.total, payload.limit) &&
+          !clamp_inflight_ref.current
+        ) {
+          clamp_inflight_ref.current = true;
+          const clamped_offset = clamped_offset_for_total(
+            payload.total,
+            payload.limit,
+          );
+          effective_ref.current = args.predicate;
+          submit_search({
+            predicate: args.predicate,
+            limit: payload.limit,
+            offset: clamped_offset,
+          });
+          return;
+        }
+        clamp_inflight_ref.current = false;
+        set_search_busy(false);
+        set_search_failed(false);
+        effective_ref.current = args.predicate;
+        paging_ref.current = { limit: payload.limit, offset: payload.offset };
+        set_search({
+          rows: payload.items,
+          total: payload.total,
+          limit: payload.limit,
+          offset: payload.offset,
+          effective_predicate: args.predicate,
+        });
+      })();
     },
-    [fetcher, loaded.path],
+    [loaded.class_name, loaded.columns],
   );
-
-  useEffect(() => {
-    if (fetcher.state !== "idle" || fetcher.data == null) {
-      return;
-    }
-    if (fetcher_path_ref.current !== loaded.path) {
-      return;
-    }
-    const result = fetcher.data;
-    if (!result.ok) {
-      clamp_inflight_ref.current = false;
-      set_warning(result.detail);
-      set_search_failed(true);
-      set_search((current) => ({
-        rows: [],
-        total: 0,
-        limit: current.limit,
-        offset: 0,
-        // Keep last-good applied filter — failed body must not become effective.
-        effective_predicate: current.effective_predicate,
-      }));
-      paging_ref.current = { limit: paging_ref.current.limit, offset: 0 };
-      return;
-    }
-    // Refresh/sort (or any keep-start search) may land past the last page when
-    // the result set shrinks — clamp once and re-fetch.
-    if (
-      start_past_last_page(result.offset, result.total, result.limit) &&
-      !clamp_inflight_ref.current
-    ) {
-      clamp_inflight_ref.current = true;
-      const clamped_offset = clamped_offset_for_total(
-        result.total,
-        result.limit,
-      );
-      effective_ref.current = result.effective_predicate;
-      submit_search({
-        predicate: result.effective_predicate,
-        limit: result.limit,
-        offset: clamped_offset,
-      });
-      return;
-    }
-    clamp_inflight_ref.current = false;
-    set_search_failed(false);
-    effective_ref.current = result.effective_predicate;
-    paging_ref.current = { limit: result.limit, offset: result.offset };
-    set_search({
-      rows: result.rows,
-      total: result.total,
-      limit: result.limit,
-      offset: result.offset,
-      effective_predicate: result.effective_predicate,
-    });
-  }, [fetcher.state, fetcher.data, loaded.path, submit_search]);
 
   const on_selected_name_change = useCallback((name: string) => {
     set_selected_name(name);
@@ -535,7 +448,7 @@ export default function DestinationListPage({
     }
   }, [loaded.columns, column_layout.order]);
 
-  const busy = fetcher.state !== "idle";
+  const busy = search_busy;
 
   return (
     <div className="flex h-full min-h-0 flex-col">

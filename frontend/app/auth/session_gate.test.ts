@@ -178,6 +178,16 @@ describe("auth gate + session", () => {
     expect(String(fetch_mock.mock.calls[0]?.[0])).toContain("/api/v2/incident/x");
   });
 
+  it("does not forward cookies on the SSR Bearer hop", async () => {
+    const fetch_mock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetch_mock);
+
+    await api_fetch_with_token("t", "/api/v2/incident/x");
+    const headers = new Headers(fetch_mock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("Authorization")).toBe("Bearer t");
+    expect(headers.get("Cookie")).toBeNull();
+  });
+
   it("refuses to verify without UNTANGLED_JWT_PUBLIC_KEY", async () => {
     delete process.env.UNTANGLED_JWT_PUBLIC_KEY;
     reset_access_verifier_for_tests();

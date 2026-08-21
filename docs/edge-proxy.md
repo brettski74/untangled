@@ -68,7 +68,7 @@ Auth-set cookies are **host-only** (no `Domain`), `SameSite=Lax`, `Secure` on th
 | Cookie | Role |
 | ------ | ---- |
 | `__untangled_csrf` | Double-submit CSRF; **not** HttpOnly |
-| `__untangled_access` | Access JWT; **HttpOnly**. SSR verifies with the public key and uses the JWT as Bearer to the API. |
+| `__untangled_access` | Access JWT; **HttpOnly**. SSR verifies with the public key and uses the JWT as Bearer to the API (no Cookie forward on that hop). Browser domain calls send the cookie with `credentials: "include"` and must not construct `Authorization`. |
 | `__untangled_refresh` | Opaque refresh token; **HttpOnly**. Set on normal login and on first refresh after a successful must-change password change. Must-change login does not set it. |
 
 `SameSite=Lax` is **not** enough for login CSRF (forced login does not need an existing cookie). `POST /api/v2/auth/login` requires:
@@ -76,7 +76,7 @@ Auth-set cookies are **host-only** (no `Domain`), `SameSite=Lax`, `Secure` on th
 1. Exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` (scheme + host + port). Default local Compose and Playwright `https://localhost:8443`. `127.0.0.1` is a different origin; no alias folding.
 2. CSRF token from `X-CSRF-Token` or form field `csrf_token` matching the CSRF cookie (CSPRNG; double-submit). The login page fetches CSRF from the **browser**.
 
-Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits `auth.csrf_denied` (`reason` is `origin_mismatch` or `csrf_mismatch` on that one event type). The event records `csrf_header_length` and `csrf_cookie_length` (0 if missing), not raw token values. The client body stays `{ detail: "Forbidden" }` with no reason. SSR and Python API Origin/CSRF failures are [#223](https://github.com/brettski74/untangled/issues/223); they do not emit yet. Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503** with distinct `detail` copy for login vs change-password (refresh audit-write 503 keeps a third string). Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).
+Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits `auth.csrf_denied` (`reason` is `origin_mismatch` or `csrf_mismatch` on that one event type). The event records `csrf_header_length` and `csrf_cookie_length` (0 if missing), not raw token values. The client body stays `{ detail: "Forbidden" }` with no reason. Python domain API cookie-auth unsafe methods emit the same event family (fail-closed: emit throw → **500**, not a CSRF-shaped 403). SSR-local anti-forgery emit remains [#223](https://github.com/brettski74/untangled/issues/223). Valid Origin+CSRF and valid password → **200** `{ ok: true }` when `Accept` includes `application/json` (JWT is **not** in the body), or **302** to a safe `next` path for form POST. Pipeline auth denials → **401** `{ detail: "Access denied" }` (no failure reason in the body). Hash-capacity shedding → **503** with distinct `detail` copy for login vs change-password (refresh audit-write 503 keeps a third string). Malformed JSON → **400**. Oversized body → **413**. Config or audit-write failure → **500** (no access cookie).
 
 `POST /api/v2/auth/refresh` uses the same Origin + CSRF rules. The browser posts directly (SSR never sees `__untangled_refresh`). Responses:
 
@@ -86,7 +86,15 @@ Missing or mismatched Origin/CSRF → **403**, no access cookie. Auth also emits
 - **403** Origin/CSRF mismatch — `{ detail: "Forbidden" }`; no refresh.
 - **405** on `GET /api/v2/auth/refresh`.
 
-Expired **document GET** (signature valid, `exp` in the past, not must-change) returns **200** bootstrap HTML at the original URL. Nested SSR loaders must not call `/me` or the API with that JWT. The page CSRF-POSTs refresh, then `location.replace`s. Invalid or missing access, expired must-change, and leftover SSR document **mutations** fail closed to login ([#238](https://github.com/brettski74/untangled/issues/238)). Valid must-change still goes to `/expired-password`.
+Expired **document GET** (signature valid, `exp` in the past, not must-change) returns **200** bootstrap HTML at the original URL. Nested SSR loaders must not call `/me` or the API with that JWT. The page CSRF-POSTs refresh, then `location.replace`s. Invalid or missing access and expired must-change fail closed to login. Valid must-change still goes to `/expired-password`. Nested Bearer 401 on document GET (including `retry: true`) still goes to login; expiry races are [#250](https://github.com/brettski74/untangled/issues/250).
+
+### Python domain API credentials
+
+Authenticated Python `/api/v2/` record routes accept the access JWT from **exactly one** method: `Authorization: Bearer` **or** the `__untangled_access` cookie. Both present (non-empty) → **400** `{ detail: "Bad request" }` with no JWT inspection. Cookie-only and Bearer-only share the same RBAC path. `__untangled_refresh` is never an API credential. Auth-service dual-channel behaviour is unchanged until [#249](https://github.com/brettski74/untangled/issues/249).
+
+Cookie-authenticated Python API requests other than GET and OPTIONS require exact `Origin` match to `UNTANGLED_PUBLIC_ORIGIN` plus CSRF double-submit (`X-CSRF-Token` vs `__untangled_csrf`). Bearer-only, GET, and OPTIONS skip that gate. Mismatch is **403** `{ detail: "Forbidden" }` with `auth.csrf_denied` as above.
+
+List search, record create, and record update run from the browser through `authenticated_fetch` to same-origin relative `/api/v2/{class_name}/…` (CSRF attached in that helper). Document GET loaders stay SSR Bearer. Sign out stays SSR `POST /logout`. Login/refresh CSRF cookie echo cleanup is [#251](https://github.com/brettski74/untangled/issues/251).
 
 `POST /api/v2/auth/change-password` uses the same Origin + CSRF rules. The browser posts directly to auth (SSR does not proxy this request and never sees `__untangled_refresh`). Success is `{ ok: true, detail: "Password change complete." }` (tokens are **not** in the body).
 

@@ -52,7 +52,7 @@ export function record_from_create_defaults(
 }
 
 /**
- * Authoritative create-body assembly for the SSR action (and client enablement).
+ * Authoritative create-body assembly for new-record save (and client enablement).
  *
  * - Editable author fields: client value when present, else create_default.
  * - FK / referenced attributes (read-only on M1 new): schema create_default only
