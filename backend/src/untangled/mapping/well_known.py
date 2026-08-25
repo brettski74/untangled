@@ -15,6 +15,7 @@ from untangled.mapping.datetime_utc import format_utc_iso_z, require_utc_seconds
 
 SYSTEM_CONFIG_ID = UUID("01900000-0000-7000-8000-000000000050")
 SYSTEM_USER_ID = UUID("01900000-0000-7000-8000-000000000006")
+AUTHZ_VERSION_ID = UUID("01900000-0000-7000-8000-000000000051")
 
 CLOCK_TOKEN_NOW = "now"
 CLOCK_TOKEN_TOMORROW = "tomorrow"
@@ -23,6 +24,7 @@ SECONDS_PER_DAY = 86400
 
 # snake_case name → substituted literal (string form).
 WELL_KNOWN: dict[str, str] = {
+    "authz_version_id": str(AUTHZ_VERSION_ID),
     "system_config_id": str(SYSTEM_CONFIG_ID),
     "system_user_id": str(SYSTEM_USER_ID),
 }
@@ -31,7 +33,7 @@ WELL_KNOWN: dict[str, str] = {
 # consumer (check_constraint: definition load; nav_bar: nav definition load;
 # create_default / data_load: evaluation-time clock env).
 SUBSTITUTION_CONTEXTS: dict[str, frozenset[str]] = {
-    "check_constraint": frozenset({"system_config_id"}),
+    "check_constraint": frozenset({"authz_version_id", "system_config_id"}),
     "nav_bar": frozenset({"system_config_id"}),
     "create_default": CLOCK_TOKEN_NAMES,
     "data_load": CLOCK_TOKEN_NAMES,

@@ -1,0 +1,22 @@
+# Many-to-many join: parent role → child role (first-class object with its own UUID PK).
+# Union-only, directional composition: parent includes children's effective permissions.
+name: role_child
+display_name: Role Child
+description: >
+  Parent-to-child role edge for RBAC composition. Effective permissions of the
+  parent are the set-union of its direct permissions and each child's effective
+  permissions (recursively). Children do not include the parent. No product
+  permissions or public record mount.
+unique:
+  - [parent_role_id, child_role_id]
+check_constraint:
+  - "parent_role_id <> child_role_id"
+attributes:
+  parent_role_id:
+    type: uuid
+    required: true
+    references: role
+  child_role_id:
+    type: uuid
+    required: true
+    references: role

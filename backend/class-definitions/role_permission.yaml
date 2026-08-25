@@ -3,7 +3,9 @@ name: role_permission
 display_name: Role Permission
 description: >
   Grant of a permission to a role. Idempotent seed uses stable join row ids;
-  composite uniqueness is enforced by seed/application logic in M1.
+  composite uniqueness is enforced by a unique index on (role_id, permission_id).
+unique:
+  - [role_id, permission_id]
 attributes:
   role_id:
     type: uuid

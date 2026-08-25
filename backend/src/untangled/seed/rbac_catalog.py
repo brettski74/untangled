@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from untangled.mapping.registry import definitions_by_name
+from untangled.persistence.ids import new_uuid7
 from untangled.rbac.keys import (
     ADMIN_PERMISSION_KEY,
     class_operation_key,
@@ -147,9 +148,11 @@ def _role_permission_keys(role_name: str) -> tuple[str, ...]:
             keys.append(class_operation_key(class_name, "search"))
         return tuple(keys)
     if role_name == "read_write":
+        # Direct create/update only; read/search come from child role read_only
+        # via role_child (union-only composition). Effective set unchanged.
         keys = []
         for class_name in _SEED_ROLE_CLASSES:
-            for operation in ("create", "read", "search", "update"):
+            for operation in ("create", "update"):
                 keys.append(class_operation_key(class_name, operation))
         return tuple(keys)
     if role_name == "change_request_read_write":
@@ -166,22 +169,43 @@ def _role_permission_keys(role_name: str) -> tuple[str, ...]:
 
 
 def _build_role_permissions() -> tuple[SeedRolePermission, ...]:
+    # Join row PKs are UUIDv7 (ADR 001). Identity for upsert is the unique
+    # (role_id, permission_id) pair; seed deletes obsolete seed-role joins then
+    # inserts with ON CONFLICT on that pair.
     items: list[SeedRolePermission] = []
-    ordinal = 0
     for role in SEED_ROLES:
         for key in _role_permission_keys(role.name):
             items.append(
                 SeedRolePermission(
-                    id=_join_id(ordinal),
+                    id=new_uuid7(),
                     role_id=role.id,
                     permission_key=key,
                 )
             )
-            ordinal += 1
     return tuple(items)
 
 
-SEED_ROLE_PERMISSIONS: tuple[SeedRolePermission, ...] = _build_role_permissions()
+def seed_role_permissions() -> tuple[SeedRolePermission, ...]:
+    """Build role↔permission join rows (fresh UUIDv7 ids each call)."""
+    return _build_role_permissions()
+
+
+@dataclass(frozen=True, slots=True)
+class SeedRoleChild:
+    id: UUID
+    parent_role_id: UUID
+    child_role_id: UUID
+
+
+def seed_role_children() -> tuple[SeedRoleChild, ...]:
+    """Build role↔child join rows (fresh UUIDv7 ids each call)."""
+    return (
+        SeedRoleChild(
+            id=new_uuid7(),
+            parent_role_id=SEED_ROLE_READ_WRITE_ID,
+            child_role_id=SEED_ROLE_READ_ONLY_ID,
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)

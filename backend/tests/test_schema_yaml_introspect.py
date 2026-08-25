@@ -19,12 +19,14 @@ from untangled.schema import (
 )
 
 _MANAGED = {
+    "authz_version",
     "change_request",
     "demo_item",
     "demo_link",
     "incident",
     "permission",
     "role",
+    "role_child",
     "role_permission",
     "system_config",
     "used_refresh_token",
@@ -129,6 +131,11 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
         IndexIR(name=unique_index_name("permission", "key"), columns=("key",), unique=True),
     )
     user_role = by_table["user_role"]
+    assert IndexIR(
+        name=unique_index_name("user_role", "user_id", "role_id"),
+        columns=("user_id", "role_id"),
+        unique=True,
+    ) in user_role.indexes
     assert ForeignKeyIR(
         name="user_role_user_id_fkey",
         columns=("user_id",),
@@ -142,6 +149,11 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
         referenced_columns=("id",),
     ) in user_role.foreign_keys
     role_permission = by_table["role_permission"]
+    assert IndexIR(
+        name=unique_index_name("role_permission", "role_id", "permission_id"),
+        columns=("role_id", "permission_id"),
+        unique=True,
+    ) in role_permission.indexes
     assert ForeignKeyIR(
         name="role_permission_role_id_fkey",
         columns=("role_id",),
@@ -154,6 +166,19 @@ def test_desired_schema_from_demo_yaml(repo_definitions: Path) -> None:
         referenced_table="permission",
         referenced_columns=("id",),
     ) in role_permission.foreign_keys
+
+    role_child = by_table["role_child"]
+    assert IndexIR(
+        name=unique_index_name("role_child", "parent_role_id", "child_role_id"),
+        columns=("parent_role_id", "child_role_id"),
+        unique=True,
+    ) in role_child.indexes
+    assert any("<>" in check.expression for check in role_child.checks)
+
+    authz_version = by_table["authz_version"]
+    assert "01900000-0000-7000-8000-000000000051" in authz_version.checks[0].expression
+    version_col = next(c for c in authz_version.columns if c.name == "version")
+    assert version_col.type_name == "integer" and not version_col.nullable
 
     used = by_table["used_refresh_token"]
     assert ForeignKeyIR(

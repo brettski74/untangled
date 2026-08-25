@@ -5,11 +5,13 @@
 import type { z } from "zod";
 
 import {
+  AuthzVersionUpdateSchema,
   ChangeRequestUpdateSchema,
   DemoItemUpdateSchema,
   DemoLinkUpdateSchema,
   IncidentUpdateSchema,
   PermissionUpdateSchema,
+  RoleChildUpdateSchema,
   RolePermissionUpdateSchema,
   RoleUpdateSchema,
   SystemConfigUpdateSchema,
@@ -22,11 +24,13 @@ import {
 export type UpdateZodSchema = z.ZodType<Record<string, unknown>>;
 
 const UPDATE_SCHEMAS: Readonly<Record<string, UpdateZodSchema>> = {
+  authz_version: AuthzVersionUpdateSchema,
   change_request: ChangeRequestUpdateSchema,
   demo_item: DemoItemUpdateSchema,
   demo_link: DemoLinkUpdateSchema,
   incident: IncidentUpdateSchema,
   permission: PermissionUpdateSchema,
+  role_child: RoleChildUpdateSchema,
   role_permission: RolePermissionUpdateSchema,
   role: RoleUpdateSchema,
   system_config: SystemConfigUpdateSchema,

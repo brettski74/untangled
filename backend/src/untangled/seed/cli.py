@@ -45,7 +45,9 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "seed: upserted RBAC: "
         f"roles={rbac['roles']}, permissions={rbac['permissions']}, "
-        f"role_permissions={rbac['role_permissions']}, user_roles={rbac['user_roles']}"
+        f"role_permissions={rbac['role_permissions']}, "
+        f"role_children={rbac.get('role_children', 0)}, "
+        f"user_roles={rbac['user_roles']}"
     )
     role_by_id = {role.id: role.name for role in SEED_ROLES}
     user_by_id = {user.id: user.username for user in SEED_USERS}

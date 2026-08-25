@@ -1,5 +1,7 @@
 import type { Pool } from "pg";
 
+import type { AuthzRedisClient } from "./rbac/permissions.js";
+import { fetch_effective_permission_keys_cached } from "./rbac/permissions.js";
 import { utc_now, utc_seconds } from "./datetime_utc.js";
 import { SYSTEM_USER_ID } from "./login_settings.js";
 
@@ -53,7 +55,10 @@ function from_row(row: UserRow): LoadedUser {
 const USER_SELECT =
   'SELECT id::text AS id, username, password_hash, display_name, is_active, failed_login_count, password_expires_at FROM "user"';
 
-export function make_user_repository(pool: Pool): UserRepository {
+export function make_user_repository(
+  pool: Pool,
+  redis: AuthzRedisClient | null = null,
+): UserRepository {
   return {
     async load_by_username(folded) {
       const result = await pool.query<UserRow>(
@@ -98,17 +103,14 @@ export function make_user_repository(pool: Pool): UserRepository {
          ORDER BY r.name`,
         [id],
       );
-      const permissions = await pool.query<{ key: string }>(
-        `SELECT DISTINCT p.key AS key
-         FROM user_role ur
-         JOIN role_permission rp ON rp.role_id = ur.role_id
-         JOIN permission p ON p.id = rp.permission_id
-         WHERE ur.user_id = $1::uuid`,
-        [id],
+      const permissions = await fetch_effective_permission_keys_cached(
+        pool,
+        id,
+        redis,
       );
       return {
         roles: roles.rows.map((row) => row.name),
-        permissions: permissions.rows.map((row) => row.key).sort(),
+        permissions,
       };
     },
   };

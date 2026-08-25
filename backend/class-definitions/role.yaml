@@ -3,7 +3,9 @@ name: role
 display_name: Role
 description: >
   Named set of permissions assigned to users. Users may hold multiple roles;
-  effective permissions are the union across assignments.
+  effective permissions are the union across assignments. Roles may also
+  declare child roles (see role_child); a parent's effective set includes its
+  descendants' permissions (union-only, directional).
 attributes:
   name:
     type: compact_text

@@ -12,6 +12,7 @@ from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.definition import ClassDefinition, load_definitions
 from untangled.mapping.system_fields import AUDIT_USER_TABLE
 from untangled.mapping.well_known import clock_env, substitute_if_tokens
+from untangled.rbac.authz_version_bootstrap import ensure_authz_version_row
 from untangled.schema.ddl import compile_op
 from untangled.schema.diff import AddDefaultValue, diff_schemas
 from untangled.schema.from_yaml import desired_schema_from_classes
@@ -126,6 +127,8 @@ def migrate(
         upsert_system_user(conn)
         log("migrate: ensure system_config singleton")
         ensure_system_config_row(conn)
+        log("migrate: ensure authz_version singleton")
+        ensure_authz_version_row(conn)
         conn.commit()
         return MigrateResult(
             definitions=tuple(definitions),
@@ -166,6 +169,8 @@ def migrate(
         upsert_system_user(conn)
         log("migrate: ensure system_config singleton")
         ensure_system_config_row(conn)
+        log("migrate: ensure authz_version singleton")
+        ensure_authz_version_row(conn)
         record_schema_version(
             conn,
             version_id=version_id,

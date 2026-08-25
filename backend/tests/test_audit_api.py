@@ -303,7 +303,7 @@ def test_privilege_change_fail_closed_rolls_back(
     """RBAC seed must not commit privilege rows when fail-closed audit emit fails."""
     # demo_schema → ensure_stub_actor_user already ran seed_all; clear privilege
     # tables so a successful seed_rbac would insert, then prove audit failure rolls back.
-    for table in ("user_role", "role_permission", "role", "permission"):
+    for table in ("user_role", "role_child", "role_permission", "role", "permission"):
         db_conn.execute(
             sql.SQL("DELETE FROM {}").format(sql.Identifier(table))
         )
