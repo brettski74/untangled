@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/rbac && cp src/rbac/effective_permissions.sql dist/rbac/",
     "start": "node dist/main.js",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json"

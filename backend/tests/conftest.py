@@ -108,12 +108,14 @@ def demo_schema(db_conn: Connection, repo_definitions: Path) -> list[ClassDefini
     # Clear managed data so new audit FKs / unique indexes can apply on shared DBs.
     for table in (
         "user_role",
+        "role_child",
         "role_permission",
         "demo_link",
         "demo_item",
         "change_request",
         "incident",
         "system_config",
+        "authz_version",
         "user_session",
         "used_refresh_token",
         "role",

@@ -14,12 +14,12 @@ from untangled.audit.emit import emit_best_effort, make_event
 from untangled.audit.types import ActorChannel, EventType, Outcome, Severity
 from untangled.auth.dependencies import CurrentUser, DbConn
 from untangled.mapping.registry import class_definition
+from untangled.rbac.cache import fetch_effective_permission_keys_cached
 from untangled.rbac.keys import (
     class_operation_granted,
     class_operation_key,
     permission_grants,
 )
-from untangled.rbac.store import fetch_effective_permission_keys, user_has_permission
 
 
 def _forbidden(detail: str = "Forbidden") -> HTTPException:
@@ -30,8 +30,11 @@ def get_effective_permissions(
     user: CurrentUser,
     conn: DbConn,
 ) -> frozenset[str]:
-    """Resolve effective permission keys for the authenticated user (DB per request)."""
-    return fetch_effective_permission_keys(conn, user["id"])
+    """Resolve effective permission keys for the authenticated user.
+
+    Uses the Redis authz cache when available; request-scoped via FastAPI Depends.
+    """
+    return fetch_effective_permission_keys_cached(conn, user["id"])
 
 
 EffectivePermissions = Annotated[frozenset[str], Depends(get_effective_permissions)]
@@ -115,5 +118,9 @@ def assert_permission(
     required: str,
 ) -> None:
     """Raise HTTP 403 if ``user_id`` lacks ``required`` (and is not admin)."""
-    if not user_has_permission(conn, user_id, required):
+    from untangled.rbac.cache import fetch_effective_permission_keys_cached
+
+    if not permission_grants(
+        fetch_effective_permission_keys_cached(conn, user_id), required
+    ):
         raise _forbidden(f"Missing permission: {required}")

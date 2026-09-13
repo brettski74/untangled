@@ -767,6 +767,7 @@ def test_search_without_read_is_opaque(
     from untangled.mapping.well_known import SYSTEM_USER_ID
     from untangled.persistence.ids import new_uuid7
     from untangled.rbac.keys import class_operation_key, permission_id_for_key
+    from untangled.rbac.store import bump_global_authz_version
     from untangled.seed.rbac import seed_rbac
     from untangled.seed.users import SEED_INCIDENT_ID
 
@@ -823,6 +824,7 @@ def test_search_without_read_is_opaque(
                 role_id,
             ),
         )
+    bump_global_authz_version(db_conn)
     db_conn.commit()
     try:
         id_only = _search(
@@ -865,5 +867,6 @@ def test_search_without_read_is_opaque(
             cur.execute("DELETE FROM user_role WHERE id = %s", (link_id,))
             cur.execute("DELETE FROM role_permission WHERE id = %s", (rp_id,))
             cur.execute("DELETE FROM role WHERE id = %s", (role_id,))
+        bump_global_authz_version(db_conn)
         db_conn.commit()
         seed_rbac(db_conn)

@@ -165,7 +165,7 @@ export async function load_config_from_env(
       redis_url,
     }),
     expiry: password_expiry_evaluator(),
-    users: make_user_repository(pool),
+    users: make_user_repository(pool, redis),
     sessions: make_session_repository(pool),
     change_password_apply: make_change_password_apply(pool),
     verify_password,

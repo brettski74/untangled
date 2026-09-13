@@ -57,12 +57,14 @@ def test_generate_demo_pydantic_accepts_and_rejects(
     zod_out = tmp_path / "zod"
     result = generate_models(repo_definitions, pydantic_out, zod_out)
     assert {d.name_snake for d in result.definitions} == {
+        "authz_version",
         "change_request",
         "demo_item",
         "demo_link",
         "incident",
         "permission",
         "role",
+        "role_child",
         "role_permission",
         "system_config",
         "used_refresh_token",

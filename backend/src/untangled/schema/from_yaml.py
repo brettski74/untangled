@@ -123,6 +123,15 @@ def _table_from_definition(definition: ClassDefinition) -> TableIR:
                 )
             )
 
+    for unique_cols in definition.unique_constraints:
+        indexes.append(
+            IndexIR(
+                name=unique_index_name(definition.name_snake, *unique_cols),
+                columns=unique_cols,
+                unique=True,
+            )
+        )
+
     checks = tuple(
         CheckIR(
             name=check_constraint_name(definition.name_snake, index),

@@ -18,12 +18,14 @@ def test_load_demo_item(repo_definitions: Path) -> None:
     definitions = load_definitions(repo_definitions)
     by_class = {d.name_snake: d for d in definitions}
     assert set(by_class) == {
+        "authz_version",
         "change_request",
         "demo_item",
         "demo_link",
         "incident",
         "permission",
         "role",
+        "role_child",
         "role_permission",
         "system_config",
         "used_refresh_token",
@@ -59,6 +61,25 @@ def test_load_demo_item(repo_definitions: Path) -> None:
     ur_attrs = {attr.name_snake: attr for attr in user_role.attributes}
     assert ur_attrs["user_id"].references == "user"
     assert ur_attrs["role_id"].references == "role"
+    assert user_role.unique_constraints == (("user_id", "role_id"),)
+
+    role_permission = by_class["role_permission"]
+    assert role_permission.unique_constraints == (("role_id", "permission_id"),)
+
+    role_child = by_class["role_child"]
+    rc_attrs = {attr.name_snake: attr for attr in role_child.attributes}
+    assert rc_attrs["parent_role_id"].references == "role"
+    assert rc_attrs["child_role_id"].references == "role"
+    assert role_child.unique_constraints == (("parent_role_id", "child_role_id"),)
+    assert role_child.permissions == ()
+    assert any("<>" in expr for expr in role_child.check_constraints)
+
+    authz_version = by_class["authz_version"]
+    assert authz_version.permissions == ()
+    assert authz_version.public is False
+    av_attrs = {attr.name_snake: attr for attr in authz_version.attributes}
+    assert av_attrs["version"].type_name == "integer"
+    assert av_attrs["version"].required is True
 
 
 def test_session_classes_are_internal(repo_definitions: Path) -> None:

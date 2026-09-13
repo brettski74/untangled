@@ -1,0 +1,17 @@
+# Monotonic global authz version (Postgres source of truth for Redis cache tags).
+# Internal singleton; not operator-tunable and not HTTP-mounted.
+name: authz_version
+display_name: Authz Version
+description: >
+  Singleton holding the monotonic global authorization version. Bumped in the
+  same transaction as role_permission, role_child, or user_role mutations so
+  per-user Redis permission caches reload on the next check. Not public; no
+  product permissions.
+check_constraint:
+  - "id = '${authz_version_id}'::uuid"
+attributes:
+  version:
+    type: integer
+    required: true
+    create_default: 1
+    min_value: 1

@@ -5,11 +5,13 @@
 import type { z } from "zod";
 
 import {
+  AuthzVersionCreateSchema,
   ChangeRequestCreateSchema,
   DemoItemCreateSchema,
   DemoLinkCreateSchema,
   IncidentCreateSchema,
   PermissionCreateSchema,
+  RoleChildCreateSchema,
   RolePermissionCreateSchema,
   RoleCreateSchema,
   UsedRefreshTokenCreateSchema,
@@ -21,11 +23,13 @@ import {
 export type CreateZodSchema = z.ZodType<Record<string, unknown>>;
 
 const CREATE_SCHEMAS: Readonly<Record<string, CreateZodSchema>> = {
+  authz_version: AuthzVersionCreateSchema,
   change_request: ChangeRequestCreateSchema,
   demo_item: DemoItemCreateSchema,
   demo_link: DemoLinkCreateSchema,
   incident: IncidentCreateSchema,
   permission: PermissionCreateSchema,
+  role_child: RoleChildCreateSchema,
   role_permission: RolePermissionCreateSchema,
   role: RoleCreateSchema,
   used_refresh_token: UsedRefreshTokenCreateSchema,

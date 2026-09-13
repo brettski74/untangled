@@ -13,6 +13,7 @@ from untangled.mapping.emit_well_known import (
 )
 from untangled.mapping.generate import generate_models
 from untangled.mapping.well_known import (
+    AUTHZ_VERSION_ID,
     SUBSTITUTION_CONTEXTS,
     SYSTEM_CONFIG_ID,
     SYSTEM_USER_ID,
@@ -24,6 +25,12 @@ from untangled.mapping.well_known import (
 
 def test_system_config_id_is_stable() -> None:
     assert SYSTEM_CONFIG_ID == UUID("01900000-0000-7000-8000-000000000050")
+
+
+def test_authz_version_id_is_stable() -> None:
+    assert AUTHZ_VERSION_ID == UUID("01900000-0000-7000-8000-000000000051")
+    assert WELL_KNOWN["authz_version_id"] == str(AUTHZ_VERSION_ID)
+    assert "authz_version_id" in SUBSTITUTION_CONTEXTS["check_constraint"]
 
 
 def test_system_user_id_is_stable() -> None:

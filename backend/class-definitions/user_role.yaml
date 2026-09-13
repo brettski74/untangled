@@ -3,7 +3,9 @@ name: user_role
 display_name: User Role
 description: >
   Assignment of a role to a user. Idempotent seed uses stable join row ids;
-  composite uniqueness is enforced by seed/application logic in M1.
+  composite uniqueness is enforced by a unique index on (user_id, role_id).
+unique:
+  - [user_id, role_id]
 attributes:
   user_id:
     type: uuid

@@ -91,6 +91,8 @@ class ClassDefinition:
     permissions: tuple[str, ...] = ()
     # Resolved SQL check expressions (``${…}`` already substituted).
     check_constraints: tuple[str, ...] = ()
+    # Composite unique indexes: each entry is an ordered tuple of attribute names.
+    unique_constraints: tuple[tuple[str, ...], ...] = ()
 
     def friendly_id_attr(self) -> AttributeDefinition | None:
         """Return the sole friendly_id attribute, if any."""
@@ -364,6 +366,7 @@ def load_definition(path: Path) -> ClassDefinition:
         "public",
         "permissions",
         "check_constraint",
+        "unique",
     }
     if unknown_top:
         raise DefinitionError(f"{path}: unknown top-level keys: {sorted(unknown_top)}")
@@ -379,6 +382,7 @@ def load_definition(path: Path) -> ClassDefinition:
             f"in permissions"
         )
     check_constraints = _parse_check_constraints(path, raw)
+    unique_constraints = _parse_unique_constraints(path, attributes, raw)
 
     return ClassDefinition(
         name_snake=name,
@@ -390,6 +394,7 @@ def load_definition(path: Path) -> ClassDefinition:
         public=public,
         permissions=permissions,
         check_constraints=check_constraints,
+        unique_constraints=unique_constraints,
     )
 
 
@@ -535,6 +540,57 @@ def _parse_check_constraints(path: Path, raw: dict[object, object]) -> tuple[str
         except SubstitutionError as exc:
             raise DefinitionError(f"{path}: {exc}") from exc
     return tuple(resolved)
+
+
+def _parse_unique_constraints(
+    path: Path,
+    attributes: list[AttributeDefinition],
+    raw: dict[object, object],
+) -> tuple[tuple[str, ...], ...]:
+    """Parse class-level ``unique`` lists of attribute-name lists."""
+    if "unique" not in raw:
+        return ()
+    value = raw["unique"]
+    if not isinstance(value, list) or not value:
+        raise DefinitionError(
+            f"{path}: 'unique' must be a non-empty list of attribute-name lists"
+        )
+    attr_names = {attr.name_snake for attr in attributes}
+    constraints: list[tuple[str, ...]] = []
+    seen_column_sets: set[frozenset[str]] = set()
+    for index, entry in enumerate(value, start=1):
+        if not isinstance(entry, list) or not entry:
+            raise DefinitionError(
+                f"{path}: 'unique' entry {index} must be a non-empty list of "
+                f"attribute names"
+            )
+        columns: list[str] = []
+        for col_index, col in enumerate(entry, start=1):
+            if not isinstance(col, str) or not col.strip():
+                raise DefinitionError(
+                    f"{path}: 'unique' entry {index} column {col_index} must be a "
+                    f"non-empty string"
+                )
+            name = col.strip()
+            _require_snake(name, path, f"unique[{index}][{col_index}]")
+            if name not in attr_names:
+                raise DefinitionError(
+                    f"{path}: 'unique' entry {index} references unknown attribute "
+                    f"{name!r}"
+                )
+            if name in columns:
+                raise DefinitionError(
+                    f"{path}: 'unique' entry {index} has duplicate column {name!r}"
+                )
+            columns.append(name)
+        column_set = frozenset(columns)
+        if column_set in seen_column_sets:
+            raise DefinitionError(
+                f"{path}: duplicate 'unique' constraint on columns {sorted(column_set)}"
+            )
+        seen_column_sets.add(column_set)
+        constraints.append(tuple(columns))
+    return tuple(constraints)
 
 
 _NUMERIC_BOUND_TYPES = frozenset({"integer", "float", "decimal"})

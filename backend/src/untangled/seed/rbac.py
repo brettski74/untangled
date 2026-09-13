@@ -1,4 +1,4 @@
-"""Idempotent RBAC seed: roles, permissions, and attachments."""
+"""Idempotent RBAC seed: roles, permissions, hierarchy, and attachments."""
 
 from __future__ import annotations
 
@@ -9,23 +9,32 @@ from psycopg import Connection, sql
 
 from untangled.mapping.datetime_utc import utc_now
 from untangled.mapping.well_known import SYSTEM_USER_ID
+from untangled.rbac.authz_version_bootstrap import ensure_authz_version_row
+from untangled.rbac.store import bump_global_authz_version
 from untangled.seed.rbac_catalog import (
     LEGACY_SEED_PERMISSION_KEYS,
-    SEED_ROLE_PERMISSIONS,
     SEED_ROLES,
     SEED_USER_ROLES,
+    SeedPermission,
+    SeedRoleChild,
+    SeedRolePermission,
     seed_permissions,
     seed_permissions_by_key,
+    seed_role_children,
+    seed_role_permissions,
 )
 
 
 def seed_rbac(conn: Connection) -> dict[str, int]:
-    """Upsert roles, permissions, and joins. Returns counts touched per kind."""
+    """Upsert roles, permissions, hierarchy, and joins. Returns counts touched."""
     now = utc_now()
     actor = SYSTEM_USER_ID
     permissions = seed_permissions()
     permissions_by_key = seed_permissions_by_key()
     catalog_keys = {p.key for p in permissions}
+    role_permissions = seed_role_permissions()
+    role_children = seed_role_children()
+    ensure_authz_version_row(conn)
     _upsert_roles(conn, now=now, actor=actor)
     _reconcile_permissions(
         conn,
@@ -36,15 +45,21 @@ def seed_rbac(conn: Connection) -> dict[str, int]:
     )
     _upsert_role_permissions(
         conn,
+        role_permissions=role_permissions,
         permissions_by_key=permissions_by_key,
         now=now,
         actor=actor,
     )
+    _upsert_role_children(
+        conn, role_children=role_children, now=now, actor=actor
+    )
     _upsert_user_roles(conn, now=now, actor=actor)
+    bump_global_authz_version(conn)
     counts = {
         "roles": len(SEED_ROLES),
         "permissions": len(permissions),
-        "role_permissions": len(SEED_ROLE_PERMISSIONS),
+        "role_permissions": len(role_permissions),
+        "role_children": len(role_children),
         "user_roles": len(SEED_USER_ROLES),
     }
     from untangled.audit.deps import ensure_audit_logger
@@ -203,11 +218,36 @@ def _reconcile_permissions(
 def _upsert_role_permissions(
     conn: Connection,
     *,
-    permissions_by_key: dict,
+    role_permissions: tuple[SeedRolePermission, ...],
+    permissions_by_key: dict[str, SeedPermission],
     now: datetime,
     actor: UUID,
 ) -> None:
-    for link in SEED_ROLE_PERMISSIONS:
+    seed_role_ids = [role.id for role in SEED_ROLES]
+    keep_pairs = [
+        (link.role_id, permissions_by_key[link.permission_key].id)
+        for link in role_permissions
+    ]
+    with conn.cursor() as cur:
+        if keep_pairs:
+            cur.execute(
+                "DELETE FROM role_permission rp "
+                "WHERE rp.role_id = ANY(%s) AND NOT EXISTS ("
+                "  SELECT 1 FROM unnest(%s::uuid[], %s::uuid[]) AS k(role_id, permission_id) "
+                "  WHERE k.role_id = rp.role_id AND k.permission_id = rp.permission_id"
+                ")",
+                (
+                    seed_role_ids,
+                    [pair[0] for pair in keep_pairs],
+                    [pair[1] for pair in keep_pairs],
+                ),
+            )
+        else:
+            cur.execute(
+                "DELETE FROM role_permission WHERE role_id = ANY(%s)",
+                (seed_role_ids,),
+            )
+    for link in role_permissions:
         permission = permissions_by_key[link.permission_key]
         with conn.cursor() as cur:
             cur.execute(
@@ -217,9 +257,7 @@ def _upsert_role_permissions(
                     "role_id, permission_id"
                     ") VALUES ("
                     "{}, {}, {}, {}, {}, {}, {}"
-                    ") ON CONFLICT (id) DO UPDATE SET "
-                    "role_id = EXCLUDED.role_id, "
-                    "permission_id = EXCLUDED.permission_id, "
+                    ") ON CONFLICT (role_id, permission_id) DO UPDATE SET "
                     "updated_at = EXCLUDED.updated_at, "
                     "updated_by = EXCLUDED.updated_by"
                 ).format(
@@ -234,6 +272,66 @@ def _upsert_role_permissions(
                     actor,
                     link.role_id,
                     permission.id,
+                ),
+            )
+
+
+def _upsert_role_children(
+    conn: Connection,
+    *,
+    role_children: tuple[SeedRoleChild, ...],
+    now: datetime,
+    actor: UUID,
+) -> None:
+    seed_role_ids = [role.id for role in SEED_ROLES]
+    keep_pairs = [
+        (link.parent_role_id, link.child_role_id) for link in role_children
+    ]
+    with conn.cursor() as cur:
+        if keep_pairs:
+            cur.execute(
+                "DELETE FROM role_child rc "
+                "WHERE rc.parent_role_id = ANY(%s) AND NOT EXISTS ("
+                "  SELECT 1 FROM unnest(%s::uuid[], %s::uuid[]) "
+                "  AS k(parent_role_id, child_role_id) "
+                "  WHERE k.parent_role_id = rc.parent_role_id "
+                "    AND k.child_role_id = rc.child_role_id"
+                ")",
+                (
+                    seed_role_ids,
+                    [pair[0] for pair in keep_pairs],
+                    [pair[1] for pair in keep_pairs],
+                ),
+            )
+        else:
+            cur.execute(
+                "DELETE FROM role_child WHERE parent_role_id = ANY(%s)",
+                (seed_role_ids,),
+            )
+    for link in role_children:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql.SQL(
+                    "INSERT INTO {} ("
+                    "id, created_at, updated_at, created_by, updated_by, "
+                    "parent_role_id, child_role_id"
+                    ") VALUES ("
+                    "{}, {}, {}, {}, {}, {}, {}"
+                    ") ON CONFLICT (parent_role_id, child_role_id) DO UPDATE SET "
+                    "updated_at = EXCLUDED.updated_at, "
+                    "updated_by = EXCLUDED.updated_by"
+                ).format(
+                    sql.Identifier("role_child"),
+                    *[sql.Placeholder() for _ in range(7)],
+                ),
+                (
+                    link.id,
+                    now,
+                    now,
+                    actor,
+                    actor,
+                    link.parent_role_id,
+                    link.child_role_id,
                 ),
             )
 
