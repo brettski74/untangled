@@ -468,9 +468,13 @@ async function handle_logout(
   }
 
   const identity = request_identity(request, config.public_origin);
+  const access = extract_access_token(request, response);
+  if (access.kind === "responded") {
+    return;
+  }
   const result = await run_logout_pipeline(
     {
-      access_token: access_token_from_request(request),
+      access_token: access.kind === "present" ? access.token : null,
       source_ip: identity.source_ip,
       protocol: identity.protocol,
       host: identity.host,
@@ -546,15 +550,44 @@ function parse_refresh_body(
   return { ok: true, data: {} };
 }
 
-function access_token_from_request(request: IncomingMessage): string | null {
-  const authorization = header_value(request.headers.authorization) ?? "";
-  if (authorization.toLowerCase().startsWith("bearer ")) {
-    const token = authorization.slice("bearer ".length).trim();
-    return token === "" ? null : token;
+type AccessTokenExtraction =
+  | { kind: "dual" }
+  | { kind: "none" }
+  | { kind: "present"; token: string };
+
+function bearer_authorization(authorization: string): { scheme: boolean; token: string } {
+  const match = /^bearer(?:\s+(.*))?$/i.exec(authorization.trim());
+  if (match == null) {
+    return { scheme: false, token: "" };
   }
+  return { scheme: true, token: (match[1] ?? "").trim() };
+}
+
+function access_token_from_request(request: IncomingMessage): AccessTokenExtraction {
+  const authorization = header_value(request.headers.authorization) ?? "";
+  const bearer = bearer_authorization(authorization);
   const cookies = parse_cookie_header(header_value(request.headers.cookie));
   const cookie_token = cookies.get(ACCESS_COOKIE_NAME) ?? "";
-  return cookie_token === "" ? null : cookie_token;
+  const cookie_present = cookie_token !== "";
+  if (bearer.scheme && cookie_present) {
+    return { kind: "dual" };
+  }
+  if (bearer.scheme) {
+    return bearer.token === "" ? { kind: "none" } : { kind: "present", token: bearer.token };
+  }
+  return cookie_present ? { kind: "present", token: cookie_token } : { kind: "none" };
+}
+
+function extract_access_token(
+  request: IncomingMessage,
+  response: ServerResponse,
+): { kind: "responded" } | { kind: "none" } | { kind: "present"; token: string } {
+  const extracted = access_token_from_request(request);
+  if (extracted.kind === "dual") {
+    json(response, 400, { detail: "Bad request" });
+    return { kind: "responded" };
+  }
+  return extracted;
 }
 
 async function handle_me(
@@ -562,11 +595,15 @@ async function handle_me(
   response: ServerResponse,
   config: AuthConfig,
 ): Promise<void> {
-  const token = access_token_from_request(request);
-  if (token == null) {
+  const access = extract_access_token(request, response);
+  if (access.kind === "responded") {
+    return;
+  }
+  if (access.kind === "none") {
     credentials_denied(response, false);
     return;
   }
+  const token = access.token;
   const verified = await verify_access_jwt(config.public_key, token);
   if (verified.kind === "invalid") {
     credentials_denied(response, false);
@@ -659,12 +696,15 @@ async function handle_change_password(
     return;
   }
 
-  const access = access_token_from_request(request);
-  if (access == null) {
+  const access = extract_access_token(request, response);
+  if (access.kind === "responded") {
+    return;
+  }
+  if (access.kind === "none") {
     credentials_denied(response, false);
     return;
   }
-  const verified = await verify_access_jwt(config.public_key, access);
+  const verified = await verify_access_jwt(config.public_key, access.token);
   if (verified.kind === "invalid") {
     credentials_denied(response, false);
     return;

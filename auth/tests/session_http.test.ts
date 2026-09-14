@@ -170,6 +170,65 @@ describe("auth me + change-password", () => {
     assert.ok(body.permissions.includes("admin"));
   });
 
+  it("GET /me returns profile for an access cookie", async () => {
+    const access = await login_access();
+    const response = await fetch(`${base_url}/api/v2/auth/me`, {
+      headers: { Cookie: `${ACCESS_COOKIE_NAME}=${access}` },
+    });
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { username: string };
+    assert.equal(body.username, "admin");
+  });
+
+  it("GET /me returns retry on an expired-valid access cookie", async () => {
+    const expired = await sign_access_token(private_key, TEST_USER_ID, {
+      ttl_seconds: 60,
+      sid: "01900000-0000-7000-8000-0000000000aa",
+      now: new Date(Date.now() - 120_000),
+    });
+    const response = await fetch(`${base_url}/api/v2/auth/me`, {
+      headers: { Cookie: `${ACCESS_COOKIE_NAME}=${expired}` },
+    });
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+      detail: "Could not validate credentials",
+      retry: true,
+    });
+  });
+
+  it("GET /me uses the cookie when Authorization is not Bearer", async () => {
+    const access = await login_access();
+    const response = await fetch(`${base_url}/api/v2/auth/me`, {
+      headers: {
+        Cookie: `${ACCESS_COOKIE_NAME}=${access}`,
+        Authorization: "Basic dXNlcjpwYXNz",
+      },
+    });
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { username: string };
+    assert.equal(body.username, "admin");
+  });
+
+  it("GET /me returns 400 when access JWT is sent as both cookie and Bearer", async () => {
+    const dual = await fetch(`${base_url}/api/v2/auth/me`, {
+      headers: {
+        Cookie: `${ACCESS_COOKIE_NAME}=junk-cookie`,
+        Authorization: "BEARER junk-bearer",
+      },
+    });
+    assert.equal(dual.status, 400);
+    assert.deepEqual(await dual.json(), { detail: "Bad request" });
+
+    const empty_bearer = await fetch(`${base_url}/api/v2/auth/me`, {
+      headers: {
+        Cookie: `${ACCESS_COOKIE_NAME}=junk-cookie`,
+        Authorization: "Bearer",
+      },
+    });
+    assert.equal(empty_bearer.status, 400);
+    assert.deepEqual(await empty_bearer.json(), { detail: "Bad request" });
+  });
+
   it("change-password rejects a wrong current password without leaking why", async () => {
     const access = await login_access();
     const { token, cookie } = await issue_csrf();
@@ -192,6 +251,64 @@ describe("auth me + change-password", () => {
     assert.deepEqual(await response.json(), {
       detail: "Password change failed.",
     });
+  });
+
+  it("change-password returns 400 when access JWT is sent as both cookie and Bearer", async () => {
+    const access = await login_access();
+    const { token, cookie } = await issue_csrf();
+    const response = await fetch(`${base_url}/api/v2/auth/change-password`, {
+      method: "POST",
+      headers: {
+        Origin: PUBLIC_ORIGIN,
+        Cookie: `${cookie}; ${ACCESS_COOKIE_NAME}=${access}`,
+        Authorization: `Bearer ${access}`,
+        "X-CSRF-Token": token,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        current_password: "admin-change-me",
+        new_password: STRONG_NEW,
+        verify_new_password: STRONG_NEW,
+      }),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { detail: "Bad request" });
+
+    const still_current = await fetch(`${base_url}/api/v2/auth/login`, {
+      method: "POST",
+      headers: {
+        Origin: PUBLIC_ORIGIN,
+        Cookie: cookie,
+        "X-CSRF-Token": token,
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "username=admin&password=admin-change-me",
+    });
+    assert.equal(still_current.status, 200);
+  });
+
+  it("change-password keeps CSRF denial when dual access channels are sent without Origin", async () => {
+    const access = await login_access();
+    const { token, cookie } = await issue_csrf();
+    const response = await fetch(`${base_url}/api/v2/auth/change-password`, {
+      method: "POST",
+      headers: {
+        Cookie: `${cookie}; ${ACCESS_COOKIE_NAME}=${access}`,
+        Authorization: `Bearer ${access}`,
+        "X-CSRF-Token": token,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        current_password: "admin-change-me",
+        new_password: STRONG_NEW,
+        verify_new_password: STRONG_NEW,
+      }),
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { detail: "Forbidden" });
   });
 
   it("change-password requires Origin/CSRF and does not reissue tokens on a normal session", async () => {
