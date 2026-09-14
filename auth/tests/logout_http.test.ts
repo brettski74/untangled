@@ -138,6 +138,8 @@ describe("POST /api/v2/auth/logout", () => {
 
   async function post_logout(args: {
     access?: string | null;
+    access_cookie?: string;
+    authorization?: string;
     bearer?: boolean;
     refresh?: string;
     csrf_token?: string;
@@ -151,11 +153,18 @@ describe("POST /api/v2/auth/logout", () => {
       args.csrf_token != null && args.csrf_cookie != null
         ? { token: args.csrf_token, cookie: args.csrf_cookie }
         : await issue_csrf();
+    const cookie_access =
+      args.access_cookie != null && args.access_cookie !== ""
+        ? args.access_cookie
+        : args.access != null &&
+            args.access !== "" &&
+            args.bearer !== true &&
+            args.authorization == null
+          ? args.access
+          : "";
     const cookies = cookie_header([
       csrf.cookie,
-      args.access != null && args.access !== "" && args.bearer !== true
-        ? `${ACCESS_COOKIE_NAME}=${args.access}`
-        : "",
+      cookie_access !== "" ? `${ACCESS_COOKIE_NAME}=${cookie_access}` : "",
       args.refresh != null ? `${REFRESH_COOKIE_NAME}=${args.refresh}` : "",
     ]);
     const headers: Record<string, string> = {
@@ -165,7 +174,9 @@ describe("POST /api/v2/auth/logout", () => {
       Accept: "application/json",
       "Content-Type": "application/json",
     };
-    if (args.bearer === true && args.access != null && args.access !== "") {
+    if (args.authorization != null && args.authorization !== "") {
+      headers.Authorization = args.authorization;
+    } else if (args.bearer === true && args.access != null && args.access !== "") {
       headers.Authorization = `Bearer ${args.access}`;
     }
     if (args.user_agent != null) {
@@ -267,6 +278,42 @@ describe("POST /api/v2/auth/logout", () => {
     assert.equal(event.user_id, TEST_USER_ID);
     assert.equal(event.ip_address, "203.0.113.9");
     assert.equal(event.data.user_agent, "logout-browser");
+  });
+
+  it("returns 400 when access JWT is sent as both cookie and Bearer without deleting", async () => {
+    const { access, refresh } = await login();
+    const before = sessions.rows.length;
+    const response = await post_logout({
+      access_cookie: access,
+      authorization: `BEARER ${access}`,
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { detail: "Bad request" });
+    assert.equal(sessions.rows.length, before);
+    assert.equal(
+      sessions.rows.some(
+        (row) => row.refresh_hmac === hmac_refresh_token(hmac_secret, refresh ?? ""),
+      ),
+      true,
+    );
+  });
+
+  it("keeps CSRF denial when dual access channels are sent with a CSRF mismatch", async () => {
+    const { access, csrf_cookie } = await login();
+    const before = sessions.rows.length;
+    audit_events.length = 0;
+    const other = await issue_csrf();
+    const response = await post_logout({
+      access_cookie: access,
+      authorization: `Bearer ${access}`,
+      csrf_token: other.token,
+      csrf_cookie,
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { detail: "Forbidden" });
+    assert.equal(sessions.rows.length, before);
+    assert.equal(audit_events[0]?.event_type, AUTH_CSRF_DENIED);
+    assert.equal(audit_events[0]?.reason, CSRF_DENIED_CSRF);
   });
 
   it("accepts a claim-expired Bearer JWT and does not require a refresh cookie", async () => {
