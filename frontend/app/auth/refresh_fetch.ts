@@ -69,6 +69,41 @@ function csrf_required(method: string): boolean {
   return method !== "GET" && method !== "OPTIONS";
 }
 
+const JSON_CSRF_TOKEN_FIELD = /("csrf_token"\s*:\s*)("(?:\\.|[^"\\])*")/;
+
+/** Rewrite only a top-level JSON ``csrf_token`` string; otherwise return ``body`` as-is. */
+function rewrite_json_csrf_token_field(
+  body: BodyInit | null | undefined,
+  token: string,
+): BodyInit | null | undefined {
+  if (typeof body !== "string") {
+    return body;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return body;
+  }
+  if (
+    parsed == null ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    !("csrf_token" in parsed) ||
+    typeof (parsed as { csrf_token: unknown }).csrf_token !== "string"
+  ) {
+    return body;
+  }
+  const current = (parsed as { csrf_token: string }).csrf_token;
+  if (current === token) {
+    return body;
+  }
+  const escaped_new = JSON.stringify(token);
+  return body.replace(JSON_CSRF_TOKEN_FIELD, (_match, prefix: string) => {
+    return `${prefix}${escaped_new}`;
+  });
+}
+
 async function init_with_csrf(
   input: RequestInfo | URL,
   init: RequestInit,
@@ -82,12 +117,10 @@ async function init_with_csrf(
   if (!csrf_required(resolved_method(input, init))) {
     return next;
   }
-  if (headers.get("X-CSRF-Token")) {
-    return next;
-  }
   const token = await csrf_token();
   if (token !== "") {
     headers.set("X-CSRF-Token", token);
+    next.body = rewrite_json_csrf_token_field(init.body, token);
   }
   return next;
 }
