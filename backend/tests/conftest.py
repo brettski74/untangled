@@ -14,6 +14,7 @@ os.environ.setdefault(
     "UNTANGLED_AUDIT_LOG_DIR",
     tempfile.mkdtemp(prefix="untangled-audit-"),
 )
+os.environ.setdefault("UNTANGLED_PUBLIC_ORIGIN", "https://localhost:8443")
 
 
 def _install_test_es256_keys() -> None:

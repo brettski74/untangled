@@ -6,7 +6,6 @@ import {
   nav_goto,
   open_identity_menu,
   sign_out,
-  track_domain_api,
 } from "./helpers/auth";
 import { SEED_USERS } from "./helpers/users";
 
@@ -32,13 +31,10 @@ test.describe("shell and auth", () => {
     await page.getByRole("button", { name: "Expand navigation" }).click();
   });
 
-  test("P65-3: Search expands without searching", async ({ page }) => {
+  test("P65-3: Search expands the query box", async ({ page }) => {
     await login(page, "admin");
-    const tracker = track_domain_api(page);
     await page.getByRole("button", { name: "Search" }).click();
     await expect(page.getByPlaceholder(/Search/)).toBeVisible();
-    tracker.assert_clean();
-    tracker.dispose();
   });
 
   test("P66: nav sections and accordion", async ({ page }) => {

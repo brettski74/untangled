@@ -208,4 +208,147 @@ describe("authenticated_fetch", () => {
     expect(fetch_mock).toHaveBeenCalledTimes(1);
     expect(assign).not.toHaveBeenCalled();
   });
+
+  it("attaches CSRF on unsafe methods from the cookie and skips GET", async () => {
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/v2/auth/csrf")) {
+        return Response.json({ csrf_token: "csrf-from-fetch" });
+      }
+      return Response.json({ ok: true }, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch_mock);
+
+    await authenticated_fetch("/api/v2/incident/search", {
+      method: "POST",
+      body: "{}",
+    });
+    const post_headers = new Headers(fetch_mock.mock.calls[0]?.[1]?.headers);
+    expect(post_headers.get("X-CSRF-Token")).toBe("csrf-from-cookie");
+    expect(
+      fetch_mock.mock.calls.some((call) => String(call[0]).includes("/api/v2/auth/csrf")),
+    ).toBe(false);
+
+    fetch_mock.mockClear();
+    await authenticated_fetch("/api/v2/incident/x");
+    const get_headers = new Headers(fetch_mock.mock.calls[0]?.[1]?.headers);
+    expect(get_headers.get("X-CSRF-Token")).toBeNull();
+  });
+
+  it("binds CSRF from the live cookie, overwriting a stale caller header and JSON csrf_token", async () => {
+    const fetch_mock = vi.fn().mockResolvedValue(Response.json({ ok: true }, { status: 200 }));
+    vi.stubGlobal("fetch", fetch_mock);
+
+    const body = JSON.stringify({
+      csrf_token: "caller-token",
+      current_password: "admin-change-me1",
+    });
+    await authenticated_fetch("/api/v2/auth/change-password", {
+      method: "POST",
+      headers: { "X-CSRF-Token": "caller-token" },
+      body,
+    });
+    const headers = new Headers(fetch_mock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("X-CSRF-Token")).toBe("csrf-from-cookie");
+    expect(fetch_mock.mock.calls[0]?.[1]?.body).toBe(
+      JSON.stringify({
+        csrf_token: "csrf-from-cookie",
+        current_password: "admin-change-me1",
+      }),
+    );
+  });
+
+  it("retries the original method URL and body after refresh", async () => {
+    let original_calls = 0;
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/v2/auth/csrf")) {
+        document.cookie = `${CSRF_COOKIE_NAME}=csrf-from-fetch`;
+        return Response.json({ csrf_token: "csrf-from-fetch" });
+      }
+      if (url.includes("/api/v2/auth/refresh")) {
+        return Response.json({ ok: true }, { status: 200 });
+      }
+      original_calls += 1;
+      if (original_calls === 1) {
+        return Response.json(
+          { detail: "Could not validate credentials", retry: true },
+          { status: 401 },
+        );
+      }
+      return Response.json({ ok: true }, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch_mock);
+
+    const body = JSON.stringify({ summary: "x" });
+    await authenticated_fetch("/api/v2/incident", {
+      method: "POST",
+      body,
+    });
+    const originals = fetch_mock.mock.calls.filter(
+      (call) => String(call[0]) === "/api/v2/incident",
+    );
+    expect(originals).toHaveLength(2);
+    expect(originals[0]?.[1]).toMatchObject({ method: "POST", body });
+    expect(originals[1]?.[1]).toMatchObject({ method: "POST", body });
+    expect(originals[1]?.[1]?.body).toBe(body);
+    expect(new Headers(originals[0]?.[1]?.headers).get("X-CSRF-Token")).toBe(
+      "csrf-from-cookie",
+    );
+    expect(new Headers(originals[1]?.[1]?.headers).get("X-CSRF-Token")).toBe(
+      "csrf-from-fetch",
+    );
+  });
+
+  it("rebinds caller CSRF header and JSON csrf_token after refresh mints a new cookie", async () => {
+    let original_calls = 0;
+    const fetch_mock = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/v2/auth/csrf")) {
+        document.cookie = `${CSRF_COOKIE_NAME}=csrf-from-fetch`;
+        return Response.json({ csrf_token: "csrf-from-fetch" });
+      }
+      if (url.includes("/api/v2/auth/refresh")) {
+        return Response.json({ ok: true }, { status: 200 });
+      }
+      original_calls += 1;
+      if (original_calls === 1) {
+        return Response.json(
+          { detail: "Could not validate credentials", retry: true },
+          { status: 401 },
+        );
+      }
+      return Response.json({ ok: true, detail: "Password change complete." }, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch_mock);
+
+    const body =
+      '{"csrf_token":"csrf-from-cookie","current_password":"admin-change-me1","new_password":"admin-change-me","verify_new_password":"admin-change-me","invalidate_user_sessions":false}';
+    const response = await authenticated_fetch("/api/v2/auth/change-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-CSRF-Token": "csrf-from-cookie",
+      },
+      body,
+    });
+    expect(response.status).toBe(200);
+    expect(assign).not.toHaveBeenCalled();
+
+    const originals = fetch_mock.mock.calls.filter(
+      (call) => String(call[0]) === "/api/v2/auth/change-password",
+    );
+    expect(originals).toHaveLength(2);
+    expect(new Headers(originals[0]?.[1]?.headers).get("X-CSRF-Token")).toBe(
+      "csrf-from-cookie",
+    );
+    expect(originals[0]?.[1]?.body).toBe(body);
+    expect(new Headers(originals[1]?.[1]?.headers).get("X-CSRF-Token")).toBe(
+      "csrf-from-fetch",
+    );
+    expect(originals[1]?.[1]?.body).toBe(
+      '{"csrf_token":"csrf-from-fetch","current_password":"admin-change-me1","new_password":"admin-change-me","verify_new_password":"admin-change-me","invalidate_user_sessions":false}',
+    );
+  });
 });

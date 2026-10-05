@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { data, useFetcher, useOutletContext, useRevalidator } from "react-router";
+import { data, useOutletContext, useRevalidator } from "react-router";
 
 import { ApiForbiddenError, ApiUnauthorizedError } from "../auth/errors";
 import {
   DOCUMENT_BOOTSTRAP,
   forbidden_response,
-  redirect_unauthenticated,
   redirect_unauthorized,
   require_document_access,
 } from "../auth/gate.server";
-import { get_access_token } from "../auth/session.server";
 import { DetailContextBar } from "../detail/detail_context_bar";
 import {
   apply_field_edit,
@@ -26,18 +24,11 @@ import { commit_active_editor_field } from "../detail/commit_active_editor_field
 import { DetailForm } from "../detail/detail_form";
 import { partition_detail_layout } from "../detail/default_layout";
 import { use_record_editor_undo } from "../detail/use_record_editor_undo";
-import {
-  update_schema_for_class,
-  update_schema_keys,
-} from "../records/update_schema_registry";
-import {
-  zod_error_detail,
-  zod_error_http_status,
-} from "../records/zod_http_status";
 import { class_field_meta } from "../generated/field_meta";
+import { update_record } from "../records/browser_api";
 import { fetch_record } from "../records/fetch.server";
+import { prepare_update_body } from "../records/mutation_body";
 import { record_detail_path } from "../records/record_paths";
-import { is_json_object, update_record } from "../records/update.server";
 import { can_update_class } from "../shell/nav_filter";
 import { ShellContextBar } from "../shell/shell_context_bar";
 import type { AuthenticatedOutletContext } from "./authenticated";
@@ -52,10 +43,6 @@ export type DetailLoaderData = {
   record: Record<string, unknown>;
   layout: ReturnType<typeof partition_detail_layout>;
 };
-
-export type DetailSaveActionResult =
-  | { ok: true; record: Record<string, unknown> }
-  | { ok: false; status: number; detail: string };
 
 export function meta({ loaderData: loader_data }: Route.MetaArgs) {
   if (loader_data == null) {
@@ -129,121 +116,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 }
 
-export async function action({
-  request,
-  params,
-}: Route.ActionArgs): Promise<
-  ReturnType<typeof data<DetailSaveActionResult>>
-> {
-  const class_name = params.class_name;
-  const locator = params.locator;
-  if (class_name == null || locator == null || locator === "") {
-    throw new Response("Not Found", { status: 404 });
-  }
-  if (locator === "new" || locator === "lists") {
-    throw new Response("Not Found", { status: 404 });
-  }
-
-  if (class_field_meta(class_name) == null) {
-    throw new Response("Not Found", { status: 404 });
-  }
-
-  const access_token = await get_access_token(request);
-  if (access_token == null) {
-    throw redirect_unauthenticated(request);
-  }
-
-  let body_unknown: unknown;
-  try {
-    body_unknown = await request.json();
-  } catch {
-    return data(
-      { ok: false, status: 400, detail: "Invalid JSON body" },
-      { status: 400 },
-    );
-  }
-
-  if (!is_json_object(body_unknown)) {
-    return data(
-      { ok: false, status: 400, detail: "Body must be a JSON object" },
-      { status: 400 },
-    );
-  }
-
-  const patch_body = body_unknown;
-  const schema = update_schema_for_class(class_name);
-  if (schema != null) {
-    const known = update_schema_keys(schema);
-    const unknown_keys = Object.keys(patch_body).filter((k) => !known.has(k));
-    if (unknown_keys.length > 0) {
-      return data(
-        {
-          ok: false,
-          status: 400,
-          detail: `Unrecognized attributes: ${unknown_keys.join(", ")}`,
-        },
-        { status: 400 },
-      );
-    }
-    const parsed = schema.safeParse(patch_body);
-    if (!parsed.success) {
-      const status = zod_error_http_status(parsed.error);
-      const { detail } = zod_error_detail(parsed.error);
-      return data({ ok: false, status, detail }, { status });
-    }
-  }
-
-  try {
-    const record = await update_record(
-      access_token,
-      class_name,
-      locator,
-      patch_body,
-    );
-    return data({ ok: true, record } satisfies DetailSaveActionResult);
-  } catch (error) {
-    if (error instanceof ApiUnauthorizedError) {
-      throw await redirect_unauthorized(request);
-    }
-    if (error instanceof ApiForbiddenError) {
-      return data(
-        { ok: false, status: 403, detail: "Forbidden" },
-        { status: 403 },
-      );
-    }
-    if (error instanceof Response) {
-      let detail = error.statusText || `Update failed (${error.status})`;
-      try {
-        const text = await error.clone().text();
-        if (text.length > 0) {
-          try {
-            const json: unknown = JSON.parse(text);
-            if (
-              json != null &&
-              typeof json === "object" &&
-              "detail" in json &&
-              typeof (json as { detail: unknown }).detail === "string"
-            ) {
-              detail = (json as { detail: string }).detail;
-            } else {
-              detail = text;
-            }
-          } catch {
-            detail = text;
-          }
-        }
-      } catch {
-        // keep statusText
-      }
-      return data(
-        { ok: false, status: error.status, detail },
-        { status: error.status },
-      );
-    }
-    throw error;
-  }
-}
-
 export default function DestinationDetailPage({
   loaderData,
 }: Route.ComponentProps) {
@@ -265,14 +137,13 @@ export default function DestinationDetailPage({
     loaded.record,
   );
   const [save_error, set_save_error] = useState<string | null>(null);
+  const [save_pending, set_save_pending] = useState(false);
   const [pending_refresh, set_pending_refresh] = useState(false);
 
   const form_ref = useRef<HTMLDivElement>(null);
   const editor_ref = useRef(editor);
   editor_ref.current = editor;
   const revalidator = useRevalidator();
-  const fetcher = useFetcher<DetailSaveActionResult>();
-  const handled_fetcher_key = useRef<string | null>(null);
 
   const dirty = is_dirty(editor.baseline, editor.draft, editable);
   const save_enabled = can_update && dirty;
@@ -294,26 +165,6 @@ export default function DestinationDetailPage({
     loaded.record,
     editable,
   ]);
-
-  // Apply successful save from fetcher; keep draft on failure.
-  useEffect(() => {
-    if (fetcher.state !== "idle" || fetcher.data == null) {
-      return;
-    }
-    const data_key = `${fetcher.formAction ?? "save"}:${JSON.stringify(fetcher.data)}`;
-    if (handled_fetcher_key.current === data_key) {
-      return;
-    }
-    handled_fetcher_key.current = data_key;
-
-    if (fetcher.data.ok) {
-      set_display_record(fetcher.data.record);
-      set_editor(reset_editor_from_record(fetcher.data.record, editable));
-      set_save_error(null);
-    } else {
-      set_save_error(fetcher.data.detail);
-    }
-  }, [fetcher.state, fetcher.data, fetcher.formAction, editable]);
 
   use_record_editor_undo(
     form_ref,
@@ -342,7 +193,7 @@ export default function DestinationDetailPage({
 
   const activate_save_ref = useRef(() => {});
   activate_save_ref.current = () => {
-    if (!can_update || fetcher.state !== "idle") {
+    if (!can_update || save_pending) {
       return;
     }
     // Time24Field commits on blur; flush before dirty/changed computation.
@@ -359,12 +210,25 @@ export default function DestinationDetailPage({
     if (Object.keys(changed).length === 0) {
       return;
     }
+    const prepared = prepare_update_body(loaded.class_name, changed);
+    if (!prepared.ok) {
+      set_save_error(prepared.detail);
+      return;
+    }
     set_save_error(null);
-    void fetcher.submit(changed as Record<string, string | number | boolean | null>, {
-      method: "PATCH",
-      action: `.`,
-      encType: "application/json",
-    });
+    set_save_pending(true);
+    void update_record(loaded.class_name, loaded.locator, prepared.body).then(
+      (result) => {
+        set_save_pending(false);
+        if (!result.ok) {
+          set_save_error(result.detail);
+          return;
+        }
+        set_display_record(result.record);
+        set_editor(reset_editor_from_record(result.record, editable));
+        set_save_error(null);
+      },
+    );
   };
 
   function on_refresh() {
@@ -388,7 +252,7 @@ export default function DestinationDetailPage({
           copy_url={loaded.copy_path}
           dirty={dirty}
           save_enabled={save_enabled}
-          save_pending={fetcher.state !== "idle"}
+          save_pending={save_pending}
           on_save={() => activate_save_ref.current()}
           on_refresh={on_refresh}
           refresh_pending={pending_refresh || revalidator.state === "loading"}

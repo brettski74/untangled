@@ -52,6 +52,79 @@ function is_refresh_bootstrap(href: string): boolean {
   }
 }
 
+function resolved_method(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): string {
+  if (typeof init.method === "string" && init.method !== "") {
+    return init.method.toUpperCase();
+  }
+  if (typeof Request !== "undefined" && input instanceof Request) {
+    return input.method.toUpperCase();
+  }
+  return "GET";
+}
+
+function csrf_required(method: string): boolean {
+  return method !== "GET" && method !== "OPTIONS";
+}
+
+const JSON_CSRF_TOKEN_FIELD = /("csrf_token"\s*:\s*)("(?:\\.|[^"\\])*")/;
+
+/** Rewrite only a top-level JSON ``csrf_token`` string; otherwise return ``body`` as-is. */
+function rewrite_json_csrf_token_field(
+  body: BodyInit | null | undefined,
+  token: string,
+): BodyInit | null | undefined {
+  if (typeof body !== "string") {
+    return body;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return body;
+  }
+  if (
+    parsed == null ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    !("csrf_token" in parsed) ||
+    typeof (parsed as { csrf_token: unknown }).csrf_token !== "string"
+  ) {
+    return body;
+  }
+  const current = (parsed as { csrf_token: string }).csrf_token;
+  if (current === token) {
+    return body;
+  }
+  const escaped_new = JSON.stringify(token);
+  return body.replace(JSON_CSRF_TOKEN_FIELD, (_match, prefix: string) => {
+    return `${prefix}${escaped_new}`;
+  });
+}
+
+async function init_with_csrf(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<RequestInit> {
+  const headers = new Headers(init.headers);
+  const next: RequestInit = {
+    ...init,
+    credentials: init.credentials ?? "include",
+    headers,
+  };
+  if (!csrf_required(resolved_method(input, init))) {
+    return next;
+  }
+  const token = await csrf_token();
+  if (token !== "") {
+    headers.set("X-CSRF-Token", token);
+    next.body = rewrite_json_csrf_token_field(init.body, token);
+  }
+  return next;
+}
+
 export function assign_login(): void {
   if (typeof window === "undefined") {
     return;
@@ -160,11 +233,9 @@ export async function authenticated_fetch(
 ): Promise<Response> {
   const href = request_href(input);
   const skip_refresh = is_refresh_bootstrap(href);
+  const request_init = await init_with_csrf(input, init);
 
-  const original = await fetch(input, {
-    ...init,
-    credentials: init.credentials ?? "include",
-  });
+  const original = await fetch(input, request_init);
   if (skip_refresh || original.status === 403) {
     return original;
   }
@@ -178,10 +249,8 @@ export async function authenticated_fetch(
 
   const refreshed = await run_refresh_attempts();
   if (refreshed === "ok") {
-    return fetch(input, {
-      ...init,
-      credentials: init.credentials ?? "include",
-    });
+    const retry_init = await init_with_csrf(input, init);
+    return fetch(input, retry_init);
   }
   assign_login();
   return original;

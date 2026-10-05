@@ -40,13 +40,13 @@ describe("ListContextBar controlled chrome wiring", () => {
 });
 
 describe("DestinationListPage shared search submit", () => {
-  it("owns fetcher path gating and filter chrome mount", async () => {
+  it("owns generation gating and filter chrome mount", async () => {
     const source = await readFile(
       new URL("../routes/destination_list.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toMatch(/fetcher_path_ref\.current !== loaded\.path/);
-    expect(source).toMatch(/fetcher_path_ref\.current = loaded\.path/);
+    expect(source).toMatch(/search_gen_ref\.current/);
+    expect(source).toMatch(/search_records/);
     expect(source).toMatch(/ListFilterChrome/);
     expect(source).toMatch(/SearchApiError/);
   });

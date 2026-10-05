@@ -6,11 +6,10 @@ Slice 2 (#81) read-layout cases remain covered by existing suites; this plan own
 
 ## Scope
 
-- In-place edit; dirty vs clean; Save icon + Ctrl+S via SSR PATCH
+- In-place edit; dirty vs clean; Save icon + Ctrl+S via same-origin domain PATCH
 - Ctrl+Z undo chunks (app-owned, form-subtree scoped)
 - Focus glow; tab order inherits slice 2 ordinal DOM order
-- `{class}:update` fail-closed (UI + action 403)
-- No browser-originated domain update calls
+- `{class}:update` fail-closed (UI + API 403)
 
 ## Out of scope (not tested as product behaviour here)
 
@@ -47,11 +46,11 @@ Touched automated suites:
 
 | AC (issue #82) | Cases |
 | -------------- | ----- |
-| Edits dirty the page; Save icon reflects dirty/clean; Save/Ctrl+S persist via SSR when permitted | E1–E4, A1, M1–M3 |
+| Edits dirty the page; Save icon reflects dirty/clean; Save/Ctrl+S persist via the domain API when permitted | E1–E4, A1, M1–M3 |
 | Refresh reloads from DB and clears dirty/undo | E5–E6, M4 |
 | Ctrl+Z undoes in reverse chunk order; exhausting undo → clean; successful save clears undo | E7–E11, M5–M6 |
 | Update RBAC fail-closed (UI + 403) | P1–P3, A3, M7 |
-| No browser-originated domain update calls | U1–U5, A1, M8 |
+| Save posts same-origin to the domain API | U1–U5, A1, M8 |
 | Implement plan documents coherent Ctrl+Z approach | Plan (implement chat); M5 verifies behaviour |
 
 ---
@@ -127,7 +126,7 @@ Touched automated suites:
 | M5 | Ctrl+Z chunks | Two-field chunks undo in reverse → clean |
 | M6 | Undo after save | Save clears buffer; Ctrl+Z does not resurrect |
 | M7 | No `{class}:update` | RO fields; Save disabled; Ctrl+S no-op; action 403 |
-| M8 | Network | No browser→domain PATCH; same-origin action only |
+| M8 | Network | Save posts same-origin to the domain API |
 | M9 | Focus / tab | Focus glow; left→right→text order |
 | M10 | Always-RO | friendly-id / audit / FK not editable with update |
 | M11 | Shell undo isolation | Ctrl+Z outside form subtree not stolen by empty stack |
@@ -139,4 +138,4 @@ Touched automated suites:
 3. `make frontend-lint` / typecheck green
 4. This TESTPLAN checked in; AC↔case table complete
 5. Manual M1–M11 smoke (or deferred items noted)
-6. No domain API contract changes; no browser domain update client
+6. Detail save uses the domain update API from the browser

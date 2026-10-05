@@ -5,21 +5,10 @@ import { reset_access_verifier_for_tests } from "../auth/session.server";
 import { fake_access_token, install_test_jwt_keys } from "../auth/test_tokens";
 
 const fetch_record = vi.fn();
-const update_record = vi.fn();
 
 vi.mock("../records/fetch.server", () => ({
   fetch_record: (...args: unknown[]) => fetch_record(...args),
 }));
-
-vi.mock("../records/update.server", async () => {
-  const actual = await vi.importActual<
-    typeof import("../records/update.server")
-  >("../records/update.server");
-  return {
-    ...actual,
-    update_record: (...args: unknown[]) => update_record(...args),
-  };
-});
 
 async function session_cookie(token = fake_access_token()): Promise<string> {
   const { commit_access_token } = await import("../auth/session.server");
@@ -84,7 +73,6 @@ describe("destination_detail loader", () => {
     install_test_jwt_keys();
     reset_access_verifier_for_tests();
     fetch_record.mockReset();
-    update_record.mockReset();
   });
 
   it("D1: loads INC by friendly-id", async () => {
@@ -277,186 +265,24 @@ describe("destination_detail context bar mount", () => {
   });
 });
 
-describe("destination_detail action", () => {
-  beforeEach(() => {
-    process.env.UNTANGLED_API_BASE_URL = "http://api.test";
-    process.env.UNTANGLED_AUTH_BASE_URL = "http://auth.test";
-    process.env.UNTANGLED_COOKIE_SECURE = "false";
-    install_test_jwt_keys();
-    reset_access_verifier_for_tests();
-    update_record.mockReset();
+describe("destination_detail leftover actions", () => {
+  it("does not export an action", async () => {
+    const mod = await import("../routes/destination_detail");
+    expect(mod).not.toHaveProperty("action");
   });
 
-  it("A1: valid PATCH returns updated record", async () => {
-    const saved = { ...INC_RECORD, status: "in-progress" };
-    update_record.mockResolvedValue(saved);
-    const { action } = await import("../routes/destination_detail");
-    const cookie = await session_cookie();
-    const result = await action({
-      request: new Request("http://web.test/incident/INC00000001", {
-        method: "PATCH",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: "in-progress" }),
-      }),
-      params: { class_name: "incident", locator: "INC00000001" },
-      context: {},
-    } as never);
-    expect(result.data).toEqual({ ok: true, record: saved });
-    expect(update_record).toHaveBeenCalledWith(
-      expect.any(String),
-      "incident",
-      "INC00000001",
-      { status: "in-progress" },
+  it("updates via browser_api and applies the returned record", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./destination_detail.tsx", import.meta.url),
+      "utf8",
     );
-  });
-
-  it("A2: propagates domain 422", async () => {
-    update_record.mockRejectedValue(
-      new Response(JSON.stringify({ detail: "semantic" }), { status: 422 }),
-    );
-    const { action } = await import("../routes/destination_detail");
-    const cookie = await session_cookie();
-    const result = await action({
-      request: new Request("http://web.test/incident/INC00000001", {
-        method: "PATCH",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: "in-progress" }),
-      }),
-      params: { class_name: "incident", locator: "INC00000001" },
-      context: {},
-    } as never);
-    expect(result.init?.status ?? (result.data.ok ? 200 : result.data.status)).toBe(422);
-    expect(result.data.ok).toBe(false);
-    if (!result.data.ok) {
-      expect(result.data.status).toBe(422);
-    }
-  });
-
-  it("A3: domain forbidden → 403", async () => {
-    const { ApiForbiddenError } = await import("../auth/errors");
-    update_record.mockRejectedValue(new ApiForbiddenError());
-    const { action } = await import("../routes/destination_detail");
-    const cookie = await session_cookie();
-    const result = await action({
-      request: new Request("http://web.test/incident/INC00000001", {
-        method: "PATCH",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: "in-progress" }),
-      }),
-      params: { class_name: "incident", locator: "INC00000001" },
-      context: {},
-    } as never);
-    expect(result.data).toEqual({
-      ok: false,
-      status: 403,
-      detail: "Forbidden",
-    });
-    expect(result.init?.status).toBe(403);
-  });
-
-  it("A4: domain not found → 404", async () => {
-    update_record.mockRejectedValue(
-      new Response(JSON.stringify({ detail: "missing" }), { status: 404 }),
-    );
-    const { action } = await import("../routes/destination_detail");
-    const cookie = await session_cookie();
-    const result = await action({
-      request: new Request("http://web.test/incident/INC999", {
-        method: "PATCH",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: "x" }),
-      }),
-      params: { class_name: "incident", locator: "INC999" },
-      context: {},
-    } as never);
-    expect(result.data.ok).toBe(false);
-    if (!result.data.ok) {
-      expect(result.data.status).toBe(404);
-    }
-  });
-
-  it("A5: unrecognized attributes → 400", async () => {
-    const { action } = await import("../routes/destination_detail");
-    const cookie = await session_cookie();
-    const result = await action({
-      request: new Request("http://web.test/incident/INC00000001", {
-        method: "PATCH",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ not_a_field: "x" }),
-      }),
-      params: { class_name: "incident", locator: "INC00000001" },
-      context: {},
-    } as never);
-    expect(result.data).toMatchObject({ ok: false, status: 400 });
-    expect(update_record).not.toHaveBeenCalled();
-  });
-
-  it("A6: field type failure → 422", async () => {
-    const { action } = await import("../routes/destination_detail");
-    const cookie = await session_cookie();
-    const result = await action({
-      request: new Request("http://web.test/incident/INC00000001", {
-        method: "PATCH",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ assigned_user_id: "not-a-uuid" }),
-      }),
-      params: { class_name: "incident", locator: "INC00000001" },
-      context: {},
-    } as never);
-    expect(result.data).toMatchObject({ ok: false, status: 422 });
-    expect(update_record).not.toHaveBeenCalled();
-  });
-
-  it("A8: unauthenticated → redirect", async () => {
-    const { action } = await import("../routes/destination_detail");
-    await expect(
-      action({
-        request: new Request("http://web.test/incident/INC00000001", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "x" }),
-        }),
-        params: { class_name: "incident", locator: "INC00000001" },
-        context: {},
-      } as never),
-    ).rejects.toMatchObject({ status: 302 });
-    expect(update_record).not.toHaveBeenCalled();
-  });
-
-  it("A9: non-object JSON → 400", async () => {
-    const { action } = await import("../routes/destination_detail");
-    const cookie = await session_cookie();
-    const result = await action({
-      request: new Request("http://web.test/incident/INC00000001", {
-        method: "PATCH",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(["not", "object"]),
-      }),
-      params: { class_name: "incident", locator: "INC00000001" },
-      context: {},
-    } as never);
-    expect(result.data).toMatchObject({ ok: false, status: 400 });
-    expect(update_record).not.toHaveBeenCalled();
+    expect(source).toMatch(/from "\.\.\/records\/browser_api"/);
+    expect(source).toMatch(/update_record/);
+    expect(source).toMatch(/prepare_update_body/);
+    expect(source).toMatch(/reset_editor_from_record\(result\.record/);
+    expect(source).not.toMatch(/useFetcher/);
+    expect(source).not.toMatch(/export async function action/);
+    expect(source).not.toMatch(/class_name === ["']incident["']/);
   });
 });
