@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login, nav_goto, track_domain_api } from "./helpers/auth";
+import { login, nav_goto } from "./helpers/auth";
 
 test.describe("list", () => {
   test("P75-2: friendly-id links use snake class path", async ({ page }) => {
@@ -50,12 +50,9 @@ test.describe("list", () => {
     ).toBeVisible();
   });
 
-  test("P77: filter chrome Execute without browser→domain search", async ({
-    page,
-  }) => {
+  test("P77: filter chrome Execute keeps the list", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/incident/lists/open");
-    const tracker = track_domain_api(page);
     const filter_btn = page.getByRole("button", { name: /Filter|Edit filter/i });
     if (await filter_btn.count()) {
       await filter_btn.first().click();
@@ -65,8 +62,6 @@ test.describe("list", () => {
       }
     }
     await expect(page.getByRole("table")).toBeVisible();
-    tracker.assert_clean();
-    tracker.dispose();
   });
 
   test("P79: pagination footer present", async ({ page }) => {

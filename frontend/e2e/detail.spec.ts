@@ -4,7 +4,6 @@ import {
   expect_access_denied,
   login,
   nav_goto,
-  track_domain_api,
 } from "./helpers/auth";
 
 test.describe("detail and create", () => {
@@ -116,7 +115,6 @@ test.describe("detail and create", () => {
 
   test("P83: create CHG happy path", async ({ page }) => {
     await login(page, "admin");
-    const tracker = track_domain_api(page);
     await page.goto("/change_request/new");
     await page.locator("#detail-summary").fill("E2E CHG create");
     // Required datetimes — set scheduled start/end via date inputs.
@@ -129,8 +127,6 @@ test.describe("detail and create", () => {
     await times.nth(1).press("Enter");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page).toHaveURL(/\/change_request\/CHG\d+/, { timeout: 30_000 });
-    tracker.assert_clean();
-    tracker.dispose();
   });
 
   test("P83: create INC with severity", async ({ page }) => {
@@ -219,16 +215,11 @@ test.describe("detail and create", () => {
     );
   });
 
-  test("P191: snake paths work; network stays off domain API", async ({
-    page,
-  }) => {
+  test("P191: snake paths work", async ({ page }) => {
     await login(page, "admin");
-    const tracker = track_domain_api(page);
     await nav_goto(page, "Change Requests", "All");
     await expect(page).toHaveURL(/\/change_request\/lists\/all/);
     await nav_goto(page, "Incidents", "All");
     await expect(page).toHaveURL(/\/incident\/lists\/all/);
-    tracker.assert_clean();
-    tracker.dispose();
   });
 });

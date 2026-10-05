@@ -9,7 +9,6 @@ import {
   nav_goto,
   open_identity_menu,
   sign_out,
-  track_domain_api,
 } from "./helpers/auth";
 import { SEED_USERS } from "./helpers/users";
 
@@ -31,19 +30,14 @@ test.describe("smoke @smoke", () => {
     ).toContainText(SEED_USERS.admin.display_name);
   });
 
-  test("P75: INC/CHG lists load without browser→domain search", async ({
-    page,
-  }) => {
+  test("P75: INC/CHG lists load", async ({ page }) => {
     await login(page, "admin");
-    const tracker = track_domain_api(page);
     await page.goto("/incident/lists/all");
     await expect(page.getByRole("table")).toBeVisible();
     await expect(page.getByRole("link", { name: /^INC/ }).first()).toBeVisible();
     await page.goto("/change_request/lists/all");
     await expect(page.getByRole("table")).toBeVisible();
     await expect(page.getByRole("link", { name: /^CHG/ }).first()).toBeVisible();
-    tracker.assert_clean();
-    tracker.dispose();
   });
 
   test("P75-4: incident user forbidden on change_request list", async ({
@@ -58,11 +52,10 @@ test.describe("smoke @smoke", () => {
     await expect(page.getByRole("table")).toBeVisible();
   });
 
-  test("P76-3: quick-filter Enter updates list via SSR", async ({ page }) => {
+  test("P76-3: quick-filter Enter updates the list", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/incident/lists/all");
     await expect(page.getByRole("table")).toBeVisible();
-    const tracker = track_domain_api(page);
     const field = page.getByLabel("Quick filter field");
     await field.selectOption("summary");
     const value = page.getByLabel("Quick filter value");
@@ -71,29 +64,20 @@ test.describe("smoke @smoke", () => {
     await expect(
       page.getByText("No records match this list."),
     ).toBeVisible({ timeout: 20_000 });
-    tracker.assert_clean();
-    tracker.dispose();
   });
 
-  test("P81: open detail by friendly-id without browser→domain GET", async ({
-    page,
-  }) => {
+  test("P81: open detail by friendly-id", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/incident/lists/all");
     const link = page.getByRole("link", { name: /^INC/ }).first();
     const href = await link.getAttribute("href");
     expect(href).toMatch(/^\/incident\/INC/);
-    const tracker = track_domain_api(page);
     await link.click();
     await expect(page).toHaveURL(/\/incident\/INC/);
     await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
-    tracker.assert_clean();
-    tracker.dispose();
   });
 
-  test("P82: dirty save persists without browser→domain PATCH", async ({
-    page,
-  }) => {
+  test("P82: dirty save persists", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/incident/lists/all");
     await page.getByRole("link", { name: /^INC/ }).first().click();
@@ -102,7 +86,6 @@ test.describe("smoke @smoke", () => {
     await expect(summary).toBeEditable();
     const original = await summary.inputValue();
     const next = `${original} e2e`.slice(0, 200);
-    const tracker = track_domain_api(page);
     await fill_expect_dirty(page, summary, next);
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Save" })).toHaveAttribute(
@@ -119,13 +102,10 @@ test.describe("smoke @smoke", () => {
       "title",
       "Save (no changes)",
     );
-    tracker.assert_clean();
-    tracker.dispose();
   });
 
-  test("P83: create INC then no browser→domain create", async ({ page }) => {
+  test("P83: create INC", async ({ page }) => {
     await login(page, "admin");
-    const tracker = track_domain_api(page);
     await page.goto("/incident/new");
     await page.locator("#detail-severity").fill("Medium");
     await page.locator("#detail-summary").fill("E2E smoke create incident");
@@ -134,8 +114,6 @@ test.describe("smoke @smoke", () => {
     await expect(page.locator("#detail-summary")).toHaveValue(
       "E2E smoke create incident",
     );
-    tracker.assert_clean();
-    tracker.dispose();
   });
 
   test("P83-A1: no-create user gets 403 on /incident/new", async ({ page }) => {
@@ -201,7 +179,6 @@ test.describe("smoke @smoke", () => {
     // Touch an editable numeric if present; otherwise just assert no bare UUID in chrome.
     const nesting = page.locator("#detail-max_search_nesting_depth");
     if (await nesting.count()) {
-      const tracker = track_domain_api(page);
       await expect(nesting).toBeEditable();
       const val = await nesting.inputValue();
       const next = String(Number(val || "5") === 5 ? 6 : 5);
@@ -218,8 +195,6 @@ test.describe("smoke @smoke", () => {
       // Restore
       await fill_expect_dirty(page, nesting, val);
       await page.getByRole("button", { name: "Save" }).click();
-      tracker.assert_clean();
-      tracker.dispose();
     }
     void updated_by;
   });

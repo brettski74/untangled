@@ -8,11 +8,11 @@ Slice 3 (#82) edit/save/undo cases remain covered by [`TESTPLAN.md`](./TESTPLAN.
 
 - Replace `/:collection/new` placeholder with shared default detail layout
 - Prefill from schema `create_default` (generic); create POST includes RO defaults
-- Save creates via SSR action; navigate to detail (friendly-id preferred)
+- Save creates via same-origin domain API; navigate to detail (friendly-id preferred)
 - Refresh on new = reset to schema create defaults; clear undo
 - Save UX: icon = dirty/clean; may enable while clean if create-valid
 - `{class}:create` fail-closed (loader + action 403)
-- No browser-originated domain create calls; unversioned `POST /{collection}` (not `/api/v1`)
+- Create uses same-origin `/api/v2/{class_name}` (not `/api/v1`)
 
 ## Out of scope (not tested as product behaviour here)
 
@@ -56,7 +56,7 @@ Harness: vitest + jsdom + Testing Library for `*.test.tsx` (no Playwright).
 | Schema defaults + RO defaults in POST | D1–D2, M1–M4, A2, F-C1, F-C2, V1–V4 | — |
 | Refresh resets to defaults | (editor `reset_editor_from_record` covered in #82 suite) | M-G1 (live chrome) |
 | Create RBAC 403 | N3, A3–A4, S1, F-no-create | M-A1 (live HTTP page) |
-| No browser→domain create | C5 | M-F7 (Network tab) |
+| Create posts same-origin to the domain API | C5 | M-F7 (Network tab) |
 | #109 / #113 locks | F-E1, F-B2/B3/B4, functional suites | — |
 
 ---
@@ -122,7 +122,7 @@ Still need a live app for end-to-end feel and Network tab. **Prerequisites:** `m
 | M-D2–D5 | Ctrl+Z chunks / shell isolation | ADR 007: form-scoped undo; click nav then Ctrl+Z must not undo into Severity (blur on outside pointer) | Keyboard + focus across shell |
 | M-F2/F3 | Fill + Save → land on friendly-id detail | Live navigate + v1 FK labels | Full RR navigate + API |
 | M-F6 | Server error popup dismiss | Draft kept | Full page fetcher UX |
-| M-F7 | Network tab on Save | No browser→domain create | Browser DevTools |
+| M-F7 | Network tab on Save | Same-origin domain create | Browser DevTools |
 | M-G1 | Dirty → Refresh | Reset to defaults in chrome | Full page state |
 | M-H1 | Reload landed detail URL | Record persists | Browser |
 | M-I1/I2 | INC + CHG happy path smoke | End-to-end create | Integration |

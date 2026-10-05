@@ -1,61 +1,6 @@
-import { expect, type Locator, type Page, type Request } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 import { SEED_USERS, type SeedUserKey } from "./users";
-
-/** True if the browser request targets the domain API (not auth-session). */
-export function is_domain_api_request(request: Request): boolean {
-  const url = request.url();
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (
-    parsed.pathname === "/api/v2/auth" ||
-    parsed.pathname.startsWith("/api/v2/auth/")
-  ) {
-    return false;
-  }
-  if (
-    (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
-    parsed.port === "8000"
-  ) {
-    return true;
-  }
-  return (
-    parsed.pathname.startsWith("/api/v1/") ||
-    parsed.pathname.startsWith("/api/v2/")
-  );
-}
-
-/**
- * Attach a listener that records forbidden browser→domain API calls.
- * Call ``assert_clean`` after the interaction under test.
- */
-export function track_domain_api(page: Page): {
-  assert_clean: () => void;
-  dispose: () => void;
-} {
-  const hits: string[] = [];
-  const on_request = (request: Request) => {
-    if (is_domain_api_request(request)) {
-      hits.push(`${request.method()} ${request.url()}`);
-    }
-  };
-  page.on("request", on_request);
-  return {
-    assert_clean: () => {
-      expect(
-        hits,
-        `browser must not call domain API: ${hits.join("; ")}`,
-      ).toEqual([]);
-    },
-    dispose: () => {
-      page.off("request", on_request);
-    },
-  };
-}
 
 export async function login(
   page: Page,
