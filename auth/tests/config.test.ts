@@ -73,6 +73,23 @@ describe("safe_next_path", () => {
     assert.equal(safe_next_path(null), "/");
     assert.equal(safe_next_path(""), "/");
   });
+
+  it("rewrites data-request and named non-page targets", () => {
+    assert.equal(safe_next_path("/incident/lists/all.data"), "/incident/lists/all");
+    assert.equal(safe_next_path("/incident/lists/all.data?_routes=x"), "/incident/lists/all");
+    assert.equal(safe_next_path("/incident/lists/all.data?q=1"), "/incident/lists/all");
+    assert.equal(safe_next_path("/_.data"), "/");
+    assert.equal(safe_next_path("/_?x=1"), "/");
+    assert.equal(safe_next_path("/api/v2/auth/me"), "/");
+    assert.equal(safe_next_path("/api"), "/");
+    assert.equal(safe_next_path("/api?x=1"), "/");
+    assert.equal(safe_next_path("/api/v2/x.data"), "/");
+    assert.equal(safe_next_path("/login"), "/");
+    assert.equal(safe_next_path("/login?next=%2Fstub"), "/");
+    assert.equal(safe_next_path("/logout"), "/");
+    assert.equal(safe_next_path("/login.data"), "/");
+    assert.equal(safe_next_path("/logout.data"), "/");
+  });
 });
 
 describe("keys", () => {

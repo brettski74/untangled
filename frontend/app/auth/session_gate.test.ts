@@ -74,6 +74,24 @@ describe("auth gate + session", () => {
     );
   });
 
+  it("rewrites a data-request URL to a document next", () => {
+    const response = redirect_unauthenticated(
+      new Request("http://web.test/incident.data"),
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe(
+      "/login?next=%2Fincident",
+    );
+  });
+
+  it("omits next when a data-request rewrites to home", () => {
+    const response = redirect_unauthenticated(
+      new Request("http://web.test/_.data"),
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/login");
+  });
+
   it("require_document_access returns bootstrap on expired GET and login otherwise", async () => {
     const now = Math.floor(Date.now() / 1000);
     const expired = fake_access_token(60, { iat: now - 120, exp: now - 10 });

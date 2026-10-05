@@ -19,16 +19,44 @@ describe("safe_next_path", () => {
     expect(safe_next_path(null)).toBe("/");
     expect(safe_next_path("")).toBe("/");
   });
+
+  it("rewrites data-request and named non-page targets", () => {
+    expect(safe_next_path("/incident/lists/all.data")).toBe(
+      "/incident/lists/all",
+    );
+    expect(safe_next_path("/incident/lists/all.data?_routes=x")).toBe(
+      "/incident/lists/all",
+    );
+    expect(safe_next_path("/incident/lists/all.data?q=1")).toBe(
+      "/incident/lists/all",
+    );
+    expect(safe_next_path("/_.data")).toBe("/");
+    expect(safe_next_path("/_?x=1")).toBe("/");
+    expect(safe_next_path("/api/v2/auth/me")).toBe("/");
+    expect(safe_next_path("/api")).toBe("/");
+    expect(safe_next_path("/api?x=1")).toBe("/");
+    expect(safe_next_path("/api/v2/x.data")).toBe("/");
+    expect(safe_next_path("/login")).toBe("/");
+    expect(safe_next_path("/login?next=%2Fstub")).toBe("/");
+    expect(safe_next_path("/logout")).toBe("/");
+    expect(safe_next_path("/login.data")).toBe("/");
+    expect(safe_next_path("/logout.data")).toBe("/");
+  });
 });
 
 describe("login_redirect_url", () => {
   it("omits next when destination is home", () => {
     expect(login_redirect_url("/")).toBe("/login");
     expect(login_redirect_url(null)).toBe("/login");
+    expect(login_redirect_url("/_.data")).toBe("/login");
+    expect(login_redirect_url("/login")).toBe("/login");
   });
 
   it("preserves a safe next destination", () => {
     expect(login_redirect_url("/stub")).toBe("/login?next=%2Fstub");
+    expect(login_redirect_url("/incident.data")).toBe(
+      "/login?next=%2Fincident",
+    );
   });
 
   it("falls back when next is unsafe", () => {
